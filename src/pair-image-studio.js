@@ -18,7 +18,7 @@ export const PAIR_IMAGE_STYLES={
 const schema=`
 CREATE TABLE IF NOT EXISTS pair_image_identity_refs(
   scope text NOT NULL DEFAULT 'couple_default',
-  subject_role text NOT NULL CHECK(subject_role IN ('owner','snezha')),
+  subject_role text NOT NULL CHECK(subject_role IN ('owner','partner')),
   telegram_file_id text NOT NULL,
   telegram_file_unique_id text NOT NULL DEFAULT '',
   uploaded_by bigint NOT NULL,
@@ -96,12 +96,12 @@ export function createPairImageStudio({pool,api,send,admins}){
   async function menu(chat){
     if(!admins.has(String(chat)))return false;
     const pref=await preferences(chat),refs=await referenceState(),style=PAIR_IMAGE_STYLES[pref.style_key]||PAIR_IMAGE_STYLES.intimate;
-    const text=`<b>📸 СТУДИЯ ПАРЫ</b>\n\nСтиль: <b>${html(style.label)}</b>\nФормат: <b>${html(pref.aspect_ratio)}</b>\nРеференс Партнёр Aа: ${refs.has('owner')?'✅':'—'} · Снежи: ${refs.has('snezha')?'✅':'—'}\n\nРеференсы сохраняются как Telegram file_id, изображения в Git не попадают.`;
+    const text=`<b>📸 СТУДИЯ ПАРЫ</b>\n\nСтиль: <b>${html(style.label)}</b>\nФормат: <b>${html(pref.aspect_ratio)}</b>\nРеференс Партнёра A: ${refs.has('owner')?'✅':'—'} · Партнёра B: ${refs.has('partner')?'✅':'—'}\n\nРеференсы сохраняются как Telegram file_id, изображения в Git не попадают.`;
     return send(chat,text,callbackRows([
       [{text:'👥 Сгенерировать пару',callback_data:'pimg:gen:pair'}],
-      [{text:'👤 Партнёр A',callback_data:'pimg:gen:owner'},{text:'👤 Партнёр B',callback_data:'pimg:gen:snezha'}],
+      [{text:'👤 Партнёр A',callback_data:'pimg:gen:owner'},{text:'👤 Партнёр B',callback_data:'pimg:gen:partner'}],
       [{text:'🎨 Стиль',callback_data:'pimg:styles'},{text:`▣ ${pref.aspect_ratio}`,callback_data:'pimg:ratios'}],
-      [{text:'📎 Реф. Партнёр Aа',callback_data:'pimg:ref:owner'},{text:'📎 Реф. Снежи',callback_data:'pimg:ref:snezha'}]
+      [{text:'📎 Реф. Партнёра A',callback_data:'pimg:ref:owner'},{text:'📎 Реф. Партнёра B',callback_data:'pimg:ref:partner'}]
     ]));
   }
   async function styleMenu(chat){
@@ -163,7 +163,7 @@ export function createPairImageStudio({pool,api,send,admins}){
   }
   async function generateFromBrief(message,state){
     const chat=String(message.chat.id),brief=String(message.text||'').trim();if(!brief||brief.startsWith('/'))return false;
-    const pref=await preferences(chat),refs=await referenceState(),roles=state.target==='pair'?['owner','snezha']:[state.target];
+    const pref=await preferences(chat),refs=await referenceState(),roles=state.target==='pair'?['owner','partner']:[state.target];
     const missing=roles.filter(role=>!refs.has(role));
     if(missing.length){sessions.delete(chat);await send(chat,`Сначала нужен референс: <b>${missing.map(roleLabel).join(' + ')}</b>.`);await menu(chat);return true;}
     sessions.delete(chat);
@@ -188,8 +188,8 @@ export function createPairImageStudio({pool,api,send,admins}){
     if(data==='pimg:open'){await menu(chat);return true;}
     if(data==='pimg:styles'){await styleMenu(chat);return true;}
     if(data==='pimg:ratios'){await ratioMenu(chat);return true;}
-    const ref=data.match(/^pimg:ref:(owner|snezha)$/);if(ref){setSession(chat,{kind:'reference',role:ref[1]});await send(chat,`Отправь следующим сообщением <b>одну исходную фотографию ${html(roleLabel(ref[1]))}</b>. Лучше нейтральный портрет без фильтров.`);return true;}
-    const gen=data.match(/^pimg:gen:(pair|owner|snezha)$/);if(gen){setSession(chat,{kind:'brief',target:gen[1]});await send(chat,'Опиши сцену одним сообщением: что происходит, локация, настроение и важные детали. Камеру, свет и фотореализм система соберёт сама.');return true;}
+    const ref=data.match(/^pimg:ref:(owner|partner)$/);if(ref){setSession(chat,{kind:'reference',role:ref[1]});await send(chat,`Отправь следующим сообщением <b>одну исходную фотографию ${html(roleLabel(ref[1]))}</b>. Лучше нейтральный портрет без фильтров.`);return true;}
+    const gen=data.match(/^pimg:gen:(pair|owner|partner)$/);if(gen){setSession(chat,{kind:'brief',target:gen[1]});await send(chat,'Опиши сцену одним сообщением: что происходит, локация, настроение и важные детали. Камеру, свет и фотореализм система соберёт сама.');return true;}
     const style=data.match(/^pimg:style:(\w+)$/);if(style&&PAIR_IMAGE_STYLES[style[1]]){await setPreference(chat,'style_key',style[1]);await menu(chat);return true;}
     const ratio=data.match(/^pimg:ratio:(1x1|4x5|9x16|16x9)$/);if(ratio){await setPreference(chat,'aspect_ratio',ratio[1].replace('x',':'));await menu(chat);return true;}
     return true;
