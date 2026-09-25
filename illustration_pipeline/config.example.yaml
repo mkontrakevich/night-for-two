@@ -1,0 +1,30 @@
+story_id: room17_demo_01
+input: input/story.docx
+output: output/story_illustrated.docx
+manifest: output/story_illustrations.json
+
+density:
+  min_paragraph_gap: 8
+  max_images: 7
+
+style:
+  base: "premium cinematic editorial still, realistic skin and fabric texture, restrained luxury, coherent contact shadows"
+  palette: "deep umber, black, brass, burgundy, warm practical light"
+  camera: "cinematic full-frame photography"
+  negative: "extra fingers, malformed hands, duplicate people, extra limbs, distorted face, plastic skin, text, logo, watermark, low resolution"
+
+continuity:
+  characters: {}
+  recurring_objects: []
+  locations: {}
+
+sd:
+  backend: automatic1111
+  base_url: http://127.0.0.1:7860
+  checkpoint: ""
+  sampler: DPM++ 2M Karras
+  steps: 30
+  cfg_scale: 6.5
+  width: 832
+  height: 1216
+  seed: -1
