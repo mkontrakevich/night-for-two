@@ -39,8 +39,8 @@ assert.equal(simulated.selection.version,3,'AI simulation must remain compatible
 assert.deepEqual(simulated.selection.categories,['caress','desire']);
 const prompt=JSON.stringify(captured);
 assert(prompt.includes('НЕ реальный человек'),'Prompt must explicitly separate simulation from a real partner');
-assert(prompt.includes('НЕ голос Снежи'),'Prompt must forbid impersonating Snezha');
-assert(prompt.includes('НЕ её согласие'),'Prompt must forbid treating simulation as consent');
+assert(prompt.includes('НЕ голос реального партнёра'),'Prompt must forbid impersonating a real partner');
+assert(prompt.includes('НЕ его или её согласие'),'Prompt must forbid treating simulation as consent');
 assert(prompt.includes('relationshipProfile'),'Simulation must receive aggregate relationship context');
 assert(prompt.includes('mutualWishes'),'Simulation must receive mutual LoveStory context');
 
