@@ -1,0 +1,30 @@
+name: Publish Night URL
+
+on:
+  workflow_dispatch:
+    inputs:
+      public_url:
+        description: Public base URL
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 10
+    env:
+      NIGHT_PAGES_URL: ${{ inputs.public_url }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      PRIMARY_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
+      PARTNER_TELEGRAM_ID: ${{ secrets.PARTNER_TELEGRAM_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify and publish
+        shell: powershell
+        run: |
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\publish-pages.ps1 -Mode Publish
+          if ($LASTEXITCODE -ne 0) { throw "NIGHT_PUBLICATION_FAILED:$LASTEXITCODE" }
