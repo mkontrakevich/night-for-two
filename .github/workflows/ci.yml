@@ -16,6 +16,12 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install illustration pipeline dependencies
+        run: python -m pip install -r illustration_pipeline/requirements.txt
       - name: Python syntax check
-        run: |
-          python -m py_compile illustration_pipeline/*.py
+        run: python -m py_compile illustration_pipeline/*.py
+      - name: Illustration pipeline unit tests
+        run: python -m unittest illustration_pipeline/test_pipeline.py
