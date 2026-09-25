@@ -1,0 +1,56 @@
+name: Generate Full Novel
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: night-full-novel-generation
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 240
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL || 'openai/gpt-4.1-mini' }}
+      PERSONAL_IMAGE_MODEL: ${{ vars.PERSONAL_IMAGE_MODEL || 'bytedance-seed/seedream-4.5' }}
+      PERSONAL_IMAGE_FALLBACK_MODEL: ${{ vars.PERSONAL_IMAGE_FALLBACK_MODEL || 'google/gemini-2.5-flash-image' }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      PRIMARY_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
+      PARTNER_TELEGRAM_ID: ${{ secrets.PARTNER_TELEGRAM_ID }}
+      RELATIONSHIP_CONTEXT_URL: ${{ vars.RELATIONSHIP_CONTEXT_URL }}
+      RELATIONSHIP_CONTEXT_TOKEN: ${{ secrets.RELATIONSHIP_CONTEXT_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start standalone stack
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          docker compose up -d --build
+          if ($LASTEXITCODE -ne 0) { throw "NIGHT_STACK_START_FAILED:$LASTEXITCODE" }
+
+      - name: Probe novel store
+        shell: powershell
+        run: |
+          docker compose exec -T app node scripts/night-linear-novel-status.mjs
+          if ($LASTEXITCODE -ne 0) { throw "NIGHT_NOVEL_STATUS_PROBE_FAILED:$LASTEXITCODE" }
+
+      - name: Generate
+        shell: powershell
+        timeout-minutes: 220
+        run: |
+          docker compose exec -T app node scripts/night-generate-linear-novel.mjs
+          if ($LASTEXITCODE -ne 0) { throw "NIGHT_FULL_NOVEL_GENERATION_FAILED:$LASTEXITCODE" }
+
+      - name: Require complete
+        shell: powershell
+        run: |
+          $status = docker compose exec -T app node scripts/night-linear-novel-status.mjs --require-complete
+          $status | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "NIGHT_FULL_NOVEL_NOT_COMPLETE:$LASTEXITCODE" }
