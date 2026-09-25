@@ -1,0 +1,13 @@
+{
+  "name": "night-for-two",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node scripts/standalone-boundary-test.mjs && node scripts/night-demo-room17-test.mjs && node scripts/night-reader-engine-test.mjs && node scripts/night-story-flow-test.mjs && node scripts/night-serial-novel-architect-test.mjs && node scripts/night-personal-core-test.mjs"
+  },
+  "dependencies": {
+    "pg": "8.13.1"
+  }
+}
