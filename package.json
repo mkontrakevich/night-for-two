@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "test": "node scripts/standalone-boundary-test.mjs && node scripts/night-demo-room17-test.mjs && node scripts/night-reader-engine-test.mjs && node scripts/night-story-flow-test.mjs && node scripts/night-serial-novel-architect-test.mjs && node scripts/night-personal-core-test.mjs"
+    "test": "node scripts/standalone-boundary-test.mjs && node scripts/night-for-two-engine-standalone-test.mjs && node scripts/night-for-two-v2-game-test.mjs && node scripts/night-ai-test-partner-test.mjs && node scripts/night-demo-room17-test.mjs && node scripts/night-reader-engine-test.mjs && node scripts/night-story-flow-test.mjs && node scripts/night-serial-novel-architect-test.mjs && node scripts/night-personal-core-test.mjs && node scripts/night-linear-novel-contract-test.mjs",
+    "novel:generate": "node scripts/night-generate-linear-novel.mjs",
+    "novel:status": "node scripts/night-linear-novel-status.mjs"
   },
   "dependencies": {
     "pg": "8.13.1"
