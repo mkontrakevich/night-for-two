@@ -221,8 +221,8 @@ Maintain one cumulative scene state instead of rebuilding creative context from 
     "continuity": {}
   },
   "identity_refs": {
-    "person_a_pack": "identity://mikhail/vN",
-    "person_b_pack": "identity://snezha/vN"
+    "person_a_pack": "identity://person-a/vN",
+    "person_b_pack": "identity://person-b/vN"
   },
   "generated_assets": []
 }
@@ -612,7 +612,7 @@ Recommended metadata:
 {
   "asset_id": "uuid",
   "scope": "couple_default",
-  "owner_role": "owner|snezha|shared",
+  "owner_role": "owner|partner|shared",
   "story_id": "uuid",
   "day": "YYYY-MM-DD",
   "type": "photo|video|audio|generated_image|generated_video",
