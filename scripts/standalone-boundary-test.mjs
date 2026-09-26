@@ -3,7 +3,8 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 
-const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const self=fileURLToPath(import.meta.url);
+const root=path.resolve(path.dirname(self),'..');
 const runtime=fs.readFileSync(path.join(root,'src/night-for-two-v2-runtime.js'),'utf8');
 const connector=fs.readFileSync(path.join(root,'src/integrations/relationship-context-connector.js'),'utf8');
 const env=fs.readFileSync(path.join(root,'.env.example'),'utf8');
@@ -16,7 +17,7 @@ function filesUnder(dir){
     if(entry.isDirectory()&&skipDirs.has(entry.name))continue;
     const p=path.join(dir,entry.name);
     if(entry.isDirectory())out.push(...filesUnder(p));
-    else if(/\.(?:js|mjs|md|json|yaml|yml|py|ps1|html|example)$/i.test(entry.name)||entry.name==='Dockerfile')out.push(p);
+    else if((/\.(?:js|mjs|md|json|yaml|yml|py|ps1|html|example)$/i.test(entry.name)||entry.name==='Dockerfile')&&path.resolve(p)!==path.resolve(self))out.push(p);
   }
   return out;
 }

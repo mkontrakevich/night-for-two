@@ -6,9 +6,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,3 +29,11 @@ jobs:
         run: python -m py_compile illustration_pipeline/*.py
       - name: Illustration pipeline unit tests
         run: python -m unittest illustration_pipeline/test_pipeline.py
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build standalone image
+        run: docker build -t night-for-two:ci .
