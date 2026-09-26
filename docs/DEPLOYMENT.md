@@ -58,3 +58,21 @@ It starts the standalone Docker stack, probes the novel store, runs generation, 
 ## Rollback
 
 Application code and relationship-history data are separated. A Night for Two rollback must not touch the bot database or conversation-analysis state.
+
+
+## Automated Cloudflare deployment
+
+Production Cloudflare gateway deployment is defined in `.github/workflows/cloudflare-deploy.yml`.
+
+The workflow deliberately keeps account-specific network coordinates out of Git. It activates only when all four GitHub Actions secrets exist:
+
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_TUNNEL_ID`
+- `NIGHT_ORIGIN_HOST`
+
+Optional repository variable `NIGHT_PAGES_URL` enables the post-deploy `/night/health` smoke test.
+
+The checked-in `cloudflare/night-gateway/wrangler.jsonc` remains a safe template. CI renders a temporary deployment config containing the tunnel ID and private origin host and never commits it.
+
+After the initial Cloudflare Pages project has its `NIGHT_GATEWAY` service binding, subsequent gateway changes under `cloudflare/**` deploy automatically from `main`.
