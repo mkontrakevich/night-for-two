@@ -22,7 +22,7 @@ services:
       PORT: 5681
       DATABASE_URL: ${DATABASE_URL:-postgresql://night:night@postgres:5432/night_for_two}
     ports:
-      - "${NIGHT_PORT:-5681}:5681"
+      - "${NIGHT_PORT:-5683}:5681"
     depends_on:
       postgres:
         condition: service_healthy
