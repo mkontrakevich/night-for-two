@@ -41,9 +41,8 @@ assert(round);
 assert(round.requires.some(x=>NIGHT_V2_INTIMATE_PERMISSIONS.has(x)));
 
 const html=renderNightV3Html();
-for(const endpoint of ['/api/visual','/api/connection-ack','/api/selection','/api/done','/api/rate','/api/overall'])assert(html.includes(endpoint),`missing endpoint ${endpoint}`);
-for(const endpoint of ['/api/story-choice','/api/story-finish'])assert(app.includes(endpoint),`missing server endpoint ${endpoint}`);
-assert(html.includes("api('story-choice'")&&html.includes("api('story-finish'"),'story reader client actions missing');
+for(const endpoint of ['/api/visual','/api/connection-ack','/api/selection','/api/done','/api/rate','/api/overall','/api/story-choice','/api/story-finish'])assert(app.includes(endpoint),`missing server endpoint ${endpoint}`);
+for(const action of ['connection-ack','selection','done','rate','overall','story-choice','story-finish'])assert(html.includes(`api('${action}'`),`missing client action ${action}`);
 assert(html.includes('readerBook')&&html.includes('renderEpisodeReader'));
 assert(html.includes('data-reader-prev')&&html.includes('data-reader-next'));
 assert(html.includes('Тестировать с ИИ-партнёром'));
