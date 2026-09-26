@@ -76,3 +76,17 @@ Optional repository variable `NIGHT_PAGES_URL` enables the post-deploy `/night/h
 The checked-in `cloudflare/night-gateway/wrangler.jsonc` remains a safe template. CI renders a temporary deployment config containing the tunnel ID and private origin host and never commits it.
 
 After the initial Cloudflare Pages project has its `NIGHT_GATEWAY` service binding, subsequent gateway changes under `cloudflare/**` deploy automatically from `main`.
+
+
+## Standalone production origin
+
+The standalone application is isolated from the reminder bot at the host-port boundary.
+
+- container port: `5681`
+- production host port: `5683`
+- Cloudflare private origin: the existing MARINS production host on port `5683`
+- existing bot services keep their current ports unchanged
+
+`.github/workflows/deploy-origin.yml` deploys the standalone Docker Compose project on the existing `marins-production` self-hosted runner and verifies `http://127.0.0.1:5683/night/health`.
+
+This deployment workflow intentionally does not modify reader/story files. Reader work can proceed independently and will be picked up by the same standalone runtime after it lands on `main`.
