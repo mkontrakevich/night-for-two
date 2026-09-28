@@ -2,6 +2,10 @@ name: Generate Full Novel
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/generate-room17-v2.trigger"
 
 permissions:
   contents: read
@@ -24,6 +28,7 @@ jobs:
       PARTNER_TELEGRAM_ID: ${{ secrets.PARTNER_TELEGRAM_ID }}
       RELATIONSHIP_CONTEXT_URL: ${{ vars.RELATIONSHIP_CONTEXT_URL }}
       RELATIONSHIP_CONTEXT_TOKEN: ${{ secrets.RELATIONSHIP_CONTEXT_TOKEN }}
+      NIGHT_VISUAL_STORYBOARD: "1"
 
     steps:
       - uses: actions/checkout@v4
