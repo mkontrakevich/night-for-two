@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   publish:
-    runs-on: [self-hosted, windows, x64, marins-production]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       NIGHT_PAGES_URL: ${{ inputs.public_url }}
@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Verify and publish
-        shell: powershell
+        shell: pwsh
         run: |
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\publish-pages.ps1 -Mode Publish
+          ./tools/publish-pages.ps1 -Mode Publish
           if ($LASTEXITCODE -ne 0) { throw "NIGHT_PUBLICATION_FAILED:$LASTEXITCODE" }
