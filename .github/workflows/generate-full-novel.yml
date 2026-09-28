@@ -46,12 +46,26 @@ jobs:
           docker compose exec -T app node scripts/night-linear-novel-status.mjs
           if ($LASTEXITCODE -ne 0) { throw "NIGHT_NOVEL_STATUS_PROBE_FAILED:$LASTEXITCODE" }
 
-      - name: Generate
+      - name: Generate or reuse fresh completed novel
         shell: powershell
         timeout-minutes: 220
         run: |
-          docker compose exec -T app node scripts/night-generate-linear-novel.mjs
-          if ($LASTEXITCODE -ne 0) { throw "NIGHT_FULL_NOVEL_GENERATION_FAILED:$LASTEXITCODE" }
+          $ErrorActionPreference = 'Continue'
+          $requestedLine = Select-String -Path "ops/generate-room17-v2.trigger" -Pattern '^requested_at=' | Select-Object -Last 1
+          $requested = if ($requestedLine) { ($requestedLine.Line -split '=',2)[1].Trim() } else { "" }
+
+          $reuse = $false
+          if ($requested) {
+            docker compose exec -T app node scripts/night-reuse-complete.mjs "--after=$requested"
+            if ($LASTEXITCODE -eq 0) { $reuse = $true }
+          }
+
+          if ($reuse) {
+            Write-Host "Fresh completed novel found after trigger timestamp; skipping duplicate generation."
+          } else {
+            docker compose exec -T app node scripts/night-generate-linear-novel.mjs
+            if ($LASTEXITCODE -ne 0) { throw "NIGHT_FULL_NOVEL_GENERATION_FAILED:$LASTEXITCODE" }
+          }
 
       - name: Require complete
         shell: powershell
