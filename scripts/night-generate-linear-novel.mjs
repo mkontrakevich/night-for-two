@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
 import pg from 'pg';
 import {completeAIText} from '../src/ai/provider-router.js';
 import {generateSerialNovelPlan} from '../src/night-serial-novel-architect.js';
@@ -27,6 +28,26 @@ function parseJson(raw){
   }
 }
 function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+let narrativeSkillCache='';
+async function narrativeSkillExcerpt(){
+  if(narrativeSkillCache)return narrativeSkillCache;
+  try{
+    const url=new URL('../skills/couple-space/intimate-narrative/SKILL.md',import.meta.url);
+    const raw=await fs.readFile(url,'utf8');
+    const sections=['## 3. Storyteller behavior','## 6. Professional visual language','## 9. Image master prompt template','## 15. Provider refusal behavior','## 16. Quality control','## 17A. Dialogue contract','## 17B. Story illustration contract'];
+    const chunks=[];
+    for(const title of sections){
+      const start=raw.indexOf(title);if(start<0)continue;
+      const next=raw.indexOf('\n## ',start+4);
+      chunks.push(raw.slice(start,next<0?raw.length:next));
+    }
+    narrativeSkillCache=chunks.join('\n\n').slice(0,16000);
+  }catch(error){
+    console.warn('NIGHT_NARRATIVE_SKILL_LOAD_FAILED',String(error?.message||error).slice(0,180));
+    narrativeSkillCache='';
+  }
+  return narrativeSkillCache;
+}
 function planDigest(plan={}){
   return {
     title:plan.title,logline:plan.logline,controlling_idea:plan.controlling_idea,dramatic_question:plan.dramatic_question,
@@ -43,6 +64,7 @@ function validateChapter(raw,{chapterIndex,pageCount,startPage,final=false}){
   const normalized=pages.map((p,i)=>{
     const body=clean(p?.text,9000),pageTitle=clean(p?.title,180),requested=Boolean(p?.illustrate),mediaPrompt=requested?clean(p?.media_prompt,1200):'';
     if(body.length<500)throw new Error(`NIGHT_LINEAR_PAGE_INVALID:${startPage+i}`);
+    if(/(^|\n)\s*[—–-]\s+\p{L}/u.test(body))throw new Error(`NIGHT_LINEAR_ANONYMOUS_DIALOGUE:${startPage+i}`);
     if(requested&&!mediaPrompt)throw new Error(`NIGHT_LINEAR_MEDIA_PROMPT_INVALID:${startPage+i}`);
     return {page_no:startPage+i,chapter_no:chapterIndex+1,chapter_title:chapterTitle,page_title:pageTitle,body,media_prompt:mediaPrompt,illustrate:Boolean(mediaPrompt)};
   });
@@ -55,6 +77,7 @@ function validateChapter(raw,{chapterIndex,pageCount,startPage,final=false}){
 }
 
 async function generateChapter({plan,chapterIndex,previousSummary='',previousTail='',bookSeed='',relationshipProfile={}}) {
+  const narrativeSkill=await narrativeSkillExcerpt();
   const pageCount=STORY_PAGE_PLAN[chapterIndex],arc=STORY_ARC[chapterIndex],startPage=storyPageOffset(chapterIndex)+1,final=chapterIndex===STORY_ARC.length-1;
   let last=null;
   for(let attempt=1;attempt<=3;attempt++){
@@ -70,7 +93,7 @@ async function generateChapter({plan,chapterIndex,previousSummary='',previousTai
 
 Жанр: взрослый романтический/эротический триллер или драма с интригой. Все персонажи, участвующие в интимных сценах, однозначно совершеннолетние. Любая близость добровольна. Текст может быть чувственным и эротическим, но должен оставаться литературным: эмоции, напряжение, прикосновения, поцелуи, телесность, желание и последствия важнее анатомической детализации.
 
-ДИАЛОГИ — ОБЯЗАТЕЛЬНЫЙ КОНТРАКТ:
+${narrativeSkill?`\nКАНОНИЧЕСКИЙ NARRATIVE SKILL:\n${narrativeSkill}\n`:''}\nДИАЛОГИ — ОБЯЗАТЕЛЬНЫЙ КОНТРАКТ:
 — каждую прямую реплику начинай с имени говорящего и двоеточия: «Марк: ...», «Ева: ...», для второстепенных героев — их имя;
 — не оставляй анонимных реплик через тире;
 — диалог должен работать через подтекст, недосказанность, возврат к ранее сказанному, индивидуальный ритм, микроиронию, паузы и смену инициативы;
