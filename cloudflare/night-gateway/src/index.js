@@ -5,7 +5,7 @@ function json(status, payload) {
 export default {
   async fetch(request, env) {
     const incoming=new URL(request.url);
-    if(!incoming.pathname.startsWith('/night')) return json(404,{ok:false,error:'NIGHT_ROUTE_NOT_FOUND'});
+    if(!['/night','/actions'].some(prefix=>incoming.pathname===prefix||incoming.pathname.startsWith(prefix+'/'))) return json(404,{ok:false,error:'NIGHT_ROUTE_NOT_FOUND'});
     if(!env.APP_VPC || typeof env.APP_VPC.fetch!=='function') return json(503,{ok:false,error:'APP_VPC_BINDING_MISSING'});
     const host=env.NIGHT_ORIGIN_HOST;
     const port=env.NIGHT_ORIGIN_PORT||'5681';
