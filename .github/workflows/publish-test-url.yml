@@ -27,4 +27,3 @@ jobs:
         shell: pwsh
         run: |
           ./tools/publish-pages.ps1 -Mode Publish
-          if ($LASTEXITCODE -ne 0) { throw "NIGHT_PUBLICATION_FAILED:$LASTEXITCODE" }
