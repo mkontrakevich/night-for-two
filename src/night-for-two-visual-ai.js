@@ -31,13 +31,13 @@ const MODES=Object.freeze({
 
 function safeKey(value=''){return String(value||'visual').toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,120)||'visual';}
 function cacheDir(){return process.env.NIGHT_VISUAL_CACHE_DIR||path.join(process.env.CONFIG_DIR||'/app/config','night-visuals');}
-function promptFor({theme='domination',mode='home',variant=''}) {
-  const themeText=THEMES[theme]||THEMES.domination,modeText=MODES[mode]||MODES.home,narrative=String(variant||'').trim();
+function promptFor({theme='domination',mode='home',variant='',pageText=''}) {
+  const themeText=THEMES[theme]||THEMES.domination,modeText=MODES[mode]||MODES.home,narrative=String(variant||'').trim(),sceneFacts=String(pageText||'').replace(/\s+/g,' ').trim().slice(0,5000);
   const storyMode=mode==='story_scene'||mode==='story_final'||narrative.startsWith('BOOK_PAGE:');
   return [
     'Create one photorealistic vertical 9:16 cinematic editorial image for a premium serialized romance inside a private couples mobile reader.',
     storyMode
-      ? 'Illustrate the exact narrative beat supplied below. The image must feel like the next shot of the same film, not a generic romance stock image.'
+      ? 'Illustrate the exact narrative beat supplied below. The image must feel like the next shot of the same film, not a generic romance stock image. Narrative facts override generic theme language.'
       : 'Create a contextual atmosphere image for the current app screen.',
     'Recurring visual language: two clearly adult partners, elegant contemporary styling, realistic anatomy, tactile fabrics, cinematic depth, natural body language and emotionally readable distance.',
     'Continuity rule: preserve the same broad couple archetype, lighting language, wardrobe palette and location details already implied by the narrative whenever the prompt indicates continuity.',
@@ -47,14 +47,14 @@ function promptFor({theme='domination',mode='home',variant=''}) {
     `Evening visual theme: ${themeText}.`,
     `Screen context: ${modeText}.`,
     storyMode
-      ? `NARRATIVE FRAME TO ILLUSTRATE: ${narrative.replace(/^BOOK_PAGE:\s*/,'')||'continue the established romantic scene'}.`
+      ? `NARRATIVE FRAME TO ILLUSTRATE: ${narrative.replace(/^BOOK_PAGE:\s*/,'')||'continue the established romantic scene'}.\nEXACT PAGE FACTS: ${sceneFacts||'use only the supplied narrative frame'}.\nDo not invent a different room, prop, garment, time of day, action, character position or emotional beat when the exact page facts specify it.`
       : `Variation direction: ${narrative||'fresh composition, do not repeat common prior framing'}.`,
     'Composition: leave readable negative space for overlaid Russian prose; avoid placing important faces or hands beneath the lower text zone.',
     'Camera: premium editorial photography, physically plausible perspective, controlled highlights, rich detailed shadows, cinematic shallow depth of field.',
     'Output: one coherent photographic frame, luxurious, emotionally immersive, tasteful and non-explicit.'
   ].join('\n');
 }
-async function imageRequest({prompt}) {
+async function imageRequest({prompt,inputReferences=[]}) {
   const key=process.env.OPENROUTER_API_KEY||'';
   if(!key)return null;
   const models=[process.env.NIGHT_VISUAL_MODEL||process.env.PERSONAL_IMAGE_MODEL||DEFAULT_MODEL,process.env.NIGHT_VISUAL_FALLBACK_MODEL||process.env.PERSONAL_IMAGE_FALLBACK_MODEL||DEFAULT_FALLBACK].filter((v,i,a)=>v&&a.indexOf(v)===i);
@@ -62,6 +62,7 @@ async function imageRequest({prompt}) {
   for(const model of models){
     try{
       const payload={model,prompt,aspect_ratio:'9:16',output_format:'jpeg'};
+      if(Array.isArray(inputReferences)&&inputReferences.length)payload.input_references=inputReferences;
       if(model.includes('seedream'))payload.resolution=process.env.NIGHT_VISUAL_RESOLUTION||'1K';
       const response=await fetch('https://openrouter.ai/api/v1/images',{method:'POST',headers:{authorization:`Bearer ${key}`,'content-type':'application/json','HTTP-Referer':'https://github.com/mkontrakevich/night-for-two','X-Title':'MARINS Night for Two Visuals'},body:JSON.stringify(payload)});
       const json=await response.json();
@@ -72,20 +73,51 @@ async function imageRequest({prompt}) {
   }
   throw last||new Error('NIGHT_VISUAL_GENERATION_FAILED');
 }
+function storyboardPromptFor({variant='',pageText=''}){
+  const beat=String(variant||'').replace(/^BOOK_PAGE:\s*/,'').trim();
+  const facts=String(pageText||'').replace(/\s+/g,' ').trim().slice(0,5000);
+  return [
+    'Create a clean monochrome pencil storyboard frame for a vertical 9:16 cinematic scene.',
+    'This is a composition and blocking reference only: accurate room geometry, camera position, adult character placement, gesture, gaze, props, wardrobe silhouette and light direction.',
+    'Keep all intimate content non-explicit. No visible genitals, no nipples, no sexual act. Do not use the sketch to conceal or transform prohibited content.',
+    `STORY BEAT: ${beat}`,
+    `EXACT PAGE FACTS: ${facts}`,
+    'No captions, no speech bubbles, no labels, no decorative text.'
+  ].join('\n');
+}
+
+function referenceDataUrl(buffer){return `data:image/jpeg;base64,${buffer.toString('base64')}`;}
+
 export function createNightVisualAI(){
-  async function ensure({key,theme='domination',mode='home',variant=''}) {
+  async function ensure({key,theme='domination',mode='home',variant='',pageText=''}) {
     const id=safeKey(key),dir=cacheDir(),file=path.join(dir,`${id}.jpg`);
     try{return {buffer:await fs.readFile(file),cached:true,key:id};}catch{}
     if(!process.env.OPENROUTER_API_KEY)return {buffer:null,cached:false,key:id,disabled:true};
     if(inflight.has(id))return inflight.get(id);
     const work=(async()=>{
       await fs.mkdir(dir,{recursive:true});
-      const result=await imageRequest({prompt:promptFor({theme,mode,variant:`${variant} · visual-id ${crypto.createHash('sha256').update(id).digest('hex').slice(0,12)}`})});
+      const visualId=crypto.createHash('sha256').update(id).digest('hex').slice(0,12);
+      let storyboard=null;
+      if((mode==='story_scene'||mode==='story_final'||String(variant).startsWith('BOOK_PAGE:'))&&process.env.NIGHT_VISUAL_STORYBOARD!=='0'){
+        try{
+          storyboard=await imageRequest({prompt:storyboardPromptFor({variant,pageText})});
+          if(storyboard?.buffer?.length)await fs.writeFile(path.join(dir,`${id}.storyboard.jpg`),storyboard.buffer);
+        }catch(error){console.warn('NIGHT_VISUAL_STORYBOARD_FALLBACK',String(error?.message||error).slice(0,220));}
+      }
+      const inputReferences=storyboard?.buffer?.length?[{type:'image_url',image_url:{url:referenceDataUrl(storyboard.buffer)}}]:[];
+      let result;
+      try{
+        result=await imageRequest({prompt:promptFor({theme,mode,variant:`${variant} · visual-id ${visualId}`,pageText}),inputReferences});
+      }catch(error){
+        if(!inputReferences.length)throw error;
+        console.warn('NIGHT_VISUAL_REFERENCE_FALLBACK',String(error?.message||error).slice(0,220));
+        result=await imageRequest({prompt:promptFor({theme,mode,variant:`${variant} · visual-id ${visualId}`,pageText})});
+      }
       if(!result?.buffer)return {buffer:null,cached:false,key:id,disabled:true};
       const temp=`${file}.${process.pid}.tmp`;await fs.writeFile(temp,result.buffer);await fs.rename(temp,file);
       return {buffer:result.buffer,cached:false,key:id,model:result.model};
     })().finally(()=>inflight.delete(id));
     inflight.set(id,work);return work;
   }
-  return {ensure,promptFor,safeKey};
+  return {ensure,promptFor,storyboardPromptFor,safeKey};
 }
