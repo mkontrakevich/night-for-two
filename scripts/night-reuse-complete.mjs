@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import pg from 'pg';
 
 const {Pool}=pg;
@@ -17,9 +19,29 @@ try{
   `);
   const novel=rows[0]||null;
   const completed=novel?.completed_at?new Date(novel.completed_at):null;
-  const reusable=Boolean(completed&&!Number.isNaN(completed.getTime())&&completed.getTime()>=after.getTime());
+  let qaReady=false,qaChecked=0;
+  if(novel&&completed&&!Number.isNaN(completed.getTime())&&completed.getTime()>=after.getTime()){
+    const {rows:pages}=await pool.query(`
+      SELECT page_no,visual_key FROM night_linear_novel_pages
+      WHERE novel_id=$1 AND BTRIM(media_prompt)<>''
+      ORDER BY page_no
+    `,[novel.id]);
+    const cacheDir=process.env.NIGHT_VISUAL_CACHE_DIR||path.join(process.env.CONFIG_DIR||'/app/config','night-visuals');
+    qaReady=pages.length>0;
+    for(const page of pages){
+      const key=String(page.visual_key||'').toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,120)||'visual';
+      try{
+        const meta=JSON.parse(await fs.readFile(path.join(cacheDir,`${key}.json`),'utf8'));
+        qaChecked++;
+        if(!meta?.qa?.passed){qaReady=false;break}
+      }catch{qaReady=false;break}
+    }
+  }
+  const reusable=Boolean(completed&&!Number.isNaN(completed.getTime())&&completed.getTime()>=after.getTime()&&qaReady);
   console.log('NIGHT_REUSE_COMPLETE '+JSON.stringify({
     reusable,
+    qa_ready:qaReady,
+    qa_checked:qaChecked,
     requested_after:after.toISOString(),
     novel:novel?{
       id:Number(novel.id),
