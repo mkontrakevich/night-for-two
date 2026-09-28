@@ -8,7 +8,7 @@ Telegram
   -> https://<project>.pages.dev/actions (separate physical actions product)
   -> Cloudflare Pages Function
   -> service binding NIGHT_GATEWAY
-  -> Worker night-for-two-gateway
+  -> Worker night42 (optional secondary Pages route)
   -> VPC binding APP_VPC
   -> private application origin :5683/night
 ```
@@ -26,6 +26,6 @@ The application container still listens on `5681`; the existing production host 
 
 Do not commit the private origin host, tunnel identifier or account-specific credentials.
 
-The actions route has its own interface, API and PostgreSQL tables. Reader content is left unchanged; story-to-action links will be added after the action product is reviewed.
+The chosen public product address is `https://night42.kontrakevich.workers.dev`; this Pages route is optional. The actions route has its own interface, API and PostgreSQL tables. Reader content is left unchanged; story-to-action links will be added after the action product is reviewed.
 
 Product behavior and the story-context contract: `docs/NIGHT_ACTIONS_PRODUCT.md`.
