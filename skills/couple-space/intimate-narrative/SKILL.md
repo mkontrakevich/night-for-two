@@ -741,6 +741,50 @@ The destination is a coherent romantic visual memory of the couple that can ulti
 
 ---
 
+## 17A. Dialogue contract
+
+Reader-facing fiction uses explicit speaker labels for every direct line:
+
+```text
+Марк: ...
+Ева: ...
+Виктор: ...
+```
+
+Rules:
+- no anonymous dialogue lines that begin only with an em dash;
+- dialogue should carry subtext rather than explain plot facts the characters already know;
+- give each recurring character a distinct rhythm, vocabulary and way of avoiding or approaching a subject;
+- use callbacks, unfinished thoughts, pauses, micro-humor, reversals and changes of initiative;
+- if a sanitized relationship profile is supplied, use only its aggregate observations about conversational rhythm, recurring themes, humor, closeness and distance;
+- never quote source private messages and never expose hidden relationship analysis in reader-facing prose.
+
+## 17B. Story illustration contract
+
+For an illustrated page, the exact page text is canonical. Visual prompts must preserve:
+- who is present;
+- location and room geometry;
+- wardrobe state;
+- props;
+- time of day;
+- body position and gesture;
+- emotional beat;
+- continuity with prior frames.
+
+Preferred production flow:
+
+```text
+exact page text
+→ scene facts
+→ pencil storyboard for camera/blocking/props
+→ reference-driven photographic render
+→ continuity and anatomy QC
+→ reader asset
+```
+
+The storyboard is a composition reference. It must not be used to conceal content from a provider or to evade provider rules.
+
+
 ## 18. Source basis
 
 This skill was synthesized from the user-supplied materials:
