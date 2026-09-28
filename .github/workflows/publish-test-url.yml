@@ -7,6 +7,10 @@ on:
         description: Public base URL
         required: true
         type: string
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-test-url.yml
 
 permissions:
   contents: read
@@ -16,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      NIGHT_PAGES_URL: ${{ inputs.public_url }}
+      NIGHT_PAGES_URL: ${{ inputs.public_url || 'https://night42.kontrakevich.workers.dev' }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       PRIMARY_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
       PARTNER_TELEGRAM_ID: ${{ secrets.PARTNER_TELEGRAM_ID }}
