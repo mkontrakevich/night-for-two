@@ -27,6 +27,7 @@ jobs:
         env:
           NIGHT_PORT: "5683"
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           RELATIONSHIP_CONTEXT_URL: ${{ secrets.RELATIONSHIP_CONTEXT_URL }}
           RELATIONSHIP_CONTEXT_TOKEN: ${{ secrets.RELATIONSHIP_CONTEXT_TOKEN }}
@@ -35,14 +36,16 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw "DOCKER_NOT_AVAILABLE" }
-          $required = @("DATABASE_URL","RELATIONSHIP_CONTEXT_URL","RELATIONSHIP_CONTEXT_TOKEN")
+          $required = @("DATABASE_URL","TELEGRAM_BOT_TOKEN","PRIMARY_OWNER_ID","PARTNER_TELEGRAM_ID")
           $missing = @($required | Where-Object { [string]::IsNullOrWhiteSpace((Get-Item "Env:$_" -ErrorAction SilentlyContinue).Value) })
           if ($missing.Count -gt 0) {
             Write-Host "::notice::Standalone origin is not configured yet. Missing secrets: $($missing -join ', ')"
-            exit 0
+            throw "NIGHT_ORIGIN_SECRETS_MISSING"
           }
           docker compose -p night-for-two up -d --build --remove-orphans
           if ($LASTEXITCODE -ne 0) { throw "NIGHT_ORIGIN_DEPLOY_FAILED:$LASTEXITCODE" }
           $health = Invoke-RestMethod -Uri "http://127.0.0.1:5683/night/health" -TimeoutSec 20
           if ($health.ok -ne $true) { throw "NIGHT_ORIGIN_HEALTH_NOT_OK" }
-          Write-Host "NIGHT_ORIGIN_READY port=5683"
+          $actionsHealth = Invoke-RestMethod -Uri "http://127.0.0.1:5683/actions/health" -TimeoutSec 20
+          if ($actionsHealth.ok -ne $true) { throw "NIGHT_ACTIONS_HEALTH_NOT_OK" }
+          Write-Host "NIGHT_ORIGIN_READY port=5683 actions=true"
