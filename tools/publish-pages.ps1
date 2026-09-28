@@ -23,12 +23,10 @@ function Verify-Health([string]$Base) {
   return $health
 }
 
-function Publish-Menu([string]$Base,[string]$ChatId) {
-  if (-not $ChatId) { return }
+function Publish-DefaultMenu([string]$Base) {
   $token = Env 'TELEGRAM_BOT_TOKEN'
   if (-not $token) { throw 'TELEGRAM_BOT_TOKEN_NOT_CONFIGURED' }
   $payload = @{
-    chat_id = $ChatId
     menu_button = @{
       type = 'web_app'
       text = 'Ночь на двоих'
@@ -36,7 +34,7 @@ function Publish-Menu([string]$Base,[string]$ChatId) {
     }
   } | ConvertTo-Json -Depth 6 -Compress
   $result = Invoke-RestMethod -Method Post -Uri "https://api.telegram.org/bot$token/setChatMenuButton" -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($payload))
-  if (-not $result.ok) { throw "TELEGRAM_MENU_FAILED:$ChatId" }
+  if (-not $result.ok) { throw 'TELEGRAM_DEFAULT_MENU_FAILED' }
 }
 
 $base = Resolve-PublicUrl
@@ -44,10 +42,6 @@ $health = Verify-Health $base
 Write-Host "NIGHT_PUBLIC_HEALTH_OK base=$base db=$($health.db)"
 
 if ($Mode -eq 'Publish') {
-  $owner = Env 'PRIMARY_OWNER_ID'
-  $partner = Env 'PARTNER_TELEGRAM_ID'
-  if (-not $owner -or -not $partner) { throw 'NIGHT_TELEGRAM_IDS_NOT_CONFIGURED' }
-  Publish-Menu $base $owner
-  Publish-Menu $base $partner
-  Write-Host "NIGHT_TELEGRAM_MENU_PUBLISHED url=$base/night"
+  Publish-DefaultMenu $base
+  Write-Host "NIGHT_TELEGRAM_DEFAULT_MENU_PUBLISHED url=$base/night"
 }
