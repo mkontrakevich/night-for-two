@@ -8,6 +8,9 @@ const root=path.resolve(path.dirname(self),'..');
 const runtime=fs.readFileSync(path.join(root,'src/night-for-two-v2-runtime.js'),'utf8');
 const connector=fs.readFileSync(path.join(root,'src/integrations/relationship-context-connector.js'),'utf8');
 const env=fs.readFileSync(path.join(root,'.env.example'),'utf8');
+const gateway=fs.readFileSync(path.join(root,'cloudflare/night-gateway/wrangler.jsonc'),'utf8');
+const compose=fs.readFileSync(path.join(root,'docker-compose.yml'),'utf8');
+const originDeploy=fs.readFileSync(path.join(root,'.github/workflows/deploy-origin.yml'),'utf8');
 
 const skipDirs=new Set(['.git','node_modules','output','cache']);
 function filesUnder(dir){
@@ -50,4 +53,10 @@ assert(connector.includes('RELATIONSHIP_CONTEXT_RAW_MESSAGES_FORBIDDEN'));
 assert(connector.includes('raw_messages:false'));
 assert(env.includes('PARTNER_TELEGRAM_ID='));
 assert(!/PERSONAL_[A-Z][A-Z0-9_]*_CHAT_ID/u.test(env));
-console.log('STANDALONE_BOUNDARY_OK raw_messages=false relationship_analysis_external=true anonymized=true');
+
+const gatewayConfig=JSON.parse(gateway);
+assert.equal(gatewayConfig.vars?.NIGHT_ORIGIN_PORT,'5683','Cloudflare gateway must target the isolated production host port');
+assert(compose.includes('"${NIGHT_PORT:-5683}:5681"'),'Docker must publish production host port 5683 to container port 5681');
+assert(originDeploy.includes('NIGHT_PORT: "5683"'),'Origin deployment must keep the isolated host port at 5683');
+
+console.log('STANDALONE_BOUNDARY_OK raw_messages=false relationship_analysis_external=true anonymized=true production_origin_port=5683');
