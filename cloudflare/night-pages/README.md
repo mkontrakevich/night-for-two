@@ -9,7 +9,7 @@ Telegram
   -> Cloudflare Pages Function
   -> service binding NIGHT_GATEWAY
   -> Worker night42 (optional secondary Pages route)
-  -> VPC binding APP_VPC
+  -> VPC binding NIGHT_VPC
   -> private application origin :5683/night
 ```
 
