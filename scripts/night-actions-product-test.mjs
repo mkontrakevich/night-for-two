@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {Script} from 'node:vm';
+import {Script,createContext} from 'node:vm';
 import {ACTION_SCENES,effectiveAction,actionCard} from '../src/night-actions-core.js';
 import {createNightActionsProduct} from '../src/night-actions-product.js';
 let html='';
@@ -8,7 +8,21 @@ await createNightActionsProduct({pool:{}}).handle({method:'GET',url:'/actions'},
   end(body){html=body;}
 });
 assert.match(html,/Откройте в Telegram/);
-new Script(html.match(/<script>([\s\S]*?)<\/script>/)?.[1]||'',{filename:'night-actions-inline.js'});
+const clientScript=html.match(/<script>([\s\S]*?)<\/script>/)?.[1]||'';
+const parsedScript=new Script(clientScript,{filename:'night-actions-inline.js'});
+const requests=[];
+const origin='https://night42.kontrakevich.workers.dev';
+const embeddedApp={innerHTML:'',insertAdjacentHTML(){}};
+const child={Telegram:{WebApp:{initData:''}}};
+child.parent={location:{origin},Telegram:{WebApp:{initData:'signed-test-context'}}};
+parsedScript.runInContext(createContext({
+  window:child,location:{origin,hostname:'night42.kontrakevich.workers.dev',search:''},
+  document:{querySelector:()=>embeddedApp,querySelectorAll:()=>[]},URLSearchParams,
+  fetch:async (url,options)=>{requests.push({url,options});return {ok:false,json:async()=>({error:'TEST_STOP'})};}
+}));
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(requests[0]?.url,'/actions/api/state');
+assert.equal(requests[0]?.options.headers['x-telegram-init-data'],'signed-test-context');
 assert.equal(ACTION_SCENES.length,3);
 assert.equal(effectiveAction('touch','words'),'words');
 assert.equal(effectiveAction('kiss','embrace'),'embrace');

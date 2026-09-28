@@ -54,6 +54,7 @@ for(const endpoint of ['/api/visual','/api/connection-ack','/api/selection','/ap
 for(const action of ['connection-ack','selection','done','rate','overall','story-choice','story-finish'])assert(html.includes(`api('${action}'`),`missing client action ${action}`);
 assert(html.includes('readerBook')&&html.includes('renderEpisodeReader'));
 assert(html.includes('href="https://night42.kontrakevich.workers.dev/reader/"'),'Room 17 demo must open on the product HTTPS domain');
+assert(html.includes('iframe title="Действия" src="/actions"')&&html.includes("bind('#openActions',renderActions)"),'Actions must open from Night within the authenticated Telegram view');
 assert(html.includes('data-reader-prev')&&html.includes('data-reader-next'));
 assert(html.includes('Тестировать с ИИ-партнёром'));
 assert(storyFlow.includes('НЕ иллюстрируй каждую страницу')&&storyFlow.includes('1–2 визуально значимые страницы'));
