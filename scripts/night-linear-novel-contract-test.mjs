@@ -11,6 +11,8 @@ assert(flow.includes('[8,10,10,10,10,10,10,10,10,12]'),'Full novel must total ex
 assert(store.includes('night_linear_novels')&&store.includes('night_linear_novel_pages'),'Full novel must persist metadata and pages');
 assert(store.includes("status IN ('generating','illustrating','complete','failed')"),'Full novel must expose durable generation status');
 assert(generator.includes('generateSerialNovelPlan'),'Generation must start from a complete hidden novel architecture');
+assert(generator.indexOf('await store.create')<generator.indexOf('generateSerialNovelPlan'),'Generation state must be persisted before slow planning begins');
+assert(app.includes("status:'generating'")&&app.includes("render();return d"),'Mini App must show generation immediately after start');
 assert(generator.includes('for(let chapterIndex=0;chapterIndex<STORY_ARC.length;chapterIndex++)'),'Generator must write every chapter');
 assert(generator.includes('for(let pageNo=1;pageNo<=STORY_TOTAL_PAGES;pageNo++)')&&generator.includes("if(!String(page.media_prompt||'').trim())continue"),'Generator must scan all pages but render only pages selected for illustration');
 assert(generator.includes('illustrated>2')&&generator.includes('minIllustrations'),'Each chapter must select only one or two meaningful illustration beats');
