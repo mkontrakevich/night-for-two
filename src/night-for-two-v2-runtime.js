@@ -14,8 +14,9 @@ import {generateStoryScene,simulateStoryChoice,initialStoryProfile,optionFor,app
 
 const {Pool}=pg;
 const SCOPE='couple_default';
-const OWNER_ID=String(process.env.PRIMARY_OWNER_ID||'');
-const PARTNER_ID=String(process.env.PARTNER_TELEGRAM_ID||'');
+const LOCAL_TEST_MODE=/^(1|true|yes)$/i.test(String(process.env.NIGHT_LOCAL_TEST_MODE||''));
+const OWNER_ID=String(process.env.PRIMARY_OWNER_ID||(LOCAL_TEST_MODE?'local_owner':''));
+const PARTNER_ID=String(process.env.PARTNER_TELEGRAM_ID||(LOCAL_TEST_MODE?'local_partner':''));
 const LEVELS=new Set(['tender','bold','hot']);
 const DURATIONS=new Set(['quick','session','open']);
 const PERMISSIONS=new Set(['words','embrace','kiss','touch','massage','closer']);

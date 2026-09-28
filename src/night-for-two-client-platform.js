@@ -12,11 +12,13 @@ const NightPlatform=(()=>{
     return '';
   }
   function telegramInitData(){return String(telegram()?.initData||launchParam('tgWebAppData')||'')}
-  function kind(){return telegramInitData()?'telegram':'web'}
-  function hasAuth(){return Boolean(telegramInitData())}
+  function localTest(){return ['localhost','127.0.0.1'].includes(location.hostname)&&launchParam('local_test')==='1'}
+  function kind(){return telegramInitData()?'telegram':localTest()?'local-test':'web'}
+  function hasAuth(){return Boolean(telegramInitData())||localTest()}
   function authHeaders(){
     const data=telegramInitData();
-    return data?{'x-telegram-init-data':data}:{};
+    if(data)return {'x-telegram-init-data':data};
+    return localTest()?{'x-night-local-test':'1'}:{};
   }
   function haptic(kind='select'){
     try{
@@ -54,7 +56,7 @@ const NightPlatform=(()=>{
     if(app?.close){app.close();return;}
     if(history.length>1)history.back();
   }
-  return {telegram,kind,hasAuth,authHeaders,haptic,ready,share,close,launchParam};
+  return {telegram,kind,hasAuth,authHeaders,haptic,ready,share,close,launchParam,localTest};
 })();
 function tg(){return NightPlatform.telegram()}
 function haptic(kind='select'){return NightPlatform.haptic(kind)}
