@@ -27,3 +27,31 @@ export function actionCard(stage,permission,context={}){
   };
   return {title:scene.chapter,text:`${pace} ${lines[scene.id][permission]} Любой может остановить действие или предложить перейти к следующей сцене.`,scene:scene.id,permission};
 }
+
+const safeText=(value,max=420)=>String(value||'').replace(/https?:\/\/\S+|[\w.+-]+@[\w.-]+\.[a-z]{2,}|\+?\d[\d ()-]{8,}\d/gi,'').replace(/\s+/g,' ').trim().slice(0,max);
+export function storyActionSnapshot(flow={},sourceId=null){
+  if(flow?.final!==true||!flow?.scene?.title)return null;
+  const history=Array.isArray(flow.history)?flow.history:[];
+  const candidates=[history[0],history[Math.floor(history.length/2)],flow.scene];
+  const anchors=candidates.map((entry,i)=>({
+    id:ACTION_SCENES[i].id,
+    chapter:safeText(entry?.title,80)||ACTION_SCENES[i].chapter,
+    story:safeText(entry?.text,420)||ACTION_SCENES[i].story
+  }));
+  return {version:1,kind:'generated_story',source_session_id:Number(sourceId)||null,anchors};
+}
+export function actionScene(stage,snapshot=null){
+  const base=ACTION_SCENES[stage];
+  if(!base)return null;
+  if(snapshot?.kind!=='generated_story')return base;
+  const anchor=snapshot.anchors?.[stage];
+  return anchor?.id===base.id?{...base,chapter:safeText(anchor.chapter,80)||base.chapter,story:safeText(anchor.story,420)||base.story}:base;
+}
+export function fallbackStoryCard(stage,permission,snapshot,context={}){
+  if(snapshot?.kind!=='generated_story')return actionCard(stage,permission,context);
+  const scene=actionScene(stage,snapshot);
+  if(permission==='skip')return actionCard(stage,'skip',context);
+  if(!ACTION_PERMISSIONS.includes(permission))throw new Error('ACTION_PERMISSION_INVALID');
+  const actions={words:'по очереди назовите одну деталь этой сцены, которая запомнилась, и скажите, что она значит для вас сейчас',embrace:'если обоим хочется, обнимитесь на несколько спокойных вдохов и вместе вспомните эту сцену',kiss:'если желание взаимно, обменяйтесь поцелуем и вместе вспомните эту сцену',touch:'если обоим комфортно, соприкоснитесь ладонями и вместе вспомните эту сцену'};
+  return {title:scene.chapter,text:`Сцена «${scene.chapter}» продолжается за пределами книги: ${actions[permission]}. Любой может остановиться или перейти дальше без объяснений.`,scene:scene.id,permission};
+}
