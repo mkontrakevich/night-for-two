@@ -18,6 +18,8 @@ jobs:
     env:
       NIGHT_PAGES_URL: ${{ inputs.public_url }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      PRIMARY_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
+      PARTNER_TELEGRAM_ID: ${{ secrets.PARTNER_TELEGRAM_ID }}
 
     steps:
       - uses: actions/checkout@v4
