@@ -83,9 +83,13 @@ jobs:
           fi
           base="${NIGHT_PAGES_URL%/}"
           curl --fail --show-error --silent --retry 4 --retry-delay 3 "$base/night/health" | tee /tmp/night-health.json
+          curl --fail --show-error --silent --retry 4 --retry-delay 3 "$base/actions/health" | tee /tmp/actions-health.json
           python - <<'PY'
           import json
           d=json.load(open("/tmp/night-health.json"))
           if d.get("ok") is not True:
               raise SystemExit("NIGHT_HEALTH_NOT_OK")
+          a=json.load(open("/tmp/actions-health.json"))
+          if a.get("ok") is not True or a.get("product") != "night_actions":
+              raise SystemExit("NIGHT_ACTIONS_HEALTH_NOT_OK")
           PY
