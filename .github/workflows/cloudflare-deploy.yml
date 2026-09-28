@@ -25,7 +25,6 @@ jobs:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_TUNNEL: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
           NIGHT_ORIGIN_HOST: ${{ secrets.NIGHT_ORIGIN_HOST }}
-          NIGHT_PAGES_URL: ${{ vars.NIGHT_PAGES_URL }}
         shell: bash
         run: |
           missing=()
@@ -33,13 +32,8 @@ jobs:
           [[ -n "$CF_TOKEN" ]] || missing+=(CLOUDFLARE_API_TOKEN)
           [[ -n "$CF_TUNNEL" ]] || missing+=(CLOUDFLARE_TUNNEL_ID)
           [[ -n "$NIGHT_ORIGIN_HOST" ]] || missing+=(NIGHT_ORIGIN_HOST)
-          [[ -n "$NIGHT_PAGES_URL" ]] || missing+=(NIGHT_PAGES_URL)
           if (( ${#missing[@]} )); then
             printf '::error::Missing repository secrets/variable: %s\n' "${missing[*]}"
-            exit 1
-          fi
-          if [[ ! "$NIGHT_PAGES_URL" =~ ^https://[^/]+/?$ ]]; then
-            echo '::error::NIGHT_PAGES_URL must be an HTTPS origin URL without a path.'
             exit 1
           fi
 
@@ -78,12 +72,14 @@ jobs:
     needs: deploy-gateway
     runs-on: ubuntu-latest
     env:
-      NIGHT_PAGES_URL: ${{ vars.NIGHT_PAGES_URL }}
+      NIGHT_PUBLIC_URL: https://night42.kontrakevich.workers.dev
     steps:
-      - name: Verify production health
+      - name: Verify production Reader and application health
         shell: bash
         run: |
-          base="${NIGHT_PAGES_URL%/}"
+          base="${NIGHT_PUBLIC_URL%/}"
+          curl --fail --show-error --silent --retry 4 --retry-delay 3 -D /tmp/reader-headers -o /tmp/reader.html "$base/reader/"
+          grep -qi '^x-night-product: reader' /tmp/reader-headers || { echo '::error::NIGHT_READER_ROUTE_NOT_READY'; exit 1; }
           curl --fail --show-error --silent --retry 4 --retry-delay 3 "$base/night/health" | tee /tmp/night-health.json
           curl --fail --show-error --silent --retry 4 --retry-delay 3 "$base/actions/health" | tee /tmp/actions-health.json
           python - <<'PY'
