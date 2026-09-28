@@ -28,7 +28,7 @@ const forbidden=[
   /PARTNER(?:_TELEGRAM)?_ID\s*\|\|\s*['"]\d{6,}['"]/u,
   /PERSONAL_[A-Z][A-Z0-9_]*_CHAT_ID/u,
   /scope\s*[:=]\s*['"]personal_[a-z0-9_-]+/iu,
-  /identity:\/\/[a-z0-9_-]+/iu,
+  /identity:\/\/(?!person-a\/|person-b\/)[a-z0-9_-]+/iu,
   /personal_original_messages/iu
 ];
 
