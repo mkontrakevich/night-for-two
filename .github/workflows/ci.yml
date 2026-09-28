@@ -37,3 +37,26 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build standalone image
         run: docker build -t night-for-two:ci .
+
+  cloudflare-inventory:
+    runs-on: ubuntu-latest
+    env:
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: List existing Pages projects
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${CF_ACCOUNT:-}" || -z "${CF_TOKEN:-}" ]]; then
+            echo "CLOUDFLARE_REPO_SECRETS_MISSING"
+            exit 0
+          fi
+          curl --fail --silent --show-error -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/pages/projects?per_page=100" > /tmp/pages.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/pages.json'))
+          if not d.get('success'): raise SystemExit('PAGES_API_FAILED')
+          for p in d.get('result') or []:
+              print('PAGES',p.get('name',''),p.get('subdomain',''),p.get('production_branch',''))
+          PY
