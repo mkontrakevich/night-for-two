@@ -27,3 +27,5 @@ The application container still listens on `5681`; the existing production host 
 Do not commit the private origin host, tunnel identifier or account-specific credentials.
 
 The actions route has its own interface, API and PostgreSQL tables. Reader content is left unchanged; story-to-action links will be added after the action product is reviewed.
+
+Product behavior and the story-context contract: `docs/NIGHT_ACTIONS_PRODUCT.md`.
