@@ -30,7 +30,7 @@ function Publish-Menu([string]$Base,[string]$ChatId) {
     chat_id = $ChatId
     menu_button = @{
       type = 'web_app'
-      text = 'Ночь на двоих'
+      text = [Text.RegularExpressions.Regex]::Unescape('\u041d\u043e\u0447\u044c \u043d\u0430 \u0434\u0432\u043e\u0438\u0445')
       web_app = @{ url = "$Base/night" }
     }
   } | ConvertTo-Json -Depth 6 -Compress
