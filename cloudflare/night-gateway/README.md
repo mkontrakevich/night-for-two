@@ -1,6 +1,6 @@
 # Night for Two gateway
 
-Cloudflare Worker that forwards only `/night*` to the private application runtime.
+Cloudflare Worker that forwards `/night*` and `/actions*` to the private application runtime.
 
 Required bindings:
 
