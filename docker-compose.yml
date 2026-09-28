@@ -22,6 +22,8 @@ services:
       PORT: 5681
       DATABASE_URL: ${DATABASE_URL:-postgresql://night:night@postgres:5432/night_for_two}
       NIGHT_LOCAL_TEST_MODE: ${NIGHT_LOCAL_TEST_MODE:-false}
+    volumes:
+      - night_visuals:/app/config/night-visuals
     ports:
       - "${NIGHT_PORT:-5683}:5681"
     depends_on:
@@ -33,6 +35,7 @@ services:
 
 volumes:
   night_postgres:
+  night_visuals:
 
 networks:
   night_context:
