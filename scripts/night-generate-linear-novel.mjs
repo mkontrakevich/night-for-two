@@ -186,6 +186,9 @@ try{
   const bookSeed=crypto.randomBytes(18).toString('hex');
   console.log('NIGHT_LINEAR_NOVEL_START',JSON.stringify({book_seed:bookSeed,total_pages:STORY_TOTAL_PAGES}));
 
+  novel=await store.create({bookSeed,title:'Ночь на двоих',plan:{phase:'planning'},totalPages:STORY_TOTAL_PAGES});
+  console.log('NIGHT_LINEAR_NOVEL_RESERVED',JSON.stringify({novel_id:novel.id,total_pages:STORY_TOTAL_PAGES}));
+
   const relationshipProfile=await relationshipBridge.context();
   console.log('NIGHT_RELATIONSHIP_CONTEXT_READY',JSON.stringify({policy:relationshipProfile.policy,observations:relationshipProfile.observations?.length||0,preferences:relationshipProfile.preferences?.length||0,dynamics:relationshipProfile.dynamics?.length||0,raw_messages:false}));
 
@@ -196,7 +199,7 @@ try{
     generate:request=>completeAIText({...request,skipDatabaseContext:true})
   });
 
-  novel=await store.create({bookSeed,title:plan.title||'Ночь на двоих',plan,totalPages:STORY_TOTAL_PAGES});
+  novel=await store.updateNovel(novel.id,{title:plan.title||'Ночь на двоих',plan,status:'generating'});
   console.log('NIGHT_LINEAR_PLAN_READY',JSON.stringify({novel_id:novel.id,title:plan.title,episodes:plan.episodes?.length||0}));
 
   let pageCounter=0,plannedImages=0,previousSummary='',previousTail='';
