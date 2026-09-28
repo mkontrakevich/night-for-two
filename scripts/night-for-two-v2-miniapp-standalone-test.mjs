@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {Script} from 'node:vm';
-import {NIGHT_V2_DISPLAY,NIGHT_FINGERPRINT_POOLS,connectionFingerprint} from '../src/night-for-two-v2-runtime.js';
+import {NIGHT_V2_DISPLAY,NIGHT_FINGERPRINT_POOLS,connectionFingerprint,normalizeNightRoomCode} from '../src/night-for-two-v2-runtime.js';
 import {renderNightV3Html} from '../src/night-for-two-miniapp-v3.js';
 import {availableNightV2Packs,chooseNightV2Round,NIGHT_V2_INTIMATE_PERMISSIONS,NIGHT_V2_NIGHT_PACKS} from '../src/night-for-two-v2-game.js';
 
@@ -35,6 +35,9 @@ const fpB=connectionFingerprint({nonce:'11'.repeat(32),roomCode:'ABC234',ownerId
 assert.deepEqual(fpA,fpB);
 assert.equal(fpA.symbols.length,4);
 assert.equal(new Set(fpA.symbols).size,4);
+assert.equal(normalizeNightRoomCode(' АВС234 '),'ABC234');
+assert.equal(normalizeNightRoomCode('aвe2х9'),'ABE2X9');
+assert.throws(()=>normalizeNightRoomCode('абв123'),/NIGHT_V2_ROOM_CODE_INVALID/);
 assert(NIGHT_FINGERPRINT_POOLS[fpA.style].length>=20);
 
 const noPhysical=availableNightV2Packs({level:2,permissions:['words','embrace']});
@@ -55,6 +58,7 @@ for(const action of ['connection-ack','selection','done','rate','overall','story
 assert(html.includes('readerBook')&&html.includes('renderEpisodeReader'));
 assert(html.includes('href="https://night42.kontrakevich.workers.dev/reader/"'),'Room 17 demo must open on the product HTTPS domain');
 assert(html.includes('iframe title="Действия" src="/actions"')&&html.includes("bind('#openActions',renderActions)"),'Actions must open from Night within the authenticated Telegram view');
+assert(html.includes('.storyJoin{display:grid;grid-template-columns:minmax(0,1fr)')&&html.includes('lang="en" inputmode="text"'),'Join input must remain readable on phones');
 assert(html.includes('data-reader-prev')&&html.includes('data-reader-next'));
 assert(html.includes('Тестировать с ИИ-партнёром'));
 assert(storyFlow.includes('НЕ иллюстрируй каждую страницу')&&storyFlow.includes('1–2 визуально значимые страницы'));
