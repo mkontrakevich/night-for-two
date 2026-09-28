@@ -11,6 +11,7 @@ const env=fs.readFileSync(path.join(root,'.env.example'),'utf8');
 const gateway=fs.readFileSync(path.join(root,'cloudflare/night-gateway/wrangler.jsonc'),'utf8');
 const compose=fs.readFileSync(path.join(root,'docker-compose.yml'),'utf8');
 const originDeploy=fs.readFileSync(path.join(root,'.github/workflows/deploy-origin.yml'),'utf8');
+const telegramPublish=fs.readFileSync(path.join(root,'tools/publish-pages.ps1'),'utf8');
 
 const skipDirs=new Set(['.git','node_modules','output','cache']);
 function filesUnder(dir){
@@ -71,5 +72,6 @@ assert(compose.includes('      - night_context'),'Night app must join the dedica
 const postgresBlock=compose.split('\n\n  app:')[0];
 assert(!postgresBlock.includes('night_context'),'Night Postgres must remain isolated from the bot context network');
 assert(originDeploy.includes('NIGHT_PORT: "5683"'),'Origin deployment must keep the isolated host port at 5683');
+assert(telegramPublish.includes('chat_id = $ChatId')&&!telegramPublish.includes('Publish-DefaultMenu'),'Night menu publication must affect only the two pair chats');
 
 console.log('STANDALONE_BOUNDARY_OK raw_messages=false relationship_analysis_external=true anonymized=true production_origin_port=5683 private_context_network=true');
