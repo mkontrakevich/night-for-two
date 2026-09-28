@@ -53,6 +53,7 @@ new Script(clientScript,{filename:'night-v3-inline.js'});
 for(const endpoint of ['/api/visual','/api/connection-ack','/api/selection','/api/done','/api/rate','/api/overall','/api/story-choice','/api/story-finish'])assert(app.includes(endpoint),`missing server endpoint ${endpoint}`);
 for(const action of ['connection-ack','selection','done','rate','overall','story-choice','story-finish'])assert(html.includes(`api('${action}'`),`missing client action ${action}`);
 assert(html.includes('readerBook')&&html.includes('renderEpisodeReader'));
+assert(html.includes('href="https://night42.kontrakevich.workers.dev/reader/"'),'Room 17 demo must open on the product HTTPS domain');
 assert(html.includes('data-reader-prev')&&html.includes('data-reader-next'));
 assert(html.includes('Тестировать с ИИ-партнёром'));
 assert(storyFlow.includes('НЕ иллюстрируй каждую страницу')&&storyFlow.includes('1–2 визуально значимые страницы'));
