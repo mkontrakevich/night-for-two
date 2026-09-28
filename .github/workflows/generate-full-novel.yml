@@ -8,7 +8,7 @@ on:
       - "ops/generate-room17-v2.trigger"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: night-full-novel-generation
@@ -59,3 +59,51 @@ jobs:
           $status = docker compose exec -T app node scripts/night-linear-novel-status.mjs --require-complete
           $status | Out-Host
           if ($LASTEXITCODE -ne 0) { throw "NIGHT_FULL_NOVEL_NOT_COMPLETE:$LASTEXITCODE" }
+
+      - name: Export static reader
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path "_reader_export") { Remove-Item "_reader_export" -Recurse -Force }
+          New-Item -ItemType Directory -Path "_reader_export" | Out-Null
+          $cid = docker compose ps -q app
+          if (-not $cid) { throw "NIGHT_APP_CONTAINER_MISSING" }
+          docker compose exec -T app node scripts/night-export-static-reader.mjs --output=/tmp/night-reader-export
+          if ($LASTEXITCODE -ne 0) { throw "NIGHT_STATIC_EXPORT_FAILED:$LASTEXITCODE" }
+          docker cp "${cid}:/tmp/night-reader-export/." "_reader_export"
+          if ($LASTEXITCODE -ne 0) { throw "NIGHT_STATIC_EXPORT_COPY_FAILED:$LASTEXITCODE" }
+
+      - name: Publish generated reader to repository
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name "night-for-two-bot"
+          git config user.email "night-for-two-bot@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
+
+          $targets = @(
+            "docs/index.html",
+            "docs/story.json",
+            "docs/manifest.json",
+            "docs/assets/generated"
+          )
+          foreach ($target in $targets) {
+            if (Test-Path $target) { Remove-Item $target -Recurse -Force }
+          }
+          New-Item -ItemType Directory -Path "docs" -Force | Out-Null
+          Copy-Item "_reader_export/index.html" "docs/index.html" -Force
+          Copy-Item "_reader_export/story.json" "docs/story.json" -Force
+          Copy-Item "_reader_export/manifest.json" "docs/manifest.json" -Force
+          New-Item -ItemType Directory -Path "docs/assets" -Force | Out-Null
+          Copy-Item "_reader_export/assets/generated" "docs/assets/generated" -Recurse -Force
+
+          git add docs/index.html docs/story.json docs/manifest.json docs/assets/generated
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Reader already current; no publication commit needed."
+            exit 0
+          }
+          git commit -m "Publish generated Room 17 personalized reader"
+          git push origin HEAD:main
+          if ($LASTEXITCODE -ne 0) { throw "NIGHT_READER_PUSH_FAILED:$LASTEXITCODE" }
