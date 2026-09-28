@@ -54,6 +54,9 @@ try{
       if(await exists(metaSrc)){
         try{meta=JSON.parse(await fs.readFile(metaSrc,'utf8'))}catch{}
       }
+      if(process.env.NIGHT_VISUAL_QA_REQUIRED!=='0'){
+        if(!meta?.qa?.passed)throw new Error(`NIGHT_EXPORT_VISUAL_QA_REJECTED:${page.page_no}`);
+      }
     }
     exported.push({
       page_no:Number(page.page_no),
@@ -66,7 +69,14 @@ try{
         model:String(meta.model||''),
         storyboard:Boolean(meta.storyboard),
         prompt_hash:String(meta.prompt_hash||''),
-        source_text_hash:String(meta.source_text_hash||'')
+        source_text_hash:String(meta.source_text_hash||''),
+        qa:meta.qa?{
+          passed:Boolean(meta.qa.passed),
+          score:Number(meta.qa.score)||0,
+          threshold:Number(meta.qa.threshold)||0,
+          model:String(meta.qa.model||''),
+          mismatches:Array.isArray(meta.qa.mismatches)?meta.qa.mismatches.slice(0,12):[]
+        }:null
       }:null
     });
   }
