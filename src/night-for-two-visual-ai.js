@@ -10,7 +10,8 @@ const THEMES=Object.freeze({
   dance:'contemporary dance, body rhythm, flowing translucent fabric, sculptural movement, warm theatrical sidelight',
   boudoir:'theatrical boudoir, velvet curtains, antique mirror, candles, satin, lace, perfume-glass reflections',
   domination:'dark leather room, black leather straps, brushed brass rings, controlled crimson practical light, refined BDSM atmosphere',
-  romance:'romantic bed interior, crumpled satin sheets, rose petals, candlelight, soft tactile closeness'
+  romance:'romantic bed interior, crumpled satin sheets, rose petals, candlelight, soft tactile closeness',
+  artistic_nude:'fine-art implied nudity, back or side silhouette, draped fabric or sheet coverage, sculptural light and shadow, restrained museum-editorial composition'
 });
 const MODES=Object.freeze({
   home:'introductory cinematic hero image, seductive but elegant, inviting negative space for interface text',
@@ -41,7 +42,7 @@ function promptFor({theme='domination',mode='home',variant='',pageText=''}) {
       : 'Create a contextual atmosphere image for the current app screen.',
     'Recurring visual language: two clearly adult partners, elegant contemporary styling, realistic anatomy, tactile fabrics, cinematic depth, natural body language and emotionally readable distance.',
     'Continuity rule: preserve the same broad couple archetype, lighting language, wardrobe palette and location details already implied by the narrative whenever the prompt indicates continuity.',
-    'Tasteful sensuality only: no visible genitals, no nipples, no explicit sexual act, no pornographic framing, no fetishized close-up, no text, no logo, no watermark.',
+    'Tasteful sensuality only: artistic implied nudity is allowed only when the page explicitly supports an undressed state; preserve clothing otherwise. No visible genitals, no nipples, no explicit sexual act, no pornographic framing, no fetishized close-up, no text, no logo, no watermark.',
     'Faces may be shown only as non-identifiable fictional adults; never imitate or identify a real person.',
     'Romantic intimacy can be conveyed through gaze, embrace, hands, silhouette, clothing, bedding, reflections, atmosphere and implied off-screen action.',
     `Evening visual theme: ${themeText}.`,
@@ -90,6 +91,8 @@ function referenceDataUrl(buffer){return `data:image/jpeg;base64,${buffer.toStri
 
 export function createNightVisualAI(){
   async function ensure({key,theme='domination',mode='home',variant='',pageText=''}) {
+    const nudeCue=/\b(nude|undressed|bare skin|обнажен|обнажён|без одежды|раздет|раздета|нагое тело)\b/i.test(String(pageText||'')+' '+String(variant||''));
+    if(nudeCue&&theme==='boudoir')theme='artistic_nude';
     const id=safeKey(key),dir=cacheDir(),file=path.join(dir,`${id}.jpg`);
     try{return {buffer:await fs.readFile(file),cached:true,key:id};}catch{}
     if(!process.env.OPENROUTER_API_KEY)return {buffer:null,cached:false,key:id,disabled:true};
