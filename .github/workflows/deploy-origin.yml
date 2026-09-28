@@ -17,7 +17,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require standalone origin configuration
+        shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          PRIMARY_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
+          PARTNER_TELEGRAM_ID: ${{ secrets.PARTNER_TELEGRAM_ID }}
+        run: |
+          missing=()
+          [[ -n "$DATABASE_URL" ]] || missing+=(DATABASE_URL)
+          [[ -n "$TELEGRAM_BOT_TOKEN" ]] || missing+=(TELEGRAM_BOT_TOKEN)
+          [[ -n "$PRIMARY_OWNER_ID" ]] || missing+=(PRIMARY_OWNER_ID)
+          [[ -n "$PARTNER_TELEGRAM_ID" ]] || missing+=(PARTNER_TELEGRAM_ID)
+          if (( ${#missing[@]} )); then
+            printf '::error::Missing standalone origin secrets: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
   deploy:
+    needs: preflight
     runs-on: [self-hosted, windows, x64, marins-production]
     timeout-minutes: 20
     steps:
