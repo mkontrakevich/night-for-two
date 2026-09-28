@@ -1,0 +1,40 @@
+name: Recover Night gateway
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/recover-night-gateway.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: night-for-two-cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Check incident and current deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl --silent --show-error --max-time 20 -o /tmp/night-health.json -w '%{http_code}' https://night42.kontrakevich.workers.dev/night/health)
+          test "$code" = 502
+          jq -e '.error == "NIGHT_ORIGIN_UNREACHABLE" and .detail == "handshake timeout"' /tmp/night-health.json >/dev/null
+          current=$(npx --yes wrangler@4 deployments status --name night42 --json)
+          grep -Fq '8566996b-ed07-4231-9782-9c9d454285ba' <<< "$current"
+          echo 'Confirmed incident on the expected night42 deployment.'
+      - name: Restore preceding Worker version
+        run: npx --yes wrangler@4 rollback --name night42 --message 'Restore working Night application routes after VPC handshake timeout'
+      - name: Verify recovered application over HTTPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 https://night42.kontrakevich.workers.dev/night/health | jq -e '.ok == true and .db == true'
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 https://night42.kontrakevich.workers.dev/actions/health | jq -e '.ok == true and .product == "night_actions"'
+          echo 'Night routes restored; Reader on this Worker still needs a safe redeployment.'
