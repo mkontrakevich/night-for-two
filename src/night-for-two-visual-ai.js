@@ -42,7 +42,7 @@ function promptFor({theme='domination',mode='home',variant='',pageText=''}) {
       : 'Create a contextual atmosphere image for the current app screen.',
     'Recurring visual language: two clearly adult partners, elegant contemporary styling, realistic anatomy, tactile fabrics, cinematic depth, natural body language and emotionally readable distance.',
     'Continuity rule: preserve the same broad couple archetype, lighting language, wardrobe palette and location details already implied by the narrative whenever the prompt indicates continuity.',
-    'Tasteful sensuality only: artistic implied nudity is allowed only when the page explicitly supports an undressed state; preserve clothing otherwise. No visible genitals, no nipples, no explicit sexual act, no pornographic framing, no fetishized close-up, no text, no logo, no watermark.',
+    'Tasteful sensuality only: artistic implied nudity is allowed only when the page explicitly supports an undressed state; preserve clothing otherwise. no visible genitals, no nipples, no explicit sexual act, no pornographic framing, no fetishized close-up, no text, no logo, no watermark.',
     'Faces may be shown only as non-identifiable fictional adults; never imitate or identify a real person.',
     'Romantic intimacy can be conveyed through gaze, embrace, hands, silhouette, clothing, bedding, reflections, atmosphere and implied off-screen action.',
     `Evening visual theme: ${themeText}.`,
