@@ -32,6 +32,9 @@ const MODES=Object.freeze({
 
 function safeKey(value=''){return String(value||'visual').toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,120)||'visual';}
 function cacheDir(){return process.env.NIGHT_VISUAL_CACHE_DIR||path.join(process.env.CONFIG_DIR||'/app/config','night-visuals');}
+function metaFile(dir,id){return path.join(dir,`${id}.json`);}
+async function readMeta(dir,id){try{return JSON.parse(await fs.readFile(metaFile(dir,id),'utf8'));}catch{return null;}}
+async function writeMeta(dir,id,data){const target=metaFile(dir,id),temp=`${target}.${process.pid}.tmp`;await fs.writeFile(temp,JSON.stringify(data,null,2));await fs.rename(temp,target);}
 function promptFor({theme='domination',mode='home',variant='',pageText=''}) {
   const themeText=THEMES[theme]||THEMES.domination,modeText=MODES[mode]||MODES.home,narrative=String(variant||'').trim(),sceneFacts=String(pageText||'').replace(/\s+/g,' ').trim().slice(0,5000);
   const storyMode=mode==='story_scene'||mode==='story_final'||narrative.startsWith('BOOK_PAGE:');
@@ -94,7 +97,7 @@ export function createNightVisualAI(){
     const nudeCue=/\b(nude|undressed|bare skin|обнажен|обнажён|без одежды|раздет|раздета|нагое тело)\b/i.test(String(pageText||'')+' '+String(variant||''));
     if(nudeCue&&theme==='boudoir')theme='artistic_nude';
     const id=safeKey(key),dir=cacheDir(),file=path.join(dir,`${id}.jpg`);
-    try{return {buffer:await fs.readFile(file),cached:true,key:id};}catch{}
+    try{return {buffer:await fs.readFile(file),cached:true,key:id,meta:await readMeta(dir,id)};}catch{}
     if(!process.env.OPENROUTER_API_KEY)return {buffer:null,cached:false,key:id,disabled:true};
     if(inflight.has(id))return inflight.get(id);
     const work=(async()=>{
@@ -118,7 +121,18 @@ export function createNightVisualAI(){
       }
       if(!result?.buffer)return {buffer:null,cached:false,key:id,disabled:true};
       const temp=`${file}.${process.pid}.tmp`;await fs.writeFile(temp,result.buffer);await fs.rename(temp,file);
-      return {buffer:result.buffer,cached:false,key:id,model:result.model};
+      const meta={
+        key:id,
+        model:result.model||'',
+        theme,
+        mode,
+        storyboard:Boolean(storyboard?.buffer?.length),
+        prompt_hash:crypto.createHash('sha256').update(promptFor({theme,mode,variant:`${variant} · visual-id ${visualId}`,pageText})).digest('hex'),
+        source_text_hash:crypto.createHash('sha256').update(String(pageText||'')).digest('hex'),
+        created_at:new Date().toISOString()
+      };
+      await writeMeta(dir,id,meta);
+      return {buffer:result.buffer,cached:false,key:id,model:result.model,meta};
     })().finally(()=>inflight.delete(id));
     inflight.set(id,work);return work;
   }
