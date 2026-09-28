@@ -66,6 +66,18 @@ const forwarded=await gatewayWorker.fetch(new Request('https://night42.kontrakev
 });
 assert.equal(forwarded.status,200);
 assert.equal(upstreamUrl,'http://10.0.0.1:5683/night/health');
+const homeRedirect=await gatewayWorker.fetch(new Request('https://night42.kontrakevich.workers.dev/'),{});
+assert.equal(homeRedirect.status,302);
+assert.equal(homeRedirect.headers.get('location'),'https://night42.kontrakevich.workers.dev/night');
+const originalFetch=globalThis.fetch;
+let readerTarget='';
+try{
+  globalThis.fetch=async request=>{readerTarget=request.url;return new Response('<h1>Reader</h1>',{headers:{'content-type':'text/html'}})};
+  const reader=await gatewayWorker.fetch(new Request('https://night42.kontrakevich.workers.dev/reader/'),{});
+  assert.equal(reader.status,200);
+  assert.equal(reader.headers.get('x-night-product'),'reader');
+  assert.equal(readerTarget,'https://mkontrakevich.github.io/night-for-two/index.html');
+}finally{globalThis.fetch=originalFetch}
 assert(compose.includes('"${NIGHT_PORT:-5683}:5681"'),'Docker must publish production host port 5683 to container port 5681');
 assert(compose.includes('name: ${NIGHT_CONTEXT_NETWORK:-night_for_two_context}'),'Night must use the dedicated external sanitized-context network');
 assert(compose.includes('      - night_context'),'Night app must join the dedicated sanitized-context network');

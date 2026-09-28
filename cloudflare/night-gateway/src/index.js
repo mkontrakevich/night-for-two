@@ -6,7 +6,7 @@ function json(status, payload) {
 
 async function readerResponse(request,incoming){
   if(incoming.pathname==='/') {
-    return Response.redirect(new URL('/reader/',incoming).toString(),302);
+    return Response.redirect(new URL('/night',incoming).toString(),302);
   }
   if(incoming.pathname==='/reader') {
     return Response.redirect(new URL('/reader/',incoming).toString(),302);
