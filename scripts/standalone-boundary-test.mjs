@@ -56,6 +56,15 @@ assert(!/PERSONAL_[A-Z][A-Z0-9_]*_CHAT_ID/u.test(env));
 
 const gatewayConfig=JSON.parse(gateway);
 assert.equal(gatewayConfig.vars?.NIGHT_ORIGIN_PORT,'5683','Cloudflare gateway must target the isolated production host port');
+assert.equal(gatewayConfig.vpc_networks?.[0]?.binding,'NIGHT_VPC','Night gateway must keep the production VPC binding name');
+const gatewayWorker=(await import('../cloudflare/night-gateway/src/index.js')).default;
+let upstreamUrl;
+const forwarded=await gatewayWorker.fetch(new Request('https://night42.kontrakevich.workers.dev/night/health'),{
+  NIGHT_VPC:{fetch:async request=>{upstreamUrl=request.url;return Response.json({ok:true});}},
+  NIGHT_ORIGIN_HOST:'10.0.0.1',NIGHT_ORIGIN_PORT:'5683'
+});
+assert.equal(forwarded.status,200);
+assert.equal(upstreamUrl,'http://10.0.0.1:5683/night/health');
 assert(compose.includes('"${NIGHT_PORT:-5683}:5681"'),'Docker must publish production host port 5683 to container port 5681');
 assert(compose.includes('name: ${NIGHT_CONTEXT_NETWORK:-night_for_two_context}'),'Night must use the dedicated external sanitized-context network');
 assert(compose.includes('      - night_context'),'Night app must join the dedicated sanitized-context network');
