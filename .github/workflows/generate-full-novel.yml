@@ -29,6 +29,9 @@ jobs:
       RELATIONSHIP_CONTEXT_URL: ${{ vars.RELATIONSHIP_CONTEXT_URL }}
       RELATIONSHIP_CONTEXT_TOKEN: ${{ secrets.RELATIONSHIP_CONTEXT_TOKEN }}
       NIGHT_VISUAL_STORYBOARD: "1"
+      NIGHT_VISUAL_QA_REQUIRED: "1"
+      NIGHT_VISUAL_QA_THRESHOLD: "0.78"
+      NIGHT_VISUAL_QA_MODEL: ${{ vars.NIGHT_VISUAL_QA_MODEL || 'google/gemini-2.5-flash' }}
 
     steps:
       - uses: actions/checkout@v4
