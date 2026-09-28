@@ -45,7 +45,7 @@ Cloudflare components live in:
 - `cloudflare/night-pages`
 - `cloudflare/night-gateway`
 
-The public base URL is stored in `NIGHT_PAGES_URL` outside Git.
+The selected product URL is `https://night42.kontrakevich.workers.dev`. The `night42` Worker opens the public illustrated story at `/reader/` and routes `/night` and `/actions` to the isolated origin. The Pages project is optional and is not the production entry point.
 
 `tools/publish-pages.ps1` verifies `/night/health` and updates the Telegram Web App menu for the two configured accounts. It contains no built-in Telegram IDs.
 
@@ -71,11 +71,11 @@ The workflow deliberately keeps account-specific network coordinates out of Git.
 - `CLOUDFLARE_TUNNEL_ID`
 - `NIGHT_ORIGIN_HOST`
 
-Repository variable `NIGHT_PAGES_URL` is required and must be the HTTPS origin of the separate Pages project (for example, `https://night-for-two.pages.dev`). A successful workflow requires both `/night/health` and `/actions/health` to return valid product health JSON. A green preflight alone does not prove deployment.
+The public URL is fixed in the verification job to the selected `night42` Worker domain. A successful workflow requires `/reader/` to be served by this Worker and both `/night/health` and `/actions/health` to return valid product health JSON. A green preflight alone does not prove deployment.
 
 The checked-in `cloudflare/night-gateway/wrangler.jsonc` remains a safe template. CI renders a temporary deployment config containing the tunnel ID and private origin host and never commits it.
 
-After the initial Cloudflare Pages project has its `NIGHT_GATEWAY` service binding, subsequent gateway changes under `cloudflare/**` deploy automatically from `main`.
+Gateway changes under `cloudflare/**` deploy the `night42` Worker automatically from `main` once the four account-specific secrets are configured. Cloudflare Pages can keep its service binding as a secondary route, but is not required for the chosen Worker URL.
 
 
 ## Standalone production origin
@@ -91,6 +91,6 @@ The standalone application is isolated from the reminder bot at the host-port bo
 
 `.github/workflows/deploy-origin.yml` deploys the standalone Docker Compose project on the existing `marins-production` self-hosted runner and verifies `http://127.0.0.1:5683/night/health`.
 
-A GitHub-hosted preflight checks required origin secrets before scheduling that runner. The runner still needs to be online and labeled `self-hosted`, `windows`, `x64`, `marins-production`. Secrets and runner registration must be configured in GitHub and on the existing production host; do not put their values in the repository. The Cloudflare Pages project must be created with root `cloudflare/night-pages`, output `public`, and service binding `NIGHT_GATEWAY` to Worker `night-for-two-gateway` before the public health checks can pass.
+A GitHub-hosted preflight checks required origin secrets before scheduling that runner. The runner still needs to be online and labeled `self-hosted`, `windows`, `x64`, `marins-production`. Secrets and runner registration must be configured in GitHub and on the existing production host; do not put their values in the repository. The public Worker health checks do not require a Pages project.
 
 This deployment workflow intentionally does not modify reader/story files. Reader work can proceed independently and will be picked up by the same standalone runtime after it lands on `main`.
