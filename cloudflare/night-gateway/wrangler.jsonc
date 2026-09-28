@@ -10,7 +10,7 @@
   },
   "vpc_networks": [
     {
-      "binding": "APP_VPC",
+      "binding": "NIGHT_VPC",
       "tunnel_id": "SET_IN_CLOUDFLARE",
       "remote": true
     }
