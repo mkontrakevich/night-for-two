@@ -1,8 +1,8 @@
 import http from 'node:http';
-import {installNightForTwoMiniApp} from './night-for-two-miniapp-v3.js';
+import {installNightBackendGenerator} from './night-backend-generator-api.js';
 
 const port=Math.max(1,Number(process.env.PORT)||5681);
-const app=installNightForTwoMiniApp({port});
+const app=installNightBackendGenerator({port});
 await app.ready;
 
 const server=http.createServer((req,res)=>{
