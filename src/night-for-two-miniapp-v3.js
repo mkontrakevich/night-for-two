@@ -132,7 +132,9 @@ async function startNovelGeneration(){
   const r=await fetch('/night/api/novel-generate',{method:'POST',headers:{'content-type':'application/json',...authHeaders()},body:'{}'});
   const raw=await r.text();let d;try{d=JSON.parse(raw)}catch{throw new Error('NIGHT_RESPONSE_INVALID')}
   if(!r.ok||!d.ok)throw new Error(d.error||'REQUEST_FAILED');
-  await novelPage(1);return d;
+  const current=d?.state?.status||{};
+  state={mode:'linear_novel_unavailable',novel:{status:'generating',total_pages:Number(current.total_pages)||100,generated_pages:Number(current.generated_pages)||0,generated_images:Number(current.generated_images)||0,planned_images:Number(current.planned_images)||0,error:''}};
+  render();return d;
 }
 async function novelPage(page=1){clearTimeout(poll);const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),35000);try{const data=initData();if(!data)throw new Error('TELEGRAM_AUTH_MISSING');const r=await fetch('/night/api/novel-page',{method:'POST',headers:{'content-type':'application/json',...authHeaders()},body:JSON.stringify({page}),signal:ctl.signal});const raw=await r.text();let d;try{d=JSON.parse(raw)}catch{throw new Error('NIGHT_RESPONSE_INVALID')}if(!r.ok||!d.ok)throw new Error(d.error||'REQUEST_FAILED');state=d.state;render();return d}finally{clearTimeout(timer)}}
 async function ensureLinearNovelImage(){const p=state?.page||{},n=state?.novel||{};if(!p.page_no||!n.id||!String(p.media_prompt||'').trim())return;const key=n.id+':'+p.page_no;if(linearNovelImageKey===key&&readerMediaCache.has('linear:'+key))return;linearNovelImageKey=key;try{const data=initData();if(!data)return;const r=await fetch('/night/api/novel-visual',{method:'POST',headers:{'content-type':'application/json',...authHeaders()},body:JSON.stringify({novelId:n.id,page:p.page_no})});const j=await r.json();if(j?.ok&&j.image){readerMediaCache.set('linear:'+key,j.image);if(state?.mode==='linear_novel'&&linearNovelImageKey===key)renderLinearNovel()}}catch{}}
