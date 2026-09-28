@@ -24,21 +24,17 @@ function filesUnder(dir){
 
 const publicSourceFiles=filesUnder(root);
 const forbidden=[
-  /personal_snezha/iu,
-  /PERSONAL_SNEZHA_CHAT_ID/u,
-  /\bsnezha\b/iu,
-  /Снеж/iu,
-  /Михаил/iu,
-  /identity:\/\/mikhail/iu,
-  /identity:\/\/snezha/iu,
-  /\b278761627\b/u,
-  /\b1139656090\b/u,
+  /PRIMARY_OWNER_ID\s*\|\|\s*['"]\d{6,}['"]/u,
+  /PARTNER(?:_TELEGRAM)?_ID\s*\|\|\s*['"]\d{6,}['"]/u,
+  /PERSONAL_[A-Z][A-Z0-9_]*_CHAT_ID/u,
+  /scope\s*[:=]\s*['"]personal_[a-z0-9_-]+/iu,
+  /identity:\/\/(?!person-a\/|person-b\/)[a-z0-9_-]+/iu,
   /personal_original_messages/iu
 ];
 
 for(const file of publicSourceFiles){
   const body=fs.readFileSync(file,'utf8');
-  for(const pattern of forbidden)assert(!pattern.test(body),`personal identifier leaked into ${path.relative(root,file)}: ${pattern}`);
+  for(const pattern of forbidden)assert(!pattern.test(body),`personal identifier class leaked into ${path.relative(root,file)}: ${pattern}`);
 }
 
 for(const botOnlyImport of [
@@ -53,5 +49,5 @@ assert(runtime.includes('./integrations/relationship-context-connector.js'));
 assert(connector.includes('RELATIONSHIP_CONTEXT_RAW_MESSAGES_FORBIDDEN'));
 assert(connector.includes('raw_messages:false'));
 assert(env.includes('PARTNER_TELEGRAM_ID='));
-assert(!env.includes('PERSONAL_SNEZHA_CHAT_ID'));
+assert(!/PERSONAL_[A-Z][A-Z0-9_]*_CHAT_ID/u.test(env));
 console.log('STANDALONE_BOUNDARY_OK raw_messages=false relationship_analysis_external=true anonymized=true');

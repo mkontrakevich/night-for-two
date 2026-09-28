@@ -27,6 +27,13 @@ Purpose: turn prose into a visually coherent illustrated edition using a Stable 
 9. Use seed/model/sampler metadata in the manifest for reproducibility.
 10. Provider/model safety policies remain authoritative. Do not attempt moderation bypass. If a requested visual is rejected, preserve story meaning with a less explicit composition.
 
+## Supported SD runtimes
+
+- AUTOMATIC1111 Web API via `/sdapi/v1/txt2img`.
+- ComfyUI via a standard API workflow: CheckpointLoader → CLIP encoders → EmptyLatent → KSampler → VAE Decode → SaveImage.
+
+The pipeline must preserve the same story-image manifest contract across back ends.
+
 ## Story-image manifest
 
 Every generated image must record:
@@ -36,8 +43,10 @@ Every generated image must record:
 - paragraph_after
 - prompt
 - negative_prompt
+- backend
 - model/checkpoint
 - sampler
+- scheduler when applicable
 - steps
 - cfg_scale
 - seed

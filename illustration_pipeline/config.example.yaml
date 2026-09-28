@@ -19,12 +19,19 @@ continuity:
   locations: {}
 
 sd:
+  # automatic1111 | comfyui
   backend: automatic1111
   base_url: http://127.0.0.1:7860
   checkpoint: ""
+  # AUTOMATIC1111 example: DPM++ 2M Karras
+  # ComfyUI example: dpmpp_2m
   sampler: DPM++ 2M Karras
+  # Used by ComfyUI.
+  scheduler: karras
   steps: 30
   cfg_scale: 6.5
   width: 832
   height: 1216
   seed: -1
+  timeout_seconds: 240
+  poll_interval_seconds: 1.0
