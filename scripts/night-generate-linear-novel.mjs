@@ -5,6 +5,7 @@ import {generateSerialNovelPlan} from '../src/night-serial-novel-architect.js';
 import {createNightLinearNovelStore} from '../src/night-linear-novel-store.js';
 import {createNightVisualAI} from '../src/night-for-two-visual-ai.js';
 import {STORY_ARC,STORY_PAGE_PLAN,STORY_TOTAL_PAGES,storyPageOffset} from '../src/night-story-flow.js';
+import {createNightRelationshipBridge} from '../src/integrations/relationship-context-connector.js';
 
 const {Pool}=pg;
 if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL_MISSING');
@@ -13,6 +14,7 @@ if(!process.env.OPENROUTER_API_KEY)throw new Error('OPENROUTER_API_KEY_MISSING')
 const pool=new Pool({connectionString:process.env.DATABASE_URL,max:2});
 const store=createNightLinearNovelStore({pool});
 const visualAI=createNightVisualAI();
+const relationshipBridge=createNightRelationshipBridge();
 
 function clean(v='',n=12000){return String(v||'').replace(/\r/g,'').trim().slice(0,n);}
 function parseJson(raw){
@@ -52,7 +54,7 @@ function validateChapter(raw,{chapterIndex,pageCount,startPage,final=false}){
   return {chapter_title:chapterTitle,summary,pages:normalized};
 }
 
-async function generateChapter({plan,chapterIndex,previousSummary='',previousTail='',bookSeed=''}) {
+async function generateChapter({plan,chapterIndex,previousSummary='',previousTail='',bookSeed='',relationshipProfile={}}) {
   const pageCount=STORY_PAGE_PLAN[chapterIndex],arc=STORY_ARC[chapterIndex],startPage=storyPageOffset(chapterIndex)+1,final=chapterIndex===STORY_ARC.length-1;
   let last=null;
   for(let attempt=1;attempt<=3;attempt++){
@@ -67,6 +69,14 @@ async function generateChapter({plan,chapterIndex,previousSummary='',previousTai
           {role:'system',content:`Ты пишешь полностью оригинальный литературный сериал для двух вымышленных совершеннолетних героев — мужчины и женщины. Это законченный роман для приватного мобильного чтения, а не анкета и не инструкция игрокам.
 
 Жанр: взрослый романтический/эротический триллер или драма с интригой. Все персонажи, участвующие в интимных сценах, однозначно совершеннолетние. Любая близость добровольна. Текст может быть чувственным и эротическим, но должен оставаться литературным: эмоции, напряжение, прикосновения, поцелуи, телесность, желание и последствия важнее анатомической детализации.
+
+ДИАЛОГИ — ОБЯЗАТЕЛЬНЫЙ КОНТРАКТ:
+— каждую прямую реплику начинай с имени говорящего и двоеточия: «Марк: ...», «Ева: ...», для второстепенных героев — их имя;
+— не оставляй анонимных реплик через тире;
+— диалог должен работать через подтекст, недосказанность, возврат к ранее сказанному, индивидуальный ритм, микроиронию, паузы и смену инициативы;
+— не используй диалог как пересказ экспозиции;
+— особенности общения пары бери только из RELATIONSHIP_PROFILE: ритм, темы, юмор, способы сближения/дистанцирования, предпочтения и повторяющиеся динамики;
+— не цитируй исходные личные сообщения и не сообщай читателю, что проводился анализ Telegram; превращай агрегированные наблюдения в художественную манеру общения персонажей.
 
 Ты пишешь ОДНУ заранее спроектированную историю. Не начинай новый сюжет в каждой главе. Сохраняй имена, внешность, пространство, предметы, мотивы, тайны, причинно-следственные связи, одежду и последствия предыдущих событий. Все plant/payoff и финальный контракт из NOVEL_PLAN обязательны.
 
@@ -89,7 +99,8 @@ async function generateChapter({plan,chapterIndex,previousSummary='',previousTai
             NOVEL_PLAN:planDigest(plan),
             PREVIOUS_CHAPTER_SUMMARY:previousSummary,
             PREVIOUS_TAIL:previousTail,
-            CHAPTER:{index:chapterIndex+1,label:arc.label,purpose:arc.purpose,page_count:pageCount,start_page:startPage,final}
+            CHAPTER:{index:chapterIndex+1,label:arc.label,purpose:arc.purpose,page_count:pageCount,start_page:startPage,final},
+            RELATIONSHIP_PROFILE:relationshipProfile
           })}
         ]
       });
@@ -108,7 +119,7 @@ async function ensureImage({novelId,page}){
   let last=null;
   for(let attempt=1;attempt<=3;attempt++){
     try{
-      const result=await visualAI.ensure({key,theme:'boudoir',mode:page.page_no===STORY_TOTAL_PAGES?'story_final':'story_scene',variant:`BOOK_PAGE: ${page.media_prompt}`});
+      const result=await visualAI.ensure({key,theme:'boudoir',mode:page.page_no===STORY_TOTAL_PAGES?'story_final':'story_scene',variant:`BOOK_PAGE: ${page.media_prompt}`,pageText:page.body});
       if(!result?.buffer?.length)throw new Error('NIGHT_LINEAR_IMAGE_EMPTY');
       return {key,model:result.model||'',cached:Boolean(result.cached)};
     }catch(error){
@@ -126,9 +137,12 @@ try{
   const bookSeed=crypto.randomBytes(18).toString('hex');
   console.log('NIGHT_LINEAR_NOVEL_START',JSON.stringify({book_seed:bookSeed,total_pages:STORY_TOTAL_PAGES}));
 
+  const relationshipProfile=await relationshipBridge.context();
+  console.log('NIGHT_RELATIONSHIP_CONTEXT_READY',JSON.stringify({policy:relationshipProfile.policy,observations:relationshipProfile.observations?.length||0,preferences:relationshipProfile.preferences?.length||0,dynamics:relationshipProfile.dynamics?.length||0,raw_messages:false}));
+
   const plan=await generateSerialNovelPlan({
     bookSeed,
-    relationshipProfile:{},
+    relationshipProfile,
     mutualWishes:[],
     generate:request=>completeAIText({...request,skipDatabaseContext:true})
   });
@@ -138,7 +152,7 @@ try{
 
   let pageCounter=0,plannedImages=0,previousSummary='',previousTail='';
   for(let chapterIndex=0;chapterIndex<STORY_ARC.length;chapterIndex++){
-    const chapter=await generateChapter({plan,chapterIndex,previousSummary,previousTail,bookSeed});
+    const chapter=await generateChapter({plan,chapterIndex,previousSummary,previousTail,bookSeed,relationshipProfile});
     for(const rawPage of chapter.pages){
       const visualKey=rawPage.media_prompt?`linear-novel-${novel.id}-page-${String(rawPage.page_no).padStart(3,'0')}`:'';
       await store.upsertPage(novel.id,{...rawPage,visual_key:visualKey,image_status:'planned'});
