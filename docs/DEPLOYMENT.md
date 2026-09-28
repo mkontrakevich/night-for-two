@@ -10,7 +10,7 @@ The only cross-project integration is:
 Night for Two -> RELATIONSHIP_CONTEXT_URL
 ```
 
-The connector accepts sanitized aggregate context and rejects raw-message payloads.
+The connector accepts sanitized aggregate context and rejects raw-message payloads. In production, this connector travels over a dedicated Docker network shared only by the reminder bot container and the Night application container; the Night PostgreSQL service is not attached to that network.
 
 ## Local Docker
 
@@ -85,6 +85,8 @@ The standalone application is isolated from the reminder bot at the host-port bo
 - container port: `5681`
 - production host port: `5683`
 - Cloudflare private origin: the existing MARINS production host on port `5683`
+- sanitized relationship-context network: `night_for_two_context`
+- Night PostgreSQL remains on the Night project network only
 - existing bot services keep their current ports unchanged
 
 `.github/workflows/deploy-origin.yml` deploys the standalone Docker Compose project on the existing `marins-production` self-hosted runner and verifies `http://127.0.0.1:5683/night/health`.
