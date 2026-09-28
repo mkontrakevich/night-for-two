@@ -6,6 +6,8 @@ import {availableNightV2Packs,chooseNightV2Round,NIGHT_V2_INTIMATE_PERMISSIONS,N
 
 const runtime=fs.readFileSync(new URL('../src/night-for-two-v2-runtime.js',import.meta.url),'utf8');
 const app=fs.readFileSync(new URL('../src/night-for-two-miniapp-v3.js',import.meta.url),'utf8');
+const entry=fs.readFileSync(new URL('../src/index.js',import.meta.url),'utf8');
+const platform=fs.readFileSync(new URL('../src/night-for-two-client-platform.js',import.meta.url),'utf8');
 const connector=fs.readFileSync(new URL('../src/integrations/relationship-context-connector.js',import.meta.url),'utf8');
 const visualAI=fs.readFileSync(new URL('../src/night-for-two-visual-ai.js',import.meta.url),'utf8');
 const storyFlow=fs.readFileSync(new URL('../src/night-story-flow.js',import.meta.url),'utf8');
@@ -23,6 +25,9 @@ assert(runtime.includes('simulateNightPartner'));
 assert(runtime.includes('story_flow jsonb'));
 assert(runtime.includes('submitStoryChoice'));
 assert(runtime.includes('saveReaderProgress'));
+assert(entry.includes("http.createServer(")&&entry.includes("server.listen(port,'0.0.0.0'"),'standalone entrypoint must bind the HTTP port');
+assert(app.includes('NIGHT_LOCAL_TEST_MODE')&&app.includes("x-night-local-test"),'local test mode must be explicit and server-gated');
+assert(platform.includes("['localhost','127.0.0.1']")&&platform.includes("local_test")&&platform.includes("x-night-local-test"),'browser local test auth must be localhost-only');
 
 const fpA=connectionFingerprint({nonce:'11'.repeat(32),roomCode:'ABC234',ownerId:'1',partnerId:'2'});
 const fpB=connectionFingerprint({nonce:'11'.repeat(32),roomCode:'ABC234',ownerId:'2',partnerId:'1'});
