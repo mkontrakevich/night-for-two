@@ -4,7 +4,8 @@ Architecture:
 
 ```text
 Telegram
-  -> https://<project>.pages.dev/night
+  -> https://<project>.pages.dev/night (interactive story)
+  -> https://<project>.pages.dev/actions (separate physical actions product)
   -> Cloudflare Pages Function
   -> service binding NIGHT_GATEWAY
   -> Worker night-for-two-gateway
@@ -24,3 +25,5 @@ Git setup:
 The application container still listens on `5681`; the existing production host exposes this isolated product on `5683`.
 
 Do not commit the private origin host, tunnel identifier or account-specific credentials.
+
+The actions route has its own interface, API and PostgreSQL tables. Reader content is left unchanged; story-to-action links will be added after the action product is reviewed.
