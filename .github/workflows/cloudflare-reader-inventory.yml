@@ -1,0 +1,47 @@
+name: Cloudflare Reader Inventory
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/cloudflare-reader-inventory.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    env:
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: List Cloudflare Pages projects and Workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${CF_ACCOUNT:-}" || -z "${CF_TOKEN:-}" ]]; then
+            echo "CLOUDFLARE_REPO_SECRETS_MISSING"
+            exit 0
+          fi
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json")
+          echo "=== PAGES_PROJECTS ==="
+          curl --fail --silent --show-error "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/pages/projects?per_page=100" > /tmp/pages.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/pages.json'))
+          if not d.get('success'):
+              raise SystemExit('PAGES_API_FAILED')
+          for p in d.get('result') or []:
+              print('PAGES', p.get('name',''), p.get('subdomain',''), p.get('production_branch',''))
+          PY
+          echo "=== WORKER_SERVICES ==="
+          curl --fail --silent --show-error "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/workers/services" > /tmp/workers.json || true
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('/tmp/workers.json')
+          if not p.exists(): raise SystemExit()
+          try: d=json.loads(p.read_text())
+          except Exception: raise SystemExit()
+          for w in d.get('result') or []:
+              print('WORKER', w.get('name',''))
+          PY
