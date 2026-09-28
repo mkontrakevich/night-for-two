@@ -64,14 +64,14 @@ Application code and relationship-history data are separated. A Night for Two ro
 
 Production Cloudflare gateway deployment is defined in `.github/workflows/cloudflare-deploy.yml`.
 
-The workflow deliberately keeps account-specific network coordinates out of Git. It activates only when all four GitHub Actions secrets exist:
+The workflow deliberately keeps account-specific network coordinates out of Git. The preflight fails with the names of missing settings until all four GitHub Actions secrets exist:
 
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_TUNNEL_ID`
 - `NIGHT_ORIGIN_HOST`
 
-Optional repository variable `NIGHT_PAGES_URL` enables the post-deploy `/night/health` smoke test.
+Repository variable `NIGHT_PAGES_URL` is required and must be the HTTPS origin of the separate Pages project (for example, `https://night-for-two.pages.dev`). A successful workflow requires both `/night/health` and `/actions/health` to return valid product health JSON. A green preflight alone does not prove deployment.
 
 The checked-in `cloudflare/night-gateway/wrangler.jsonc` remains a safe template. CI renders a temporary deployment config containing the tunnel ID and private origin host and never commits it.
 
@@ -90,5 +90,7 @@ The standalone application is isolated from the reminder bot at the host-port bo
 - existing bot services keep their current ports unchanged
 
 `.github/workflows/deploy-origin.yml` deploys the standalone Docker Compose project on the existing `marins-production` self-hosted runner and verifies `http://127.0.0.1:5683/night/health`.
+
+A GitHub-hosted preflight checks required origin secrets before scheduling that runner. The runner still needs to be online and labeled `self-hosted`, `windows`, `x64`, `marins-production`. Secrets and runner registration must be configured in GitHub and on the existing production host; do not put their values in the repository. The Cloudflare Pages project must be created with root `cloudflare/night-pages`, output `public`, and service binding `NIGHT_GATEWAY` to Worker `night-for-two-gateway` before the public health checks can pass.
 
 This deployment workflow intentionally does not modify reader/story files. Reader work can proceed independently and will be picked up by the same standalone runtime after it lands on `main`.

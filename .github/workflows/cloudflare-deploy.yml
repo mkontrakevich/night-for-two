@@ -18,27 +18,33 @@ concurrency:
 jobs:
   preflight:
     runs-on: ubuntu-latest
-    outputs:
-      configured: ${{ steps.check.outputs.configured }}
     steps:
-      - id: check
+      - name: Require Cloudflare deployment configuration
         env:
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_TUNNEL: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
           NIGHT_ORIGIN_HOST: ${{ secrets.NIGHT_ORIGIN_HOST }}
+          NIGHT_PAGES_URL: ${{ vars.NIGHT_PAGES_URL }}
         shell: bash
         run: |
-          if [[ -n "$CF_ACCOUNT" && -n "$CF_TOKEN" && -n "$CF_TUNNEL" && -n "$NIGHT_ORIGIN_HOST" ]]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Cloudflare deployment is not configured yet. Required secrets: CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, CLOUDFLARE_TUNNEL_ID, NIGHT_ORIGIN_HOST."
+          missing=()
+          [[ -n "$CF_ACCOUNT" ]] || missing+=(CLOUDFLARE_ACCOUNT_ID)
+          [[ -n "$CF_TOKEN" ]] || missing+=(CLOUDFLARE_API_TOKEN)
+          [[ -n "$CF_TUNNEL" ]] || missing+=(CLOUDFLARE_TUNNEL_ID)
+          [[ -n "$NIGHT_ORIGIN_HOST" ]] || missing+=(NIGHT_ORIGIN_HOST)
+          [[ -n "$NIGHT_PAGES_URL" ]] || missing+=(NIGHT_PAGES_URL)
+          if (( ${#missing[@]} )); then
+            printf '::error::Missing repository secrets/variable: %s\n' "${missing[*]}"
+            exit 1
+          fi
+          if [[ ! "$NIGHT_PAGES_URL" =~ ^https://[^/]+/?$ ]]; then
+            echo '::error::NIGHT_PAGES_URL must be an HTTPS origin URL without a path.'
+            exit 1
           fi
 
   deploy-gateway:
     needs: preflight
-    if: needs.preflight.outputs.configured == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -74,13 +80,9 @@ jobs:
     env:
       NIGHT_PAGES_URL: ${{ vars.NIGHT_PAGES_URL }}
     steps:
-      - name: Verify production health when public URL is configured
+      - name: Verify production health
         shell: bash
         run: |
-          if [[ -z "$NIGHT_PAGES_URL" ]]; then
-            echo "::notice::NIGHT_PAGES_URL repository variable is not configured yet; gateway deployed, public Pages health check skipped."
-            exit 0
-          fi
           base="${NIGHT_PAGES_URL%/}"
           curl --fail --show-error --silent --retry 4 --retry-delay 3 "$base/night/health" | tee /tmp/night-health.json
           curl --fail --show-error --silent --retry 4 --retry-delay 3 "$base/actions/health" | tee /tmp/actions-health.json
