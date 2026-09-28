@@ -1,5 +1,14 @@
 import assert from 'node:assert/strict';
+import {Script} from 'node:vm';
 import {ACTION_SCENES,effectiveAction,actionCard} from '../src/night-actions-core.js';
+import {createNightActionsProduct} from '../src/night-actions-product.js';
+let html='';
+await createNightActionsProduct({pool:{}}).handle({method:'GET',url:'/actions'}, {
+  writeHead(){},
+  end(body){html=body;}
+});
+assert.match(html,/Откройте в Telegram/);
+new Script(html.match(/<script>([\s\S]*?)<\/script>/)?.[1]||'',{filename:'night-actions-inline.js'});
 assert.equal(ACTION_SCENES.length,3);
 assert.equal(effectiveAction('touch','words'),'words');
 assert.equal(effectiveAction('kiss','embrace'),'embrace');

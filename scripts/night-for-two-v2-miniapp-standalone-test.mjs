@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {Script} from 'node:vm';
 import {NIGHT_V2_DISPLAY,NIGHT_FINGERPRINT_POOLS,connectionFingerprint} from '../src/night-for-two-v2-runtime.js';
 import {renderNightV3Html} from '../src/night-for-two-miniapp-v3.js';
 import {availableNightV2Packs,chooseNightV2Round,NIGHT_V2_INTIMATE_PERMISSIONS,NIGHT_V2_NIGHT_PACKS} from '../src/night-for-two-v2-game.js';
@@ -46,6 +47,9 @@ assert(round);
 assert(round.requires.some(x=>NIGHT_V2_INTIMATE_PERMISSIONS.has(x)));
 
 const html=renderNightV3Html();
+const clientScript=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+assert(clientScript,'standalone page must include its client script');
+new Script(clientScript,{filename:'night-v3-inline.js'});
 for(const endpoint of ['/api/visual','/api/connection-ack','/api/selection','/api/done','/api/rate','/api/overall','/api/story-choice','/api/story-finish'])assert(app.includes(endpoint),`missing server endpoint ${endpoint}`);
 for(const action of ['connection-ack','selection','done','rate','overall','story-choice','story-finish'])assert(html.includes(`api('${action}'`),`missing client action ${action}`);
 assert(html.includes('readerBook')&&html.includes('renderEpisodeReader'));
