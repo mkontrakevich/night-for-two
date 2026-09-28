@@ -139,15 +139,41 @@ ${narrativeSkill?`\nКАНОНИЧЕСКИЙ NARRATIVE SKILL:\n${narrativeSkill}
 
 async function ensureImage({novelId,page}){
   const key=page.visual_key||`linear-novel-${novelId}-page-${String(page.page_no).padStart(3,'0')}`;
+  const qaRequired=process.env.NIGHT_VISUAL_QA_REQUIRED!=='0';
+  const qaThreshold=Math.max(0.5,Math.min(0.99,Number(process.env.NIGHT_VISUAL_QA_THRESHOLD)||0.78));
   let last=null;
   for(let attempt=1;attempt<=3;attempt++){
     try{
-      const result=await visualAI.ensure({key,theme:'boudoir',mode:page.page_no===STORY_TOTAL_PAGES?'story_final':'story_scene',variant:`BOOK_PAGE: ${page.media_prompt}`,pageText:page.body});
+      const result=await visualAI.ensure({
+        key,
+        theme:'boudoir',
+        mode:page.page_no===STORY_TOTAL_PAGES?'story_final':'story_scene',
+        variant:`BOOK_PAGE: ${page.media_prompt}`,
+        pageText:page.body,
+        force:attempt>1
+      });
       if(!result?.buffer?.length)throw new Error('NIGHT_LINEAR_IMAGE_EMPTY');
-      return {key,model:result.model||'',cached:Boolean(result.cached)};
+
+      let qa={available:false,pass:!qaRequired,score:qaRequired?0:1,mismatches:[],model:''};
+      try{
+        qa=await visualAI.assess({buffer:result.buffer,pageText:page.body,mediaPrompt:page.media_prompt});
+      }catch(error){
+        if(qaRequired)throw error;
+        console.warn('NIGHT_VISUAL_QA_OPTIONAL_FAILED',JSON.stringify({page:page.page_no,error:String(error?.message||error).slice(0,220)}));
+      }
+
+      const passed=qaRequired?(qa.available&&qa.pass&&Number(qa.score)>=qaThreshold):(!qa.available||qa.pass);
+      await visualAI.recordQuality({key,qa:{...qa,threshold:qaThreshold,passed}});
+
+      if(!passed){
+        await visualAI.archiveRejected({key,attempt,qa:{...qa,threshold:qaThreshold,passed:false}});
+        throw new Error(`NIGHT_VISUAL_QA_REJECTED:${page.page_no}:${Number(qa.score||0).toFixed(2)}:${(qa.mismatches||[]).join('|').slice(0,500)}`);
+      }
+
+      return {key,model:result.model||'',cached:Boolean(result.cached),qa:{...qa,threshold:qaThreshold,passed:true}};
     }catch(error){
       last=error;
-      console.warn('NIGHT_LINEAR_IMAGE_RETRY',JSON.stringify({page:page.page_no,attempt,error:String(error?.message||error).slice(0,220)}));
+      console.warn('NIGHT_LINEAR_IMAGE_RETRY',JSON.stringify({page:page.page_no,attempt,error:String(error?.message||error).slice(0,320)}));
       await sleep(1800*attempt);
     }
   }
@@ -201,7 +227,7 @@ try{
     await store.markImage(novel.id,pageNo,'ready');
     images++;
     await store.updateNovel(novel.id,{status:'illustrating',generated_pages:STORY_TOTAL_PAGES,generated_images:images});
-    console.log('NIGHT_LINEAR_IMAGE_PROGRESS',JSON.stringify({novel_id:novel.id,page:pageNo,images,planned:plannedImages,cached:image.cached,model:image.model}));
+    console.log('NIGHT_LINEAR_IMAGE_PROGRESS',JSON.stringify({novel_id:novel.id,page:pageNo,images,planned:plannedImages,cached:image.cached,model:image.model,qa_score:image.qa?.score??null,qa_model:image.qa?.model||'',qa_passed:Boolean(image.qa?.passed)}));
   }
 
   if(images!==plannedImages)throw new Error(`NIGHT_LINEAR_IMAGE_COUNT_MISMATCH:${images}:${plannedImages}`);
