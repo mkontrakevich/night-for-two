@@ -50,6 +50,11 @@ jobs:
               a=next((v for v in previous if v.get('name')==name),None)
               b=next((v for v in failed if v.get('name')==name),None)
               print('Binding equality',name,':',a==b)
+          vpc=next(v for v in previous if v.get('name')=='NIGHT_VPC')
+          host=next(v for v in previous if v.get('name')=='NIGHT_ORIGIN_HOST')
+          print('Working VPC binding fields:',sorted(vpc))
+          print('Working host binding fields:',sorted(host))
+          print('Working tunnel matches configured secret:',vpc.get('tunnel_id')==os.environ['CLOUDFLARE_TUNNEL_ID'] if 'tunnel_id' in vpc else 'unknown')
           try:
               tunnel=get('/cfd_tunnel/'+os.environ['CLOUDFLARE_TUNNEL_ID'])
               print('Configured tunnel status:',tunnel.get('status','unknown'))
