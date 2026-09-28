@@ -27,6 +27,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - default
+      - night_context
 
 volumes:
   night_postgres:
+
+networks:
+  night_context:
+    external: true
+    name: ${NIGHT_CONTEXT_NETWORK:-night_for_two_context}
