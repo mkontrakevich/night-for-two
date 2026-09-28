@@ -24,14 +24,12 @@ jobs:
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_TUNNEL: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
-          NIGHT_ORIGIN_HOST: ${{ secrets.NIGHT_ORIGIN_HOST }}
         shell: bash
         run: |
           missing=()
           [[ -n "$CF_ACCOUNT" ]] || missing+=(CLOUDFLARE_ACCOUNT_ID)
           [[ -n "$CF_TOKEN" ]] || missing+=(CLOUDFLARE_API_TOKEN)
           [[ -n "$CF_TUNNEL" ]] || missing+=(CLOUDFLARE_TUNNEL_ID)
-          [[ -n "$NIGHT_ORIGIN_HOST" ]] || missing+=(NIGHT_ORIGIN_HOST)
           if (( ${#missing[@]} )); then
             printf '::error::Missing repository secrets/variable: %s\n' "${missing[*]}"
             exit 1
@@ -47,22 +45,52 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_TUNNEL_ID: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
-      NIGHT_ORIGIN_HOST: ${{ secrets.NIGHT_ORIGIN_HOST }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Check current production application before updating its gateway
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent https://night42.kontrakevich.workers.dev/night/health | python -c 'import json,sys; assert json.load(sys.stdin).get("ok") is True'
+          curl --fail --show-error --silent https://night42.kontrakevich.workers.dev/actions/health | python -c 'import json,sys; assert json.load(sys.stdin).get("product")=="night_actions"'
       - name: Render account-specific Wrangler config
         shell: bash
         run: |
           python - <<'PY'
-          import json, os
+          import json, os, re, urllib.request
           from pathlib import Path
+          baseline='45bb34f4-a2cf-4fa1-9ce7-f57eedfd5f95'
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']
+          req=urllib.request.Request(
+              f'https://api.cloudflare.com/client/v4/accounts/{account}/workers/scripts/night42/versions/{baseline}',
+              headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN']})
+          with urllib.request.urlopen(req,timeout=25) as response:
+              version=json.load(response)
+          if not version.get('success'):
+              raise SystemExit('NIGHT_BASELINE_VERSION_UNAVAILABLE')
+          bindings=(version['result'].get('resources') or {}).get('bindings',[])
+          def binding(name):
+              return next((item for item in bindings if item.get('name')==name),None)
+          vpc=binding('NIGHT_VPC')
+          host_binding=binding('NIGHT_ORIGIN_HOST')
+          port_binding=binding('NIGHT_ORIGIN_PORT')
+          if not vpc or vpc.get('type')!='vpc_network' or vpc.get('tunnel_id')!=os.environ['CLOUDFLARE_TUNNEL_ID']:
+              raise SystemExit('NIGHT_BASELINE_TUNNEL_MISMATCH')
+          host=(host_binding or {}).get('text','')
+          if not re.fullmatch(r'[A-Za-z0-9.-]+',host):
+              raise SystemExit('NIGHT_BASELINE_ORIGIN_HOST_INVALID')
+          if (port_binding or {}).get('text')!='5683':
+              raise SystemExit('NIGHT_BASELINE_PORT_MISMATCH')
+          print('::add-mask::'+host)
           p=Path("wrangler.jsonc")
           cfg=json.loads(p.read_text())
-          cfg["vars"]["NIGHT_ORIGIN_HOST"]=os.environ["NIGHT_ORIGIN_HOST"]
-          cfg["vpc_networks"][0]["tunnel_id"]=os.environ["CLOUDFLARE_TUNNEL_ID"]
+          if cfg['vpc_networks'][0]['binding']!='NIGHT_VPC':
+              raise SystemExit('NIGHT_VPC_BINDING_MISMATCH')
+          cfg['vars']['NIGHT_ORIGIN_HOST']=host
+          cfg['vpc_networks'][0]['tunnel_id']=vpc['tunnel_id']
           Path("wrangler.deploy.json").write_text(json.dumps(cfg, indent=2)+"\n")
           PY
       - name: Deploy gateway Worker
@@ -73,8 +101,12 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NIGHT_PUBLIC_URL: https://night42.kontrakevich.workers.dev
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - name: Verify production Reader and application health
+        id: health
+        continue-on-error: true
         shell: bash
         run: |
           base="${NIGHT_PUBLIC_URL%/}"
@@ -91,3 +123,9 @@ jobs:
           if a.get("ok") is not True or a.get("product") != "night_actions":
               raise SystemExit("NIGHT_ACTIONS_HEALTH_NOT_OK")
           PY
+      - name: Restore verified working Worker on failed health check
+        if: steps.health.outcome == 'failure'
+        run: npx --yes wrangler@4 rollback 45bb34f4-a2cf-4fa1-9ce7-f57eedfd5f95 --name night42 --message 'Automatic rollback after failed Night gateway verification'
+      - name: Mark failed release
+        if: steps.health.outcome == 'failure'
+        run: exit 1
