@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 
 const DEFAULT_MODEL='bytedance-seed/seedream-4.5';
 const DEFAULT_FALLBACK='google/gemini-2.5-flash-image';
+const DEFAULT_QA_MODEL='google/gemini-2.5-flash';
 const inflight=new Map();
 
 const THEMES=Object.freeze({
@@ -91,13 +92,70 @@ function storyboardPromptFor({variant='',pageText=''}){
 }
 
 function referenceDataUrl(buffer){return `data:image/jpeg;base64,${buffer.toString('base64')}`;}
+function parseQaJson(raw){
+  const text=Array.isArray(raw)?raw.map(x=>x?.text||'').join(''):String(raw||'');
+  const clean=text.trim().replace(/^```(?:json)?\s*|\s*```$/g,'');
+  try{return JSON.parse(clean)}catch{
+    const a=clean.indexOf('{'),b=clean.lastIndexOf('}');
+    if(a>=0&&b>a)return JSON.parse(clean.slice(a,b+1));
+    throw new Error('NIGHT_VISUAL_QA_JSON_INVALID');
+  }
+}
+function qaPromptFor({pageText='',mediaPrompt=''}) {
+  const facts=String(pageText||'').replace(/\s+/g,' ').trim().slice(0,6500);
+  const beat=String(mediaPrompt||'').replace(/\s+/g,' ').trim().slice(0,1600);
+  return [
+    'You are a strict visual continuity inspector for a cinematic illustrated story.',
+    'Compare the supplied image only with the written scene facts. Judge observable correspondence, not artistic taste.',
+    'Check: number/type of adult characters present, location, wardrobe state, important props, body position/action, time/light cues, and whether the image contradicts the scene.',
+    'Do not identify real people. Do not infer private traits. Do not penalize harmless framing differences that preserve the scene.',
+    'Return JSON only with this shape:',
+    '{"pass":true,"score":0.0,"checks":{"characters":true,"location":true,"wardrobe":true,"props":true,"action":true,"time_light":true},"mismatches":[],"regeneration_hint":""}',
+    'Set pass=false for any material contradiction in characters, location, wardrobe, required prop, or central action.',
+    `PAGE FACTS: ${facts}`,
+    `TARGET VISUAL BEAT: ${beat}`
+  ].join('\n');
+}
+async function visualQARequest({buffer,pageText='',mediaPrompt=''}) {
+  const key=process.env.OPENROUTER_API_KEY||'';
+  if(!key||!buffer?.length)return {available:false,pass:false,score:0,mismatches:['qa_unavailable'],model:''};
+  const model=process.env.NIGHT_VISUAL_QA_MODEL||DEFAULT_QA_MODEL;
+  const payload={
+    model,
+    temperature:0,
+    max_tokens:900,
+    messages:[{role:'user',content:[
+      {type:'text',text:qaPromptFor({pageText,mediaPrompt})},
+      {type:'image_url',image_url:{url:referenceDataUrl(buffer)}}
+    ]}]
+  };
+  const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+    method:'POST',
+    headers:{authorization:`Bearer ${key}`,'content-type':'application/json','HTTP-Referer':'https://github.com/mkontrakevich/night-for-two','X-Title':'MARINS Night for Two Visual QA'},
+    body:JSON.stringify(payload)
+  });
+  const json=await response.json();
+  if(!response.ok)throw new Error(`OPENROUTER_VISUAL_QA_${response.status}:${json?.error?.message||'failed'}`);
+  const data=parseQaJson(json?.choices?.[0]?.message?.content);
+  const score=Math.max(0,Math.min(1,Number(data?.score)||0));
+  const mismatches=(Array.isArray(data?.mismatches)?data.mismatches:[]).slice(0,12).map(x=>String(x).slice(0,220));
+  return {
+    available:true,
+    pass:Boolean(data?.pass),
+    score,
+    checks:data?.checks&&typeof data.checks==='object'?data.checks:{},
+    mismatches,
+    regeneration_hint:String(data?.regeneration_hint||'').slice(0,900),
+    model
+  };
+}
 
 export function createNightVisualAI(){
-  async function ensure({key,theme='domination',mode='home',variant='',pageText=''}) {
+  async function ensure({key,theme='domination',mode='home',variant='',pageText='',force=false}) {
     const nudeCue=/\b(nude|undressed|bare skin|обнажен|обнажён|без одежды|раздет|раздета|нагое тело)\b/i.test(String(pageText||'')+' '+String(variant||''));
     if(nudeCue&&theme==='boudoir')theme='artistic_nude';
     const id=safeKey(key),dir=cacheDir(),file=path.join(dir,`${id}.jpg`);
-    try{return {buffer:await fs.readFile(file),cached:true,key:id,meta:await readMeta(dir,id)};}catch{}
+    if(!force){try{return {buffer:await fs.readFile(file),cached:true,key:id,meta:await readMeta(dir,id)};}catch{}}
     if(!process.env.OPENROUTER_API_KEY)return {buffer:null,cached:false,key:id,disabled:true};
     if(inflight.has(id))return inflight.get(id);
     const work=(async()=>{
@@ -136,5 +194,26 @@ export function createNightVisualAI(){
     })().finally(()=>inflight.delete(id));
     inflight.set(id,work);return work;
   }
-  return {ensure,promptFor,storyboardPromptFor,safeKey};
+  async function assess({buffer,pageText='',mediaPrompt=''}) {
+    return visualQARequest({buffer,pageText,mediaPrompt});
+  }
+  async function recordQuality({key,qa}={}) {
+    const id=safeKey(key),dir=cacheDir();
+    await fs.mkdir(dir,{recursive:true});
+    const current=await readMeta(dir,id)||{key:id};
+    const next={...current,qa:{...qa,checked_at:new Date().toISOString()}};
+    await writeMeta(dir,id,next);
+    return next.qa;
+  }
+  async function archiveRejected({key,attempt=1,qa=null}={}) {
+    const id=safeKey(key),dir=cacheDir(),file=path.join(dir,`${id}.jpg`);
+    const suffix=`rejected-${String(attempt).padStart(2,'0')}`;
+    try{await fs.rename(file,path.join(dir,`${id}.${suffix}.jpg`));}catch{}
+    const current=await readMeta(dir,id);
+    if(current){
+      await fs.writeFile(path.join(dir,`${id}.${suffix}.json`),JSON.stringify({...current,qa,rejected_at:new Date().toISOString()},null,2));
+      await fs.rm(metaFile(dir,id),{force:true});
+    }
+  }
+  return {ensure,assess,recordQuality,archiveRejected,promptFor,qaPromptFor,storyboardPromptFor,safeKey};
 }
