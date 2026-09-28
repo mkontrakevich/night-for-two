@@ -1,0 +1,59 @@
+name: Inspect Night gateway bindings
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/inspect-night-gateway.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_TUNNEL_ID: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
+    steps:
+      - name: Compare deployed and failed Worker bindings without printing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']
+          token=os.environ['CLOUDFLARE_API_TOKEN']
+          root=f'https://api.cloudflare.com/client/v4/accounts/{account}'
+          def get(path):
+              req=urllib.request.Request(root+path,headers={'Authorization':'Bearer '+token})
+              with urllib.request.urlopen(req,timeout=25) as response: data=json.load(response)
+              if not data.get('success'): raise RuntimeError('Cloudflare API returned an unsuccessful response')
+              return data['result']
+          result=get('/workers/scripts/night42/versions?per_page=10')
+          versions=result.get('items',result) if isinstance(result,dict) else result
+          broken='8566996b-ed07-4231-9782-9c9d454285ba'
+          ids=[v['id'] for v in versions]
+          if broken not in ids or ids.index(broken)+1>=len(ids): raise RuntimeError('Cannot identify the preceding version')
+          old=ids[ids.index(broken)+1]
+          print('Working version id:',old)
+          def bindings(version):
+              obj=get('/workers/scripts/night42/versions/'+version)
+              resources=obj.get('resources') or {}
+              return resources.get('bindings',obj.get('bindings',[]))
+          previous=bindings(old); failed=bindings(broken)
+          def describe(items):
+              return [(v.get('name'),v.get('type')) for v in items]
+          print('Working binding names and types:',describe(previous))
+          print('Failed binding names and types:',describe(failed))
+          for name in sorted({v.get('name') for v in previous+failed}):
+              a=next((v for v in previous if v.get('name')==name),None)
+              b=next((v for v in failed if v.get('name')==name),None)
+              print('Binding equality',name,':',a==b)
+          try:
+              tunnel=get('/cfd_tunnel/'+os.environ['CLOUDFLARE_TUNNEL_ID'])
+              print('Configured tunnel status:',tunnel.get('status','unknown'))
+              print('Configured tunnel connections:',len(tunnel.get('connections') or []))
+          except Exception as exc:
+              print('Tunnel status lookup unavailable:',type(exc).__name__)
+          PY
