@@ -57,7 +57,7 @@ jobs:
               tunnel=(vb.get("NIGHT_VPC") or {}).get("tunnel_id")
               anns=vr.get("annotations") or {}
               safe_annotations={key:value for key,value in anns.items() if key in ("workers/triggered_by","workers/commit_hash","workers/deployment_message")}
-              lines.append(f"Deployment created={item.get('created_on')} version={vid} reader_binding={('READER_ASSETS' in vb)} host_match={host==origin} port_match={port=='5683'} tunnel_match={tunnel==os.environ['CF_TUNNEL']} version_success={vd.get('success')} source={item.get('source')} annotations={safe_annotations}")
+              lines.append(f"Deployment created={item.get('created_on')} version={vid} reader_binding={('READER_ASSETS' in vb)} host_match={host==origin} port_match={port=='5683'} tunnel_match={tunnel==os.environ['CF_TUNNEL']} version_success={vd.get('success')} source={item.get('source')} author_email={item.get('author_email')} annotations={safe_annotations}")
           t=get(f"/cfd_tunnel/{os.environ['CF_TUNNEL']}")
           obj=t.get("result") or {}
           lines.append(f"Tunnel status={obj.get('status')} connection_count={len(obj.get('connections') or [])}")
@@ -68,8 +68,10 @@ jobs:
           clients=cr if isinstance(cr,list) else cr.get("connections",[])
           lines.append(f"Tunnel client_count={len(clients)} status={c.get('http_status','ok')}")
           for client in clients:
-              links=client.get("connections") or []
-              lines.append(f"Client keys={','.join(sorted(client.keys()))} version={client.get('client_version')} run_at={client.get('run_at')} active_connections={len(links)}")
+              links=client.get("conns") or []
+              lines.append(f"Client version={client.get('version')} run_at={client.get('run_at')} active_connections={len(links)} features={client.get('features')} ha_status={client.get('ha_status')}")
+              for link in links:
+                  lines.append(f"Client connection keys={','.join(sorted(link.keys()))} protocol={link.get('protocol')} opened={link.get('opened_at')}")
           Path("ops/night-cloudflare-inspect-result.txt").parent.mkdir(exist_ok=True)
           Path("ops/night-cloudflare-inspect-result.txt").write_text("\n".join(lines)+"\n")
           print("\n".join(lines))
