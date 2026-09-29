@@ -74,3 +74,12 @@ jobs:
           $actionsHealth = Invoke-RestMethod -Uri "http://127.0.0.1:5683/actions/health" -TimeoutSec 20
           if ($actionsHealth.ok -ne $true) { throw "NIGHT_ACTIONS_HEALTH_NOT_OK" }
           Write-Host "NIGHT_ORIGIN_READY port=5683 actions=true"
+
+      - name: Publish Telegram pair menu
+        shell: powershell
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          PRIMARY_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
+          PARTNER_TELEGRAM_ID: ${{ secrets.PARTNER_TELEGRAM_ID }}
+        run: |
+          ./tools/publish-pages.ps1 -Mode Publish -PublicUrl "https://night42.kontrakevich.workers.dev"
