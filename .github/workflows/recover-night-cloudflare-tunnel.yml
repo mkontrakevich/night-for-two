@@ -1,0 +1,44 @@
+name: Recover Night Cloudflare tunnel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/recover-night-cloudflare-tunnel.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 10
+    steps:
+      - name: Restart only Night cloudflared and verify public health
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $local=Invoke-RestMethod 'http://127.0.0.1:5683/night/health' -TimeoutSec 10
+          if($local.ok -ne $true -or $local.db -ne $true){ throw 'LOCAL_NIGHT_NOT_HEALTHY' }
+
+          $raw=docker inspect night-prod-cloudflared
+          if($LASTEXITCODE -ne 0 -or -not $raw){ throw 'NIGHT_TUNNEL_CONTAINER_MISSING' }
+          $c=@($raw|ConvertFrom-Json)[0]
+          if(-not $c.State.Running){ throw 'NIGHT_TUNNEL_NOT_RUNNING' }
+
+          docker restart night-prod-cloudflared
+          if($LASTEXITCODE -ne 0){ throw 'NIGHT_TUNNEL_RESTART_FAILED' }
+
+          for($i=1;$i -le 30;$i++){
+            Start-Sleep -Seconds 3
+            try{
+              $p=Invoke-RestMethod 'https://night42.kontrakevich.workers.dev/night/health' -TimeoutSec 10 -ErrorAction Stop
+              if($p.ok -eq $true -and $p.db -eq $true){
+                Write-Host "NIGHT_PUBLIC_HEALTH_RECOVERED attempt=$i"
+                exit 0
+              }
+            }catch{
+              Write-Host "NIGHT_PUBLIC_HEALTH_WAIT attempt=$i"
+            }
+          }
+          throw 'NIGHT_PUBLIC_HEALTH_NOT_RECOVERED'
