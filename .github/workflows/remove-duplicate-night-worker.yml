@@ -1,0 +1,54 @@
+name: Remove duplicate Night Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/remove-duplicate-night-worker.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Verify primary Night production
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://night42.kontrakevich.workers.dev"
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 "$base/night/health" | jq -e '.ok == true and .db == true'
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 "$base/actions/health" | jq -e '.ok == true'
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 -D /tmp/reader.headers -o /tmp/reader.html "$base/reader/"
+          grep -qi '^x-night-product: reader' /tmp/reader.headers
+          echo "PRIMARY_NIGHT_OK"
+
+      - name: Delete duplicate dedicated Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/night-for-two"
+          code="$(curl --silent --show-error --output /tmp/delete.json --write-out '%{http_code}' -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$api")"
+          if [ "$code" = "404" ]; then
+            echo "DUPLICATE_ALREADY_ABSENT"
+          else
+            test "$code" = "200"
+            jq -e '.success == true' /tmp/delete.json >/dev/null
+            echo "DUPLICATE_NIGHT_WORKER_DELETED"
+          fi
+
+      - name: Verify primary remains healthy
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://night42.kontrakevich.workers.dev"
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 "$base/night/health" | jq -e '.ok == true and .db == true'
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 "$base/actions/health" | jq -e '.ok == true'
+          echo "PRIMARY_NIGHT_STILL_OK"
