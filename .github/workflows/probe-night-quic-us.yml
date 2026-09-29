@@ -1,0 +1,62 @@
+name: Probe Night QUIC via US region
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/probe-night-quic-us.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 8
+    steps:
+      - name: Start temporary US-region QUIC connector and test night42
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $raw=docker inspect night-prod-cloudflared
+          if($LASTEXITCODE -ne 0 -or -not $raw){throw 'NIGHT_TUNNEL_MISSING'}
+          $c=@($raw|ConvertFrom-Json)[0]
+          $parts=@($c.Config.Entrypoint)+@($c.Config.Cmd)
+          $idx=[Array]::IndexOf($parts,'--token-file')
+          if($idx -lt 0 -or $idx+1 -ge $parts.Count){throw 'TOKEN_FILE_ARG_MISSING'}
+          $containerPath=[string]$parts[$idx+1]
+          $mount=@($c.Mounts | Where-Object { $containerPath -eq $_.Destination -or $containerPath.StartsWith($_.Destination.TrimEnd('/')+'/') })[0]
+          if(-not $mount){throw 'TOKEN_FILE_MOUNT_MISSING'}
+          $tokenFile=[string]$mount.Source
+          $cmd=Get-Command cloudflared.exe -ErrorAction Stop
+          $exe=$cmd.Source
+
+          $out=Join-Path $env:RUNNER_TEMP 'night-us-quic.stdout.log'
+          $err=Join-Path $env:RUNNER_TEMP 'night-us-quic.stderr.log'
+          $args=@('tunnel','--region','us','--protocol','quic','run','--token-file',('"'+$tokenFile+'"'))
+          $p=Start-Process -FilePath $exe -ArgumentList $args -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err
+          $recovered=$false
+          try{
+            for($i=1;$i -le 15;$i++){
+              Start-Sleep -Seconds 4
+              try{
+                $h=Invoke-RestMethod 'https://night42.kontrakevich.workers.dev/night/health' -TimeoutSec 8 -ErrorAction Stop
+                if($h.ok -eq $true -and $h.db -eq $true){
+                  Write-Host "PUBLIC_RECOVERED_US_QUIC=true attempt=$i"
+                  $recovered=$true
+                  break
+                }
+              }catch{
+                Write-Host "PUBLIC_WAIT_US_QUIC attempt=$i"
+              }
+            }
+          }finally{
+            if(-not $p.HasExited){Stop-Process -Id $p.Id -Force}
+          }
+
+          $lines=@((Get-Content $out -ErrorAction SilentlyContinue)+(Get-Content $err -ErrorAction SilentlyContinue))
+          foreach($flag in @('Registered tunnel connection','Failed to dial a quic connection','no recent network activity','Serve tunnel error','location=')){
+            $count=@($lines | Where-Object {$_.IndexOf($flag,[System.StringComparison]::OrdinalIgnoreCase)-ge 0}).Count
+            Write-Host "US_NATIVE_LOG [$flag]=$count"
+          }
+          if(-not $recovered){throw 'PUBLIC_NOT_RECOVERED_US_QUIC'}
