@@ -33,11 +33,15 @@ jobs:
           records=deployments.get('deployments',deployments.get('items',[])) if isinstance(deployments,dict) else deployments
           print('Deployment count:',len(records))
           for item in records[:5]:
-              print('Deployment:',item.get('id'),item.get('created_on'),item.get('source'))
+              print('Deployment:',item.get('id'),item.get('created_on'),item.get('source'),'annotations:',item.get('annotations'))
               print('Traffic versions:',[(v.get('version_id'),v.get('percentage')) for v in item.get('versions',[])])
           versions=get('/workers/scripts/night42/versions?per_page=10')
           items=versions.get('items',versions) if isinstance(versions,dict) else versions
           print('Recent version IDs:',[v.get('id') for v in items[:8]])
+          print('Recent version metadata:',[(v.get('id'),v.get('metadata'),v.get('annotations')) for v in items[:4]])
+          req=urllib.request.Request(root+'/workers/scripts/night42',headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(req,timeout=25) as response: script=response.read()
+          print('Current script includes Reader proxy:',b'READER_ORIGIN' in script,'bytes:',len(script))
           for version_id in [v.get('version_id') for v in records[0].get('versions',[])] if records else []:
               obj=get('/workers/scripts/night42/versions/'+version_id)
               bindings=(obj.get('resources') or {}).get('bindings',obj.get('bindings',[]))
