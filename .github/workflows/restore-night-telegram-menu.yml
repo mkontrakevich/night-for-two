@@ -1,0 +1,54 @@
+name: Restore Night Telegram menu
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/restore-night-telegram-menu.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      PRIMARY_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
+      PARTNER_TELEGRAM_ID: ${{ secrets.PARTNER_TELEGRAM_ID }}
+      NIGHT_URL: https://night42.kontrakevich.workers.dev
+    steps:
+      - name: Wait for public Night health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if body="$(curl --fail --silent --show-error --max-time 8 "$NIGHT_URL/night/health" 2>/dev/null)" && echo "$body" | jq -e '.ok == true and .db == true' >/dev/null; then
+              echo "NIGHT_PUBLIC_HEALTH_OK attempt=$i"
+              exit 0
+            fi
+            echo "NIGHT_PUBLIC_HEALTH_WAIT attempt=$i"
+            sleep 5
+          done
+          echo "::error::NIGHT_PUBLIC_HEALTH_FAILED"
+          exit 1
+
+      - name: Restore and verify pair menu
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$TELEGRAM_BOT_TOKEN"
+          test -n "$PRIMARY_OWNER_ID"
+          test -n "$PARTNER_TELEGRAM_ID"
+          for chat_id in "$PRIMARY_OWNER_ID" "$PARTNER_TELEGRAM_ID"; do
+            payload="$(jq -cn --arg chat_id "$chat_id" --arg url "$NIGHT_URL/night" '{chat_id:$chat_id,menu_button:{type:"web_app",text:"Ночь на двоих",web_app:{url:$url}}}')"
+            set_result="$(curl --fail --silent --show-error -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setChatMenuButton" -H 'content-type: application/json' --data "$payload")"
+            echo "$set_result" | jq -e '.ok == true' >/dev/null
+
+            get_payload="$(jq -cn --arg chat_id "$chat_id" '{chat_id:$chat_id}')"
+            get_result="$(curl --fail --silent --show-error -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getChatMenuButton" -H 'content-type: application/json' --data "$get_payload")"
+            echo "$get_result" | jq -e --arg url "$NIGHT_URL/night" '.ok == true and .result.type == "web_app" and .result.text == "Ночь на двоих" and .result.web_app.url == $url' >/dev/null
+            echo "NIGHT_TELEGRAM_MENU_VERIFIED chat=paired"
+          done
+          echo "NIGHT_TELEGRAM_PAIR_MENU_RESTORED"
