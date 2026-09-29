@@ -1,5 +1,14 @@
 import {spawn} from 'node:child_process';
 
+const ACTIVE=new Set(['generating','illustrating']);
+const RETRYABLE_PLAN_ERROR=/NIGHT_NOVEL_(?:STRUCTURE_TOO_THIN|PROTAGONISTS_INVALID|ROLE_PAIR_INVALID|PLAN_FAILED)/;
+
+function canResume(current={}){
+  const status=String(current?.status||'');
+  if(ACTIVE.has(status))return true;
+  return status==='failed'&&Number(current?.generated_pages||0)===0&&RETRYABLE_PLAN_ERROR.test(String(current?.error||''));
+}
+
 export function createNightNovelGenerationService({store}={}){
   if(!store)throw new Error('NIGHT_NOVEL_GENERATION_STORE_REQUIRED');
   let child=null,lastStart=0,lastExit=null,starting=false;
@@ -11,15 +20,15 @@ export function createNightNovelGenerationService({store}={}){
 
   function spawnGenerator(current=null,{recovery=false}={}){
     const env={...process.env};
-    const active=['generating','illustrating'].includes(String(current?.status||''));
-    if(active&&current?.id)env.NIGHT_RESUME_NOVEL_ID=String(current.id);
+    const resumable=canResume(current)&&current?.id;
+    if(resumable)env.NIGHT_RESUME_NOVEL_ID=String(current.id);
     else delete env.NIGHT_RESUME_NOVEL_ID;
 
     child=spawn(process.execPath,['scripts/night-generate-linear-novel.mjs'],{
       cwd:process.cwd(),env,stdio:['ignore','inherit','inherit']
     });
     lastStart=Date.now();lastExit=null;
-    console.log('NIGHT_NOVEL_RUNNER_STARTED',JSON.stringify({pid:child.pid||null,recovery:Boolean(recovery&&active),resume_novel_id:active?current.id:null,status:active?current.status:'new'}));
+    console.log('NIGHT_NOVEL_RUNNER_STARTED',JSON.stringify({pid:child.pid||null,recovery:Boolean(recovery&&resumable),resume_novel_id:resumable?current.id:null,status:resumable?current.status:'new'}));
     child.once('exit',(code,signal)=>{
       lastExit={code,signal,at:Date.now()};
       console.log('NIGHT_NOVEL_RUNNER_EXIT',JSON.stringify(lastExit));
@@ -30,7 +39,7 @@ export function createNightNovelGenerationService({store}={}){
       console.error('NIGHT_NOVEL_RUNNER_ERROR',JSON.stringify(lastExit));
       child=null;
     });
-    return {started:true,recovery:Boolean(recovery&&active),pid:child.pid,resume_novel_id:active?current.id:null};
+    return {started:true,recovery:Boolean(recovery&&resumable),pid:child.pid,resume_novel_id:resumable?current.id:null};
   }
 
   async function start(){
@@ -39,8 +48,8 @@ export function createNightNovelGenerationService({store}={}){
     starting=true;
     try{
       const current=await store.status();
-      const active=['generating','illustrating'].includes(String(current.status));
-      const launched=spawnGenerator(active?current:null,{recovery:active});
+      const resume=canResume(current);
+      const launched=spawnGenerator(resume?current:null,{recovery:resume});
       return {...launched,status:await status()};
     }finally{starting=false;}
   }
@@ -51,9 +60,9 @@ export function createNightNovelGenerationService({store}={}){
     starting=true;
     try{
       const current=await store.status();
-      if(!['generating','illustrating'].includes(String(current.status)))return {started:false,reason:'nothing_to_recover',status:await status()};
+      if(!canResume(current))return {started:false,reason:'nothing_to_recover',status:await status()};
       const launched=spawnGenerator(current,{recovery:true});
-      console.log('NIGHT_NOVEL_RECOVERY_STARTED',JSON.stringify({novel_id:current.id,status:current.status,pid:launched.pid||null}));
+      console.log('NIGHT_NOVEL_RECOVERY_STARTED',JSON.stringify({novel_id:current.id,status:current.status,pid:launched.pid||null,retry_failed:current.status==='failed'}));
       return {...launched,status:await status()};
     }finally{starting=false;}
   }
