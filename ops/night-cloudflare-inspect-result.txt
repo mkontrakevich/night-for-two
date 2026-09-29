@@ -1,3 +1,4 @@
+Dedicated Worker exists=False status=404
 Baseline success=True bindings=NIGHT_ORIGIN_HOST:plain_text,NIGHT_ORIGIN_PORT:plain_text,NIGHT_VPC:vpc_network
 Deployment keys=annotations,author_email,created_on,id,source,strategy,versions
 Deployment keys=annotations,author_email,created_on,id,source,strategy,versions
