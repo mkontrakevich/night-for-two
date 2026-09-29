@@ -1,0 +1,36 @@
+name: Inspect Night QUIC routes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-night-quic-routes.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 8
+    steps:
+      - name: Inspect Windows routes to Cloudflare Tunnel edges
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host '=== INTERFACES ==='
+          Get-NetIPInterface -AddressFamily IPv4 | Sort-Object InterfaceMetric | Select-Object InterfaceAlias,InterfaceIndex,ConnectionState,NlMtu,InterfaceMetric,Dhcp | Format-Table -Auto
+
+          Write-Host '=== DEFAULT ROUTES ==='
+          Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object InterfaceAlias,InterfaceIndex,NextHop,RouteMetric,ifMetric | Format-Table -Auto
+
+          Write-Host '=== CLOUDFLARE EDGE ROUTES ==='
+          $ips=@(Resolve-DnsName region1.v2.argotunnel.com -Type A -ErrorAction Stop | Where-Object {$_.IPAddress} | Select-Object -ExpandProperty IPAddress -Unique)
+          foreach($ip in $ips){
+            try{
+              $best=Find-NetRoute -RemoteIPAddress $ip -ErrorAction Stop
+              Write-Host "EDGE ip=$ip interface=$($best.IPInterface.InterfaceAlias) ifIndex=$($best.IPInterface.InterfaceIndex) nextHop=$($best.NetRoute.NextHop) routeMetric=$($best.NetRoute.RouteMetric) ifMetric=$($best.IPInterface.InterfaceMetric) mtu=$($best.IPInterface.NlMtu)"
+            }catch{
+              Write-Host "EDGE ip=$ip route=unresolved"
+            }
+          }
