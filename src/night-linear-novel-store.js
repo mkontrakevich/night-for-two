@@ -101,8 +101,9 @@ export function createNightLinearNovelStore({pool}={}){
     if(!novel){
       const progress=await latest();
       if(!progress)return {mode:'linear_novel_unavailable',novel:null};
-      const stats=await imageStats(progress.id);
-      return {mode:'linear_novel_unavailable',novel:{id:progress.id,title:progress.title,status:progress.status,total_pages:progress.total_pages,generated_pages:progress.generated_pages,generated_images:stats.ready,planned_images:stats.planned,error:progress.error}};
+      const stats=await imageStats(progress.id),textRatio=Math.min(1,(Number(progress.generated_pages)||0)/Math.max(1,Number(progress.total_pages)||100)),visualRatio=stats.planned?Math.min(1,stats.ready/stats.planned):(progress.status==='generating'?0:1);
+      const pct=Math.floor(Math.min(99,textRatio*75+visualRatio*25));
+      return {mode:'linear_novel_unavailable',novel:{id:progress.id,title:progress.title,status:progress.status,progress:pct,total_pages:progress.total_pages,generated_pages:progress.generated_pages,generated_images:stats.ready,planned_images:stats.planned,error:progress.error}};
     }
     const stats=await imageStats(novel.id);
     const p=await page(novel.id,pageNo);
