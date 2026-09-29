@@ -39,7 +39,7 @@ jobs:
             throw 'TOKEN_FILE_DECODE_FAILED'
           }
           $actual=''
-          foreach($name in @('tunnelID','tunnel_id','TunnelID')){
+          foreach($name in @('t','tunnelID','tunnel_id','TunnelID')){
             if($json.PSObject.Properties.Name -contains $name){
               $actual=[string]$json.$name
               if($actual){break}
