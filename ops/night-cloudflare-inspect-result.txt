@@ -1,14 +1,18 @@
 Baseline success=True bindings=NIGHT_ORIGIN_HOST:plain_text,NIGHT_ORIGIN_PORT:plain_text,NIGHT_VPC:vpc_network
 Deployment keys=annotations,author_email,created_on,id,source,strategy,versions
 Deployment keys=annotations,author_email,created_on,id,source,strategy,versions
-Deployment created=2026-09-29T10:33:14.448612Z version=23f4080b-1c5e-47db-92e0-0567299055ac reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
-Deployment created=2026-09-29T10:32:06.346742Z version=19f7c400-783c-497d-a15f-dd0af84e6185 reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
-Deployment created=2026-09-29T10:31:45.471363Z version=588df934-a7db-470f-894a-6423acb3f753 reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
-Deployment created=2026-09-29T10:31:32.753307Z version=8a98f84c-8bc5-498d-b159-9ba17c3b4c4c reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:33:14.448612Z version=23f4080b-1c5e-47db-92e0-0567299055ac reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler author_email=kontrakevych@gmail.com annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:32:06.346742Z version=19f7c400-783c-497d-a15f-dd0af84e6185 reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler author_email=kontrakevych@gmail.com annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:31:45.471363Z version=588df934-a7db-470f-894a-6423acb3f753 reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler author_email=kontrakevych@gmail.com annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:31:32.753307Z version=8a98f84c-8bc5-498d-b159-9ba17c3b4c4c reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler author_email=kontrakevych@gmail.com annotations={'workers/triggered_by': 'version_upload'}
 Tunnel status=healthy connection_count=4
 Tunnel connection keys=client_id,client_version,colo_name,id,is_pending_reconnect,opened_at,origin_ip,uuid version=2026.9.1 opened=2026-09-29T10:32:48.405841Z pending=False
 Tunnel connection keys=client_id,client_version,colo_name,id,is_pending_reconnect,opened_at,origin_ip,uuid version=2026.9.1 opened=2026-09-29T10:37:15.295478Z pending=False
 Tunnel connection keys=client_id,client_version,colo_name,id,is_pending_reconnect,opened_at,origin_ip,uuid version=2026.9.1 opened=2026-09-29T10:33:42.298943Z pending=False
 Tunnel connection keys=client_id,client_version,colo_name,id,is_pending_reconnect,opened_at,origin_ip,uuid version=2026.9.1 opened=2026-09-29T10:34:45.486992Z pending=False
 Tunnel client_count=1 status=ok
-Client keys=arch,conns,features,ha_status,id,run_at,version version=None run_at=2026-09-29T10:32:48.405841Z active_connections=0
+Client version=2026.9.1 run_at=2026-09-29T10:32:48.405841Z active_connections=4 features=['support_datagram_v2', 'support_quic_eof', 'management_logs', 'allow_remote_config', 'serialized_headers'] ha_status=None
+Client connection keys=client_id,client_version,colo_name,id,is_pending_reconnect,opened_at,origin_ip,uuid protocol=None opened=2026-09-29T10:32:48.405841Z
+Client connection keys=client_id,client_version,colo_name,id,is_pending_reconnect,opened_at,origin_ip,uuid protocol=None opened=2026-09-29T10:37:15.295478Z
+Client connection keys=client_id,client_version,colo_name,id,is_pending_reconnect,opened_at,origin_ip,uuid protocol=None opened=2026-09-29T10:33:42.298943Z
+Client connection keys=client_id,client_version,colo_name,id,is_pending_reconnect,opened_at,origin_ip,uuid protocol=None opened=2026-09-29T10:34:45.486992Z
