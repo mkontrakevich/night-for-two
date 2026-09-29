@@ -1,0 +1,6 @@
+/night status=502
+/night/health status=502
+{"ok":false,"error":"NIGHT_ORIGIN_UNREACHABLE","detail":"connection_refused"}
+/actions/health status=502
+{"ok":false,"error":"NIGHT_ORIGIN_UNREACHABLE","detail":"connection_refused"}
+shared-reader status=200
