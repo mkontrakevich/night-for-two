@@ -1,0 +1,60 @@
+name: Inspect Night Cloudflare deployment
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/night-cloudflare-inspect-20260929.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_TUNNEL: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect active Worker deployment and tunnel without secrets
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request, urllib.error
+          from pathlib import Path
+          base=f"https://api.cloudflare.com/client/v4/accounts/{os.environ['CF_ACCOUNT']}"
+          headers={"Authorization":"Bearer "+os.environ["CF_TOKEN"]}
+          def get(path):
+              request=urllib.request.Request(base+path,headers=headers)
+              try:
+                  with urllib.request.urlopen(request,timeout=25) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as exc:
+                  return {"success":False,"http_status":exc.code}
+          lines=[]
+          d=get("/workers/scripts/night42/deployments")
+          lines.append(f"Deployments API success={d.get('success')} status={d.get('http_status','ok')}")
+          result=d.get("result") or []
+          deployments=result if isinstance(result,list) else result.get("deployments",[])
+          for item in deployments[:6]:
+              versions=item.get("versions") or []
+              version_ids=[f"{v.get('version_id')}:{v.get('percentage')}" for v in versions]
+              lines.append(f"Deployment id={item.get('id')} created_on={item.get('created_on')} source={item.get('source')} author={item.get('author')} versions={','.join(version_ids)}")
+          t=get(f"/cfd_tunnel/{os.environ['CF_TUNNEL']}")
+          obj=t.get("result") or {}
+          lines.append(f"Tunnel API success={t.get('success')} status={t.get('http_status','ok')} tunnel_status={obj.get('status')} connections={len(obj.get('connections') or [])}")
+          c=get(f"/cfd_tunnel/{os.environ['CF_TUNNEL']}/connections")
+          cr=c.get("result") or []
+          conns=cr if isinstance(cr,list) else cr.get("connections",[])
+          lines.append(f"Connections API success={c.get('success')} status={c.get('http_status','ok')} count={len(conns)}")
+          Path("ops/night-cloudflare-inspect-result.txt").parent.mkdir(exist_ok=True)
+          Path("ops/night-cloudflare-inspect-result.txt").write_text("\n".join(lines)+"\n")
+          print("\n".join(lines))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/night-cloudflare-inspect-result.txt
+          git commit -m "Record temporary Night Cloudflare deployment state"
+          git push
