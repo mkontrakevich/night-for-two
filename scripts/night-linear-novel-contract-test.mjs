@@ -13,7 +13,7 @@ assert(flow.includes('[8,10,10,10,10,10,10,10,10,12]'),'Full novel must total ex
 assert(store.includes('night_linear_novels')&&store.includes('night_linear_novel_pages'),'Full novel must persist metadata and pages');
 assert(store.includes("status IN ('generating','illustrating','complete','failed')"),'Full novel must expose durable generation status');
 assert(generator.includes('generateSerialNovelPlan'),'Generation must start from a complete hidden novel architecture');
-assert(generator.indexOf('await store.create')<generator.indexOf('const plan=await generateSerialNovelPlan'),'Generation state must be persisted before slow planning begins');
+assert(generator.includes('novel=await store.create')&&generator.indexOf('novel=await store.create')<generator.indexOf('plan=await generateSerialNovelPlan'),'Generation state must be persisted before slow planning begins');
 assert(app.includes("status:'generating'")&&app.includes("render();return d"),'Mini App must show generation immediately after start');
 assert(store.includes('progress:pct'),'Reader state must expose authoritative generation progress');
 assert(app.includes('novelProgressPct')&&app.includes('novelProgressFill'),'Mini App must render visible generation percentage and progress bar');
