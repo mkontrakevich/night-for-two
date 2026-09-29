@@ -78,4 +78,13 @@ jobs:
               print('Tunnel status:',tunnel.get('status','unknown'),'connections:',len(tunnel.get('connections') or []))
           except (urllib.error.HTTPError,RuntimeError) as error:
               print('Tunnel status lookup unavailable:',type(error).__name__)
+          try:
+              request=urllib.request.Request('https://api.cloudflare.com/client/v4/zones?account.id='+account,headers={'Authorization':'Bearer '+token})
+              with urllib.request.urlopen(request,timeout=25) as response: zone_data=json.load(response)
+              if zone_data.get('success'):
+                  print('Account zones:',[(zone.get('name'),zone.get('status')) for zone in zone_data.get('result',[])])
+              else:
+                  print('Zone list unavailable: API unsuccessful')
+          except (urllib.error.HTTPError,RuntimeError) as error:
+              print('Zone list unavailable:',type(error).__name__)
           PY
