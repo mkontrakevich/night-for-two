@@ -1,0 +1,34 @@
+name: Inspect Night UDP block rule
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-night-udp-block-rule.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 6
+    steps:
+      - name: Inspect effective sandbox UDP block scope
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $rule=Get-NetFirewallRule -DisplayName 'codex_sandbox_offline_block_loopback_udp' -ErrorAction SilentlyContinue
+          if(-not $rule){
+            Write-Host 'SANDBOX_UDP_RULE_PRESENT=false'
+            exit 0
+          }
+          $port=$rule | Get-NetFirewallPortFilter
+          $addr=$rule | Get-NetFirewallAddressFilter
+          $app=$rule | Get-NetFirewallApplicationFilter
+          Write-Host 'SANDBOX_UDP_RULE_PRESENT=true'
+          Write-Host "enabled=$($rule.Enabled) direction=$($rule.Direction) action=$($rule.Action) profiles=$($rule.Profile)"
+          Write-Host "protocol=$($port.Protocol) localPort=$($port.LocalPort) remotePort=$($port.RemotePort)"
+          Write-Host "localAddress=$($addr.LocalAddress -join ',')"
+          Write-Host "remoteAddress=$($addr.RemoteAddress -join ',')"
+          Write-Host "program=$($app.Program)"
