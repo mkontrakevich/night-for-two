@@ -207,7 +207,12 @@ try{
   if(resumeId){
     novel=await store.get(resumeId);
     if(!novel)throw new Error(`NIGHT_LINEAR_RESUME_NOT_FOUND:${resumeId}`);
-    if(!['generating','illustrating'].includes(String(novel.status)))throw new Error(`NIGHT_LINEAR_RESUME_STATUS_INVALID:${resumeId}:${novel.status}`);
+    const retryableFailed=String(novel.status)==='failed'&&Number(novel.generated_pages||0)===0&&/NIGHT_NOVEL_(?:STRUCTURE_TOO_THIN|PROTAGONISTS_INVALID|ROLE_PAIR_INVALID|PLAN_FAILED)/.test(String(novel.error||''));
+    if(!['generating','illustrating'].includes(String(novel.status))&&!retryableFailed)throw new Error(`NIGHT_LINEAR_RESUME_STATUS_INVALID:${resumeId}:${novel.status}`);
+    if(retryableFailed){
+      novel=await store.updateNovel(novel.id,{status:'generating',error:''});
+      console.log('NIGHT_LINEAR_NOVEL_RETRY',JSON.stringify({novel_id:novel.id,reason:'recoverable_plan_failure'}));
+    }
     console.log('NIGHT_LINEAR_NOVEL_RESUME',JSON.stringify({novel_id:novel.id,status:novel.status,generated_pages:Number(novel.generated_pages)||0,generated_images:Number(novel.generated_images)||0}));
   }else{
     const freshBookSeed=crypto.randomBytes(18).toString('hex');
