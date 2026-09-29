@@ -5,6 +5,8 @@ const store=fs.readFileSync(new URL('../src/night-linear-novel-store.js',import.
 const generator=fs.readFileSync(new URL('./night-generate-linear-novel.mjs',import.meta.url),'utf8');
 const app=fs.readFileSync(new URL('../src/night-for-two-miniapp-v3.js',import.meta.url),'utf8');
 const flow=fs.readFileSync(new URL('../src/night-story-flow.js',import.meta.url),'utf8');
+const service=fs.readFileSync(new URL('../src/night-novel-generation-service.js',import.meta.url),'utf8');
+const api=fs.readFileSync(new URL('../src/night-backend-generator-api.js',import.meta.url),'utf8');
 
 assert(flow.includes('STORY_TOTAL_PAGES=STORY_PAGE_PLAN.reduce'));
 assert(flow.includes('[8,10,10,10,10,10,10,10,10,12]'),'Full novel must total exactly 100 pages');
@@ -20,6 +22,10 @@ assert(generator.includes('for(let chapterIndex=0;chapterIndex<STORY_ARC.length;
 assert(generator.includes('for(let pageNo=1;pageNo<=STORY_TOTAL_PAGES;pageNo++)')&&generator.includes("if(!String(page.media_prompt||'').trim())continue"),'Generator must scan all pages but render only pages selected for illustration');
 assert(generator.includes('illustrated>2')&&generator.includes('minIllustrations'),'Each chapter must select only one or two meaningful illustration beats');
 assert(generator.includes("progress:100"),'Generator must emit an explicit 100% completion marker');
+assert(service.includes('NIGHT_RESUME_NOVEL_ID')&&service.includes('NIGHT_NOVEL_RECOVERY_STARTED'),'Generator service must recover an orphaned durable run after restart');
+assert(api.includes('generator.recover()'),'Backend startup must automatically recover interrupted novel generation');
+assert(generator.includes('NIGHT_LINEAR_NOVEL_RESUME')&&generator.includes('NIGHT_LINEAR_PLAN_REUSED'),'Generator must resume the same persisted novel instead of creating a duplicate');
+assert(generator.includes("if(page.image_status==='ready')continue"),'Illustration resume must skip already completed visuals');
 assert(generator.includes("OPENROUTER_API_KEY_MISSING"),'Production illustration generation must require OpenRouter');
 assert(generator.includes("BOOK_PAGE:"),'Every selected illustration must use the page narrative as its image prompt');
 assert(store.includes('planned_images')||store.includes('AS planned'),'Completion must compare generated images with the selected visual plan, not with all 100 pages');
