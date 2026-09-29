@@ -1,6 +1,6 @@
-/night status=502
+/night status=200
 /night/health status=502
 {"ok":false,"error":"NIGHT_ORIGIN_UNREACHABLE","detail":"connection_refused"}
 /actions/health status=502
-{"ok":false,"error":"NIGHT_ORIGIN_UNREACHABLE","detail":"connection_refused"}
+{"ok":false,"error":"NIGHT_ORIGIN_UNREACHABLE","detail":"handshake timeout"}
 shared-reader status=200
