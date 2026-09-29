@@ -10,3 +10,9 @@ Deployment created=2026-09-29T10:29:50.81992Z version=9585531a-5aa0-4bfc-b801-e6
 Deployment created=2026-09-29T10:28:54.722994Z version=a5f9a1a8-b925-4299-9d84-7f83ad8f8098 reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
 Deployment created=2026-09-29T10:28:38.422439Z version=41122acf-69ab-40fe-81d6-83637b36474a reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
 Tunnel status=healthy connection_count=4
+Tunnel connection protocol=None version=2026.9.1 opened=2026-09-29T10:32:48.405841Z pending=False
+Tunnel connection protocol=None version=2026.9.1 opened=2026-09-29T10:32:48.871988Z pending=False
+Tunnel connection protocol=None version=2026.9.1 opened=2026-09-29T10:33:42.298943Z pending=False
+Tunnel connection protocol=None version=2026.9.1 opened=2026-09-29T10:34:45.486992Z pending=False
+Tunnel client_count=1 status=ok
+Client version=None run_at=2026-09-29T10:32:48.405841Z active_connections=0 protocols=
