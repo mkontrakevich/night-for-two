@@ -13,6 +13,9 @@ assert(store.includes("status IN ('generating','illustrating','complete','failed
 assert(generator.includes('generateSerialNovelPlan'),'Generation must start from a complete hidden novel architecture');
 assert(generator.indexOf('await store.create')<generator.indexOf('const plan=await generateSerialNovelPlan'),'Generation state must be persisted before slow planning begins');
 assert(app.includes("status:'generating'")&&app.includes("render();return d"),'Mini App must show generation immediately after start');
+assert(store.includes('progress:pct'),'Reader state must expose authoritative generation progress');
+assert(app.includes('novelProgressPct')&&app.includes('novelProgressFill'),'Mini App must render visible generation percentage and progress bar');
+assert(app.includes('Number(n.progress)'),'Mini App must prefer backend generation progress');
 assert(generator.includes('for(let chapterIndex=0;chapterIndex<STORY_ARC.length;chapterIndex++)'),'Generator must write every chapter');
 assert(generator.includes('for(let pageNo=1;pageNo<=STORY_TOTAL_PAGES;pageNo++)')&&generator.includes("if(!String(page.media_prompt||'').trim())continue"),'Generator must scan all pages but render only pages selected for illustration');
 assert(generator.includes('illustrated>2')&&generator.includes('minIllustrations'),'Each chapter must select only one or two meaningful illustration beats');
