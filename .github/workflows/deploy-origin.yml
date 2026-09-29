@@ -67,12 +67,27 @@ jobs:
             Write-Host "::notice::Standalone origin is not configured yet. Missing secrets: $($missing -join ', ')"
             throw "NIGHT_ORIGIN_SECRETS_MISSING"
           }
+
+          function Wait-NightHealth([string]$Uri,[string]$FailureCode) {
+            for ($attempt = 1; $attempt -le 30; $attempt++) {
+              try {
+                $result = Invoke-RestMethod -Uri $Uri -TimeoutSec 5
+                if ($result.ok -eq $true) {
+                  Write-Host "NIGHT_HEALTH_READY uri=$Uri attempt=$attempt"
+                  return $result
+                }
+              } catch {
+                Write-Host "NIGHT_HEALTH_WAIT uri=$Uri attempt=$attempt"
+              }
+              Start-Sleep -Seconds 2
+            }
+            throw $FailureCode
+          }
+
           docker compose -p night-for-two up -d --build --remove-orphans
           if ($LASTEXITCODE -ne 0) { throw "NIGHT_ORIGIN_DEPLOY_FAILED:$LASTEXITCODE" }
-          $health = Invoke-RestMethod -Uri "http://127.0.0.1:5683/night/health" -TimeoutSec 20
-          if ($health.ok -ne $true) { throw "NIGHT_ORIGIN_HEALTH_NOT_OK" }
-          $actionsHealth = Invoke-RestMethod -Uri "http://127.0.0.1:5683/actions/health" -TimeoutSec 20
-          if ($actionsHealth.ok -ne $true) { throw "NIGHT_ACTIONS_HEALTH_NOT_OK" }
+          $health = Wait-NightHealth "http://127.0.0.1:5683/night/health" "NIGHT_ORIGIN_HEALTH_NOT_OK"
+          $actionsHealth = Wait-NightHealth "http://127.0.0.1:5683/actions/health" "NIGHT_ACTIONS_HEALTH_NOT_OK"
           Write-Host "NIGHT_ORIGIN_READY port=5683 actions=true"
 
       - name: Publish Telegram pair menu
