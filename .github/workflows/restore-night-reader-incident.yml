@@ -73,14 +73,16 @@ jobs:
         run: |
           set -euo pipefail
           base=https://night42.kontrakevich.workers.dev
-          curl --fail --silent --show-error --retry 5 --retry-delay 3 -D /tmp/reader.headers -o /tmp/reader.html "$base/reader/"
+          for attempt in $(seq 1 12); do
+            code=$(curl --silent --show-error --max-time 20 -D /tmp/reader.headers -o /tmp/reader.html -w '%{http_code}' "$base/reader/")
+            if [ "$code" = 200 ] && grep -qi '^x-night-product: reader' /tmp/reader.headers && grep -q 'Комната №17' /tmp/reader.html; then break; fi
+            sleep 4
+          done
+          test "$code" = 200
           grep -qi '^x-night-product: reader' /tmp/reader.headers
-          grep -q 'Комната №17' /tmp/reader.html
-          code=$(curl --silent --show-error --max-time 20 -o /tmp/night.json -w '%{http_code}' "$base/night/health")
-          if [ "$code" = 200 ]; then
-            jq -e '.ok == true and .db == true' /tmp/night.json >/dev/null
-          else
-            test "$code" = 502
-            jq -e '.error == "NIGHT_ORIGIN_UNREACHABLE"' /tmp/night.json >/dev/null
-            echo '::notice::Reader is restored; Night origin still requires separate recovery.'
-          fi
+          curl --fail --silent --show-error "$base/night/health" | jq -e '.ok == true and .db == true' >/dev/null
+          curl --fail --silent --show-error "$base/actions/health" | jq -e '.ok == true and .product == "night_actions"' >/dev/null
+          sleep 25
+          curl --fail --silent --show-error -D /tmp/reader.stable.headers -o /dev/null "$base/reader/"
+          grep -qi '^x-night-product: reader' /tmp/reader.stable.headers
+          echo 'Night Reader route and both origin health checks remain healthy after stabilization.'
