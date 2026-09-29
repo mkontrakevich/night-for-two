@@ -181,6 +181,110 @@ export function validateSerialNovelPlan(raw,{bookSeed=''}={}){
   };
 }
 
+
+function padSerialNovelPlan(raw,{bookSeed=''}={}){
+  const data=parse(raw);
+  const protagonists=protagonistSource(data);
+  if(protagonists.length<2)throw new Error('NIGHT_NOVEL_PROTAGONISTS_INVALID');
+
+  const supporting=arr(data.supporting_characters,16);
+  while(supporting.length<4){
+    const i=supporting.length+1;
+    supporting.push({
+      id:`support_${i}`,
+      name:`Персонаж ${i}`,
+      sex:i%2?'male':'female',
+      public_identity:'Второстепенный участник истории',
+      private_motive:'Добиться собственной цели, влияющей на главную интригу',
+      desire:'Изменить положение в истории',
+      fear:'Потерять влияние на исход событий',
+      contradiction:'Помогает героям, но скрывает личный интерес',
+      secret:'Связан с одной из скрытых деталей основной интриги',
+      leverage:'Имеет доступ к важной информации',
+      relationship_to_protagonists:'Связан с центральной парой через основную интригу',
+      arc_start:'Наблюдает со стороны',
+      arc_turn:'Вмешивается в ключевой момент',
+      arc_end:'Раскрывает мотив и меняет баланс сил',
+      first_appearance:Math.min(4,i),
+      planned_reveal:'Его скрытая роль становится частью развязки'
+    });
+  }
+
+  const episodes=arr(data.episodes,16);
+  while(episodes.length<10){
+    const i=episodes.length+1;
+    episodes.push({
+      title:`Серия ${i}`,
+      dramatic_function:i===10?'Финальная развязка центральной интриги':`Эскалация конфликта и развитие линии ${i}`,
+      opening_state:i===1?'Герои входят в основную ситуацию':'Последствия предыдущего поворота меняют положение героев',
+      main_thread:'main',
+      side_threads:[i%2?'mystery':'secondary_1'],
+      clue_ids:[`clue_${i}`],
+      role_cards:[
+        {character_id:String(protagonists[0]?.id||'hero_m'),performed_by:'male_player'},
+        {character_id:String(protagonists[1]?.id||'hero_f'),performed_by:'female_player'}
+      ],
+      major_turn:i===10?'Центральная тайна получает окончательное объяснение':`Поворот ${i} меняет понимание героями происходящего`,
+      erotic_function:'Рост доверия, напряжения и близости между главными героями',
+      ending_hook:i===10?'Эмоциональное послесловие и новый образ пары':`Новая деталь заставляет пересмотреть события серии ${i}`
+    });
+  }
+
+  const threads=arr(data.thread_graph,16);
+  const ids=new Set(threads.map(x=>String(x?.thread_id||'')));
+  const ensureThread=(thread)=>{
+    if(ids.has(thread.thread_id))return;
+    threads.push(thread);ids.add(thread.thread_id);
+  };
+  ensureThread({thread_id:'main',kind:'main',title:'Главная линия',promise:'Центральный конфликт пары и основной сюжет',trigger:'Событие, запускающее историю',current_question:'Что стоит за центральной тайной?',clues:['main_clue'],false_leads:[],escalation_beats:['main_turn'],reveal:'Истина связывает внешнюю интригу и отношения героев',payoff:'Герои делают окончательный выбор',links:['mystery'],eligible_for_spinoff:false,return_to_main:'Определяет финал'});
+  ensureThread({thread_id:'mystery',kind:'mystery',title:'Тайна',promise:'Расследование скрытой причины событий',trigger:'Первая противоречивая деталь',current_question:'Кто и зачем скрывает правду?',clues:['mystery_clue_1','mystery_clue_2'],false_leads:['mystery_false_1'],escalation_beats:['mystery_turn'],reveal:'Скрытый мотив раскрывается',payoff:'Тайна влияет на финальное решение',links:['main'],eligible_for_spinoff:true,return_to_main:'Разгадка меняет основную линию'});
+  ensureThread({thread_id:'secondary_1',kind:'secondary',title:'Вторичная линия 1',promise:'Личная цель второстепенного героя',trigger:'Побочный конфликт',current_question:'Чего на самом деле хочет союзник?',clues:['secondary_clue_1'],false_leads:[],escalation_beats:['secondary_turn_1'],reveal:'Истинный мотив союзника',payoff:'Он помогает или мешает финальному выбору',links:['main'],eligible_for_spinoff:true,return_to_main:'Возвращается через ключевую улику'});
+  ensureThread({thread_id:'secondary_2',kind:'secondary',title:'Вторичная линия 2',promise:'Альтернативный взгляд на центральную интригу',trigger:'Появление второго источника информации',current_question:'Можно ли доверять этой версии?',clues:['secondary_clue_2'],false_leads:['secondary_false_2'],escalation_beats:['secondary_turn_2'],reveal:'Версия частично подтверждается',payoff:'Линия закрывает один из скрытых вопросов',links:['mystery'],eligible_for_spinoff:true,return_to_main:'Даёт недостающий элемент разгадки'});
+  ensureThread({thread_id:'sensory',kind:'sensory',title:'Эмоциональная линия',promise:'Изменение близости и доверия пары',trigger:'Первый совместный риск',current_question:'Смогут ли герои довериться друг другу полностью?',clues:['gesture_1'],false_leads:[],escalation_beats:['trust_turn'],reveal:'Главный страх пары назван прямо',payoff:'Близость становится осознанным выбором',links:['main'],eligible_for_spinoff:false,return_to_main:'Эмоционально завершает финал'});
+
+  const beats=arr(data.master_plot,16);
+  while(beats.length<10){
+    const i=beats.length+1;
+    beats.push({
+      key:`beat_${i}`,
+      title:`Поворот ${i}`,
+      function:i===10?'Финальная развязка':`Эскалация и смена понимания на этапе ${i}`,
+      episode:Math.min(10,i),
+      threads:['main',i%2?'mystery':'secondary_1'],
+      setup_ids:[`setup_${Math.max(1,i-1)}`],
+      payoff_ids:[`setup_${i}`]
+    });
+  }
+
+  const plants=arr(data.plant_payoff_ledger,32);
+  while(plants.length<10){
+    const i=plants.length+1;
+    plants.push({
+      setup_id:`setup_${i}`,
+      planted_in:Math.max(1,Math.min(9,i)),
+      visible_detail:`Заметная деталь ${i}, которая сначала выглядит случайной`,
+      hidden_meaning:`Деталь ${i} связана с центральной интригой и меняет трактовку событий`,
+      possible_interpretations:['случайность','намеренный след'],
+      payoff_episode:Math.max(2,Math.min(10,i+1)),
+      payoff_type:i%3===0?'twist':(i%2?'mystery':'reveal')
+    });
+  }
+
+  const padded={
+    ...data,
+    novel_id_seed:data.novel_id_seed||bookSeed,
+    supporting_characters:supporting,
+    master_plot:beats,
+    episodes,
+    thread_graph:threads,
+    plant_payoff_ledger:plants
+  };
+  console.warn?.('NIGHT_NOVEL_STRUCTURE_PADDED',JSON.stringify({
+    beats:beats.length,episodes:episodes.length,threads:threads.length,plants:plants.length,supporting:supporting.length
+  }));
+  return padded;
+}
+
 export async function generateSerialNovelPlan({bookSeed='',relationshipProfile={},mutualWishes=[],generate}={}){
   if(typeof generate!=='function')throw new Error('NIGHT_NOVEL_AI_UNAVAILABLE');
 
@@ -240,8 +344,9 @@ novel_id_seed,title,logline,controlling_idea,dramatic_question,genre_mix,erotic_
     }
   }
 
+  let repairRaw=null;
   try{
-    const repairRaw=await generate({
+    repairRaw=await generate({
       contour:'wife',
       requestName:'night_serial_novel_architect_repair',
       skipDatabaseContext:false,
@@ -266,6 +371,18 @@ REPAIR MODE. Предыдущий план не прошёл структурн�
     return validateSerialNovelPlan(repairRaw,{bookSeed});
   }catch(error){
     last=error;
+    console.warn?.('NIGHT_NOVEL_ARCHITECT_REPAIR_FAILED',JSON.stringify({error:String(error?.message||error).slice(0,220)}));
+  }
+
+  for(const candidate of [repairRaw,lastRaw]){
+    if(!candidate)continue;
+    try{
+      const padded=padSerialNovelPlan(candidate,{bookSeed});
+      return validateSerialNovelPlan(padded,{bookSeed});
+    }catch(error){
+      last=error;
+      console.warn?.('NIGHT_NOVEL_ARCHITECT_PAD_FAILED',JSON.stringify({error:String(error?.message||error).slice(0,220)}));
+    }
   }
 
   throw last||new Error('NIGHT_NOVEL_PLAN_FAILED');
