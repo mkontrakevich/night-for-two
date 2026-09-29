@@ -1,0 +1,46 @@
+name: Verify Night tunnel identity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-night-tunnel-identity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 8
+    steps:
+      - name: Verify token tunnel ID without exposing credentials
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $expected='529f14b1-9135-4537-8e6f-2a8d539f1aaf'
+          $raw=docker inspect night-prod-cloudflared
+          if($LASTEXITCODE -ne 0 -or -not $raw){throw 'NIGHT_TUNNEL_MISSING'}
+          $c=@($raw|ConvertFrom-Json)[0]
+          $parts=@($c.Config.Entrypoint)+@($c.Config.Cmd)
+          $idx=[Array]::IndexOf($parts,'--token-file')
+          if($idx -lt 0 -or $idx+1 -ge $parts.Count){throw 'TOKEN_FILE_ARG_MISSING'}
+          $containerPath=[string]$parts[$idx+1]
+          $mount=@($c.Mounts | Where-Object { $containerPath -eq $_.Destination -or $containerPath.StartsWith($_.Destination.TrimEnd('/')+'/') })[0]
+          if(-not $mount){throw 'TOKEN_FILE_MOUNT_MISSING'}
+          $source=[string]$mount.Source
+          if(-not (Test-Path -LiteralPath $source -PathType Leaf)){throw 'TOKEN_FILE_SOURCE_MISSING'}
+          $token=(Get-Content -LiteralPath $source -Raw).Trim()
+          $pad=(4-($token.Length%4))%4
+          $normalized=$token.Replace('-','+').Replace('_','/')+('='*$pad)
+          try{
+            $json=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($normalized)) | ConvertFrom-Json
+          }catch{
+            throw 'TOKEN_FILE_DECODE_FAILED'
+          }
+          $actual=[string]($json.tunnelID ?? $json.tunnel_id ?? $json.TunnelID)
+          if(-not $actual){throw 'TOKEN_TUNNEL_ID_MISSING'}
+          Write-Host "TOKEN_TUNNEL_ID=$actual"
+          Write-Host "EXPECTED_TUNNEL_ID=$expected"
+          if($actual -ne $expected){throw 'TOKEN_TUNNEL_ID_MISMATCH'}
+          Write-Host 'TOKEN_TUNNEL_ID_MATCH=true'
