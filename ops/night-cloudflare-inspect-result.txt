@@ -1,9 +1,12 @@
-Deployments API success=True status=ok
-Deployment id=a7f95951-2176-46f2-8f03-f966d70f7c4f created_on=2026-09-29T10:33:14.448612Z source=wrangler author=None versions=23f4080b-1c5e-47db-92e0-0567299055ac:100
-Deployment id=e9eddfcd-ece9-4af1-b68b-8d231b239d82 created_on=2026-09-29T10:32:06.346742Z source=wrangler author=None versions=19f7c400-783c-497d-a15f-dd0af84e6185:100
-Deployment id=bbd52ad7-6114-4e13-80c0-74422edcc41a created_on=2026-09-29T10:31:45.471363Z source=wrangler author=None versions=588df934-a7db-470f-894a-6423acb3f753:100
-Deployment id=871e55c6-6e1c-41c5-8715-b51cb81ae3f9 created_on=2026-09-29T10:31:32.753307Z source=wrangler author=None versions=8a98f84c-8bc5-498d-b159-9ba17c3b4c4c:100
-Deployment id=84828736-e24b-42ac-953d-7bc32a97df99 created_on=2026-09-29T10:30:59.436285Z source=wrangler author=None versions=3019a826-235f-40b4-8a1b-31ab66d09193:100
-Deployment id=7cf5ba9e-5393-4f2d-9798-8e1dc33d699b created_on=2026-09-29T10:30:38.645105Z source=wrangler author=None versions=4676212e-8392-4517-950a-70accc48429c:100
-Tunnel API success=True status=ok tunnel_status=healthy connections=4
-Connections API success=True status=ok count=1
+Baseline success=True bindings=NIGHT_ORIGIN_HOST:plain_text,NIGHT_ORIGIN_PORT:plain_text,NIGHT_VPC:vpc_network
+Deployment created=2026-09-29T10:33:14.448612Z version=23f4080b-1c5e-47db-92e0-0567299055ac reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:32:06.346742Z version=19f7c400-783c-497d-a15f-dd0af84e6185 reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:31:45.471363Z version=588df934-a7db-470f-894a-6423acb3f753 reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:31:32.753307Z version=8a98f84c-8bc5-498d-b159-9ba17c3b4c4c reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:30:59.436285Z version=3019a826-235f-40b4-8a1b-31ab66d09193 reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:30:38.645105Z version=4676212e-8392-4517-950a-70accc48429c reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:30:11.660493Z version=93e11f13-502d-4d25-8d94-940de376218f reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:29:50.81992Z version=9585531a-5aa0-4bfc-b801-e61d910bfd0e reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:28:54.722994Z version=a5f9a1a8-b925-4299-9d84-7f83ad8f8098 reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
+Deployment created=2026-09-29T10:28:38.422439Z version=41122acf-69ab-40fe-81d6-83637b36474a reader_binding=False host_match=True port_match=True tunnel_match=True version_success=True source=wrangler annotations={'workers/triggered_by': 'version_upload'}
+Tunnel status=healthy connection_count=4
