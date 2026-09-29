@@ -1,0 +1,55 @@
+name: Inspect active Night Worker delivery
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/inspect-night-live-20260929.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_TUNNEL_ID: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
+    steps:
+      - name: Inspect version traffic and binding identity without secret values
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.request, urllib.error
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          root=f'https://api.cloudflare.com/client/v4/accounts/{account}'
+          def get(path):
+              req=urllib.request.Request(root+path,headers={'Authorization':'Bearer '+token})
+              with urllib.request.urlopen(req,timeout=25) as response: data=json.load(response)
+              if not data.get('success'): raise RuntimeError('Cloudflare API unsuccessful: '+path)
+              return data['result']
+          deployments=get('/workers/scripts/night42/deployments')
+          records=deployments.get('deployments',deployments.get('items',[])) if isinstance(deployments,dict) else deployments
+          print('Deployment count:',len(records))
+          for item in records[:5]:
+              print('Deployment:',item.get('id'),item.get('created_on'),item.get('source'))
+              print('Traffic versions:',[(v.get('version_id'),v.get('percentage')) for v in item.get('versions',[])])
+          versions=get('/workers/scripts/night42/versions?per_page=10')
+          items=versions.get('items',versions) if isinstance(versions,dict) else versions
+          print('Recent version IDs:',[v.get('id') for v in items[:8]])
+          for version_id in [v.get('version_id') for v in records[0].get('versions',[])] if records else []:
+              obj=get('/workers/scripts/night42/versions/'+version_id)
+              bindings=(obj.get('resources') or {}).get('bindings',obj.get('bindings',[]))
+              print('Active version:',version_id,'binding names/types:',[(b.get('name'),b.get('type')) for b in bindings])
+              vpc=next((b for b in bindings if b.get('name')=='NIGHT_VPC'),{})
+              host=next((b for b in bindings if b.get('name')=='NIGHT_ORIGIN_HOST'),{})
+              port=next((b for b in bindings if b.get('name')=='NIGHT_ORIGIN_PORT'),{})
+              print('Tunnel matches configured secret:',vpc.get('tunnel_id')==os.environ['CLOUDFLARE_TUNNEL_ID'])
+              print('Host binding present:',bool(host.get('text')),'port:',port.get('text'))
+          try:
+              tunnel=get('/cfd_tunnel/'+os.environ['CLOUDFLARE_TUNNEL_ID'])
+              print('Tunnel status:',tunnel.get('status','unknown'),'connections:',len(tunnel.get('connections') or []))
+          except (urllib.error.HTTPError,RuntimeError) as error:
+              print('Tunnel status lookup unavailable:',type(error).__name__)
+          PY
