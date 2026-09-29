@@ -1,0 +1,35 @@
+name: Probe Night tunnel origin routes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/probe-night-tunnel-origin-routes.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 8
+    steps:
+      - name: Probe origins from tunnel Docker network
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $network='night_for_two_context'
+          $net=docker network inspect $network | ConvertFrom-Json
+          if(-not $net){throw 'NIGHT_CONTEXT_NETWORK_MISSING'}
+          Write-Host '=== NETWORK MEMBERS ==='
+          $net[0].Containers.PSObject.Properties | ForEach-Object {
+            Write-Host "member=$($_.Value.Name) ipv4=$($_.Value.IPv4Address)"
+          }
+
+          Write-Host '=== DIRECT APP DNS ==='
+          docker run --rm --network $network postgres:16-alpine sh -c "wget -qO- -T 8 http://app:5681/night/health"
+          if($LASTEXITCODE -ne 0){throw 'APP_DNS_ORIGIN_UNREACHABLE'}
+
+          Write-Host '=== HOST PUBLISHED PORT FROM SAME NETWORK ==='
+          docker run --rm --network $network postgres:16-alpine sh -c "wget -qO- -T 8 http://10.0.130.218:5683/night/health"
+          if($LASTEXITCODE -ne 0){throw 'HOST_ORIGIN_UNREACHABLE_FROM_TUNNEL_NETWORK'}
