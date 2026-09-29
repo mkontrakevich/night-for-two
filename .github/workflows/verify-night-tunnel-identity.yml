@@ -38,7 +38,13 @@ jobs:
           }catch{
             throw 'TOKEN_FILE_DECODE_FAILED'
           }
-          $actual=[string]($json.tunnelID ?? $json.tunnel_id ?? $json.TunnelID)
+          $actual=''
+          foreach($name in @('tunnelID','tunnel_id','TunnelID')){
+            if($json.PSObject.Properties.Name -contains $name){
+              $actual=[string]$json.$name
+              if($actual){break}
+            }
+          }
           if(-not $actual){throw 'TOKEN_TUNNEL_ID_MISSING'}
           Write-Host "TOKEN_TUNNEL_ID=$actual"
           Write-Host "EXPECTED_TUNNEL_ID=$expected"
