@@ -14,36 +14,20 @@ jobs:
     runs-on: [self-hosted, windows, x64, marins-production]
     timeout-minutes: 8
     steps:
-      - name: Inspect Docker and local Night origin without changes
+      - name: Inspect Night container stop reason
         shell: powershell
         run: |
           $ErrorActionPreference = 'Continue'
-          Write-Host '=== RUNNER IDENTITY ==='
-          whoami
-          Write-Host '=== DOCKER VERSION ==='
-          docker version
-          Write-Host "docker version exit=$LASTEXITCODE"
-          Write-Host '=== DOCKER PS NIGHT ==='
-          docker ps -a --filter "name=night-for-two" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-          Write-Host "docker ps exit=$LASTEXITCODE"
-          Write-Host '=== LOCAL HEALTH ==='
-          try {
-            $night = Invoke-RestMethod -Uri 'http://127.0.0.1:5683/night/health' -TimeoutSec 10 -ErrorAction Stop
-            Write-Host "Night ok=$($night.ok) db=$($night.db)"
-          } catch { Write-Host "Night local error=$($_.Exception.Message)" }
-          try {
-            $actions = Invoke-RestMethod -Uri 'http://127.0.0.1:5683/actions/health' -TimeoutSec 10 -ErrorAction Stop
-            Write-Host "Actions ok=$($actions.ok) product=$($actions.product)"
-          } catch { Write-Host "Actions local error=$($_.Exception.Message)" }
-          Write-Host '=== APP LOGS ==='
-          docker logs night-for-two-app-1 --tail 80
-          Write-Host '=== POSTGRES LOGS ==='
-          docker logs night-for-two-postgres-1 --tail 40
-          Write-Host '=== HOST IP ==='
-          Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike '127.*'} | Select-Object InterfaceAlias,IPAddress,PrefixLength | Format-Table -Auto
-          Write-Host '=== ORIGIN TCP ==='
-          $tcp = Test-NetConnection -ComputerName '10.0.130.218' -Port 5683 -InformationLevel Quiet -WarningAction SilentlyContinue
-          Write-Host "10.0.130.218:5683=$tcp"
-          Write-Host '=== CLOUDFLARED ==='
-          docker ps -a --filter "name=night-prod-cloudflared" --format "table {{.Names}}\t{{.Status}}"
-          docker logs night-prod-cloudflared --tail 80
+          $raw = docker inspect night-for-two-app-1
+          if ($LASTEXITCODE -ne 0 -or -not $raw) { throw 'NIGHT_APP_CONTAINER_MISSING' }
+          $c = @($raw | ConvertFrom-Json)[0]
+          Write-Host "State status=$($c.State.Status) running=$($c.State.Running) paused=$($c.State.Paused) restarting=$($c.State.Restarting)"
+          Write-Host "ExitCode=$($c.State.ExitCode) OOMKilled=$($c.State.OOMKilled) Error=$($c.State.Error)"
+          Write-Host "StartedAt=$($c.State.StartedAt) FinishedAt=$($c.State.FinishedAt) RestartCount=$($c.RestartCount)"
+          Write-Host "RestartPolicy=$($c.HostConfig.RestartPolicy.Name)"
+          Write-Host "ComposeProject=$($c.Config.Labels.'com.docker.compose.project')"
+          Write-Host "ComposeWorkingDir=$($c.Config.Labels.'com.docker.compose.project.working_dir')"
+          Write-Host "ComposeConfigFiles=$($c.Config.Labels.'com.docker.compose.project.config_files')"
+          Write-Host '=== EVENTS ==='
+          $since = (Get-Date).AddHours(-2).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+          docker events --since $since --until (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') --filter "container=night-for-two-app-1" --format "{{.Time}} {{.Action}} {{json .Actor.Attributes}}" | Select-Object -Last 80
