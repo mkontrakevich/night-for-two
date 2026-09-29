@@ -101,7 +101,7 @@ export function createNightLinearNovelStore({pool}={}){
     if(!novel){
       const progress=await latest();
       if(!progress)return {mode:'linear_novel_unavailable',novel:null};
-      const stats=await imageStats(progress.id),textRatio=Math.min(1,(Number(progress.generated_pages)||0)/Math.max(1,Number(progress.total_pages)||100)),visualRatio=stats.planned?Math.min(1,stats.ready/stats.planned):(progress.status==='generating'?0:1);
+      const stats=await imageStats(progress.id),textRatio=Math.min(1,(Number(progress.generated_pages)||0)/Math.max(1,Number(progress.total_pages)||100)),visualRatio=stats.planned?Math.min(1,stats.ready/stats.planned):(['illustrating','complete'].includes(String(progress.status))?1:0);
       const pct=Math.floor(Math.min(99,textRatio*75+visualRatio*25));
       return {mode:'linear_novel_unavailable',novel:{id:progress.id,title:progress.title,status:progress.status,progress:pct,total_pages:progress.total_pages,generated_pages:progress.generated_pages,generated_images:stats.ready,planned_images:stats.planned,error:progress.error}};
     }
@@ -113,7 +113,7 @@ export function createNightLinearNovelStore({pool}={}){
   async function status(){
     const novel=await latest();
     if(!novel)return {status:'missing',progress:0,total_pages:100,generated_pages:0,generated_images:0,planned_images:0,complete:false};
-    const stats=await imageStats(novel.id),textRatio=Math.min(1,(Number(novel.generated_pages)||0)/Math.max(1,Number(novel.total_pages)||100)),visualRatio=stats.planned?Math.min(1,stats.ready/stats.planned):(novel.status==='generating'?0:1);
+    const stats=await imageStats(novel.id),textRatio=Math.min(1,(Number(novel.generated_pages)||0)/Math.max(1,Number(novel.total_pages)||100)),visualRatio=stats.planned?Math.min(1,stats.ready/stats.planned):(['illustrating','complete'].includes(String(novel.status))?1:0);
     const complete=novel.status==='complete'&&novel.generated_pages>=novel.total_pages&&stats.planned>0&&stats.ready>=stats.planned;
     const progress=complete?100:Math.floor(Math.min(99,textRatio*75+visualRatio*25));
     return {id:novel.id,title:novel.title,status:novel.status,progress,total_pages:novel.total_pages,generated_pages:novel.generated_pages,generated_images:stats.ready,planned_images:stats.planned,error:novel.error,complete};
