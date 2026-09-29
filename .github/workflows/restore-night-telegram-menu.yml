@@ -42,13 +42,13 @@ jobs:
           test -n "$PRIMARY_OWNER_ID"
           test -n "$PARTNER_TELEGRAM_ID"
           for chat_id in "$PRIMARY_OWNER_ID" "$PARTNER_TELEGRAM_ID"; do
-            payload="$(jq -cn --arg chat_id "$chat_id" --arg url "$NIGHT_URL/night" '{chat_id:$chat_id,menu_button:{type:"web_app",text:"Ночь на двоих",web_app:{url:$url}}}')"
+            payload="$(jq -cn --arg chat_id "$chat_id" --arg url "$NIGHT_URL/night" '{chat_id:$chat_id,menu_button:{type:"web_app",text:"18+",web_app:{url:$url}}}')"
             set_result="$(curl --fail --silent --show-error -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setChatMenuButton" -H 'content-type: application/json' --data "$payload")"
             echo "$set_result" | jq -e '.ok == true' >/dev/null
 
             get_payload="$(jq -cn --arg chat_id "$chat_id" '{chat_id:$chat_id}')"
             get_result="$(curl --fail --silent --show-error -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getChatMenuButton" -H 'content-type: application/json' --data "$get_payload")"
-            echo "$get_result" | jq -e --arg url "$NIGHT_URL/night" '.ok == true and .result.type == "web_app" and .result.text == "Ночь на двоих" and .result.web_app.url == $url' >/dev/null
+            echo "$get_result" | jq -e --arg url "$NIGHT_URL/night" '.ok == true and .result.type == "web_app" and .result.text == "18+" and .result.web_app.url == $url' >/dev/null
             echo "NIGHT_TELEGRAM_MENU_VERIFIED chat=paired"
           done
           echo "NIGHT_TELEGRAM_PAIR_MENU_RESTORED"
