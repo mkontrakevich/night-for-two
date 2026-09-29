@@ -1,0 +1,29 @@
+name: Inspect live novel generation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-live-novel.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 8
+    steps:
+      - name: Inspect live novel generation
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Write-Host '=== CONTAINERS ==='
+          docker ps --filter "name=night-for-two" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          Write-Host '=== STATUS SCRIPT ==='
+          docker exec night-for-two-app-1 node scripts/night-linear-novel-status.mjs
+          Write-Host "status exit=$LASTEXITCODE"
+          Write-Host '=== PROCESSES ==='
+          docker top night-for-two-app-1
+          Write-Host '=== RECENT GENERATOR LOGS ==='
+          docker logs night-for-two-app-1 --since 20m 2>&1 | Select-String -Pattern 'NIGHT_LINEAR_|NIGHT_RELATIONSHIP_CONTEXT_READY|ai_gateway|NOVEL|generation|OPENROUTER|failed|error' | Select-Object -Last 160 | ForEach-Object { $_.Line }
