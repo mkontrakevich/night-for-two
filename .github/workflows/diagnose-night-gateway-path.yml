@@ -1,0 +1,48 @@
+name: Diagnose Night gateway path
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-night-gateway-path.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 8
+    steps:
+      - name: Inspect local origin and Cloudflare tunnel
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          Write-Host '=== LOCAL ==='
+          try { $h=Invoke-RestMethod 'http://127.0.0.1:5683/night/health' -TimeoutSec 10 -ErrorAction Stop; Write-Host "local night ok=$($h.ok) db=$($h.db)" } catch { Write-Host "local night error=$($_.Exception.Message)" }
+          try { $a=Invoke-RestMethod 'http://127.0.0.1:5683/actions/health' -TimeoutSec 10 -ErrorAction Stop; Write-Host "local actions ok=$($a.ok)" } catch { Write-Host "local actions error=$($_.Exception.Message)" }
+
+          Write-Host '=== HOST IP ==='
+          $ips=Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike '127.*'} | Select-Object InterfaceAlias,IPAddress,PrefixLength
+          $ips | Format-Table -Auto
+          Write-Host "has origin ip=$(@($ips | Where-Object {$_.IPAddress -eq '10.0.130.218'}).Count -gt 0)"
+
+          Write-Host '=== TCP ORIGIN ==='
+          $tcp=Test-NetConnection -ComputerName '10.0.130.218' -Port 5683 -InformationLevel Quiet -WarningAction SilentlyContinue
+          Write-Host "origin tcp=$tcp"
+
+          Write-Host '=== TUNNEL CONTAINER ==='
+          docker ps -a --filter "name=night-prod-cloudflared" --format "table {{.Names}}\t{{.Status}}"
+          $raw=docker inspect night-prod-cloudflared 2>$null
+          if($LASTEXITCODE -eq 0 -and $raw){
+            $c=@($raw|ConvertFrom-Json)[0]
+            Write-Host "tunnel state=$($c.State.Status) running=$($c.State.Running) restarts=$($c.RestartCount)"
+          }
+          $lines=@(docker logs night-prod-cloudflared --tail 120 2>&1 | ForEach-Object {$_.ToString()})
+          foreach($flag in @('Registered tunnel connection','connection refused','destination_not_found','handshake timeout','Failed to','ERR ')){
+            $count=@($lines|Where-Object {$_.IndexOf($flag,[System.StringComparison]::OrdinalIgnoreCase)-ge 0}).Count
+            Write-Host "tunnel log [$flag]=$count"
+          }
+
+          Write-Host '=== PUBLIC ==='
+          try { $p=Invoke-RestMethod 'https://night42.kontrakevich.workers.dev/night/health' -TimeoutSec 15 -ErrorAction Stop; Write-Host "public night ok=$($p.ok) db=$($p.db)" } catch { Write-Host "public night error=$($_.Exception.Message)" }
