@@ -1,0 +1,99 @@
+name: Night for Two Product Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/night-product/**"
+      - ".github/workflows/night-product-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: night-for-two-dedicated-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: cloudflare/night-product
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_TUNNEL_ID: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Render dedicated Worker configuration from known Night tunnel
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, re, urllib.request
+          from pathlib import Path
+          for key in ('CLOUDFLARE_ACCOUNT_ID','CLOUDFLARE_API_TOKEN','CLOUDFLARE_TUNNEL_ID'):
+              if not os.environ.get(key):
+                  raise SystemExit(f'MISSING_{key}')
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']
+          req=urllib.request.Request(
+              f'https://api.cloudflare.com/client/v4/accounts/{account}/workers/scripts/night42/versions/45bb34f4-a2cf-4fa1-9ce7-f57eedfd5f95',
+              headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN']})
+          with urllib.request.urlopen(req,timeout=25) as response:
+              version=json.load(response)
+          bindings=(version['result'].get('resources') or {}).get('bindings',[])
+          def binding(name):
+              return next((item for item in bindings if item.get('name')==name),None)
+          vpc=binding('NIGHT_VPC')
+          host=(binding('NIGHT_ORIGIN_HOST') or {}).get('text','')
+          port=(binding('NIGHT_ORIGIN_PORT') or {}).get('text')
+          if not vpc or vpc.get('tunnel_id')!=os.environ['CLOUDFLARE_TUNNEL_ID']:
+              raise SystemExit('NIGHT_TUNNEL_MISMATCH')
+          if not re.fullmatch(r'[A-Za-z0-9.-]+',host) or port!='5683':
+              raise SystemExit('NIGHT_ORIGIN_CONFIG_INVALID')
+          print('::add-mask::'+host)
+          cfg=json.loads(Path('wrangler.jsonc').read_text())
+          if cfg['name']!='night-for-two' or cfg['vpc_networks'][0]['binding']!='NIGHT_VPC':
+              raise SystemExit('NIGHT_PRODUCT_CONFIG_MISMATCH')
+          cfg['vars']['NIGHT_ORIGIN_HOST']=host
+          cfg['vpc_networks'][0]['tunnel_id']=vpc['tunnel_id']
+          Path('wrangler.deploy.json').write_text(json.dumps(cfg,indent=2)+'\n')
+          PY
+      - name: Deploy dedicated Worker
+        run: npx --yes wrangler@4 deploy --config wrangler.deploy.json
+
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe dedicated Night URL and preserve result
+        shell: bash
+        run: |
+          base="https://night-for-two.kontrakevich.workers.dev"
+          mkdir -p ops
+          report=ops/night-product-verify-result.txt
+          : > "$report"
+          for path in /night /night/health /actions/health; do
+            status="$(curl --silent --show-error --location --max-time 20 --output /tmp/night-response --write-out '%{http_code}' "$base$path")"
+            printf '%s status=%s\n' "$path" "$status" | tee -a "$report"
+            if [[ "$path" == /night/health || "$path" == /actions/health ]]; then
+              head -c 180 /tmp/night-response | tr '\n' ' ' >> "$report"
+              printf '\n' >> "$report"
+            fi
+          done
+          reader="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' 'https://night42.kontrakevich.workers.dev/reader/')"
+          printf 'shared-reader status=%s\n' "$reader" | tee -a "$report"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$report"
+          git commit -m "Record dedicated Night HTTPS verification"
+          git push
+          grep -q '^/night/health status=200$' "$report"
+          grep -q '^/actions/health status=200$' "$report"
