@@ -1,11 +1,6 @@
 name: Night for Two Product Deploy
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "cloudflare/night-product/**"
-      - ".github/workflows/night-product-deploy.yml"
   workflow_dispatch:
 
 permissions:
