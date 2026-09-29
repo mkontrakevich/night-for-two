@@ -1,3 +1,4 @@
+// Canonical production gateway: /reader, /night and /actions live on night42.
 const READER_ORIGIN='https://mkontrakevich.github.io/night-for-two/';
 
 function json(status, payload) {
