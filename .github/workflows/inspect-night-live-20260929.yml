@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, urllib.request, urllib.error
+          import json, os, ipaddress, urllib.request, urllib.error
           account=os.environ['CLOUDFLARE_ACCOUNT_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
           root=f'https://api.cloudflare.com/client/v4/accounts/{account}'
           def get(path):
@@ -51,6 +51,28 @@ jobs:
               port=next((b for b in bindings if b.get('name')=='NIGHT_ORIGIN_PORT'),{})
               print('Tunnel matches configured secret:',vpc.get('tunnel_id')==os.environ['CLOUDFLARE_TUNNEL_ID'])
               print('Host binding present:',bool(host.get('text')),'port:',port.get('text'))
+              baseline=get('/workers/scripts/night42/versions/45bb34f4-a2cf-4fa1-9ce7-f57eedfd5f95')
+              bb=(baseline.get('resources') or {}).get('bindings',[])
+              bhost=next((b.get('text') for b in bb if b.get('name')=='NIGHT_ORIGIN_HOST'),'')
+              print('Active host matches baseline:',host.get('text')==bhost)
+              target=host.get('text','')
+              try: ip=ipaddress.ip_address(target); print('Host is IP:',True)
+              except ValueError: ip=None; print('Host is IP:',False)
+              for path,field in [('/teamnet/routes','network'),('/zerotrust/routes/hostname','hostname')]:
+                  try:
+                      obj=get(path)
+                      routes=obj.get('result',obj.get('routes',obj.get('items',[]))) if isinstance(obj,dict) else obj
+                      matches=[]
+                      for route in routes:
+                          if route.get('deleted_at'): continue
+                          if field=='network' and ip:
+                              try: same=ip in ipaddress.ip_network(route.get(field,''),strict=False)
+                              except ValueError: same=False
+                          else: same=route.get(field,'').lower()==target.lower()
+                          if same: matches.append(route)
+                      print('Route family:',field,'active count:',sum(not x.get('deleted_at') for x in routes),'target matches:',len(matches),'matching tunnel:',any(x.get('tunnel_id')==os.environ['CLOUDFLARE_TUNNEL_ID'] for x in matches))
+                  except (urllib.error.HTTPError,RuntimeError,TypeError,KeyError) as error:
+                      print('Route lookup unavailable:',field,type(error).__name__)
           try:
               tunnel=get('/cfd_tunnel/'+os.environ['CLOUDFLARE_TUNNEL_ID'])
               print('Tunnel status:',tunnel.get('status','unknown'),'connections:',len(tunnel.get('connections') or []))
