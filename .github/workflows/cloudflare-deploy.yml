@@ -50,12 +50,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check current production application before updating its gateway
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --fail --show-error --silent https://night42.kontrakevich.workers.dev/night/health | python -c 'import json,sys; assert json.load(sys.stdin).get("ok") is True'
-          curl --fail --show-error --silent https://night42.kontrakevich.workers.dev/actions/health | python -c 'import json,sys; assert json.load(sys.stdin).get("product")=="night_actions"'
       - name: Render account-specific Wrangler config
         shell: bash
         run: |
@@ -123,9 +117,8 @@ jobs:
           if a.get("ok") is not True or a.get("product") != "night_actions":
               raise SystemExit("NIGHT_ACTIONS_HEALTH_NOT_OK")
           PY
-      - name: Restore verified working Worker on failed health check
-        if: steps.health.outcome == 'failure'
-        run: npx --yes wrangler@4 rollback 45bb34f4-a2cf-4fa1-9ce7-f57eedfd5f95 --name night42 --message 'Automatic rollback after failed Night gateway verification'
       - name: Mark failed release
         if: steps.health.outcome == 'failure'
-        run: exit 1
+        run: |
+          echo '::error::Night HTTPS verification failed; inspect the origin and tunnel before accepting this release.'
+          exit 1
