@@ -45,7 +45,8 @@ jobs:
           baseline="45bb34f4-a2cf-4fa1-9ce7-f57eedfd5f95"
           bd,br,bb=bindings(baseline)
           origin=(bb.get("NIGHT_ORIGIN_HOST") or {}).get("text")
-          lines.append(f"Baseline success={bd.get('success')} bindings={','.join(f'{k}:{v.get('type')}' for k,v in bb.items())}")
+          binding_summary=','.join(k+':'+str(v.get('type')) for k,v in bb.items())
+          lines.append(f"Baseline success={bd.get('success')} bindings={binding_summary}")
           for item in deployments[:10]:
               vid=(item.get("versions") or [{}])[0].get("version_id")
               vd,vr,vb=bindings(vid) if vid else ({},{},{})
