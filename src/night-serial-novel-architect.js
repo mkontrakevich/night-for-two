@@ -183,17 +183,8 @@ export function validateSerialNovelPlan(raw,{bookSeed=''}={}){
 
 export async function generateSerialNovelPlan({bookSeed='',relationshipProfile={},mutualWishes=[],generate}={}){
   if(typeof generate!=='function')throw new Error('NIGHT_NOVEL_AI_UNAVAILABLE');
-  let last=null;
-  for(let attempt=0;attempt<3;attempt++){
-    try{
-      const raw=await generate({
-        contour:'wife',
-        requestName:'night_serial_novel_architect',
-        skipDatabaseContext:false,
-        temperature:.9,
-        maxTokens:6200,
-        messages:[
-          {role:'system',content:`${SERIAL_NOVELIST_SYSTEM}
+
+  const systemPrompt=`${SERIAL_NOVELIST_SYSTEM}
 
 Ты NOVEL ARCHITECT. Сейчас НЕ пиши первую сцену. Спроектируй весь скрытый роман, который движок будет раскрывать позже.
 
@@ -218,18 +209,65 @@ export async function generateSerialNovelPlan({bookSeed='',relationshipProfile={
 — не копируй известные книги/фильмы/персонажей.
 
 Верни только JSON со следующими верхнеуровневыми ключами:
-novel_id_seed,title,logline,controlling_idea,dramatic_question,genre_mix,erotic_promise,world_bible,protagonists,supporting_characters,master_plot,episodes,thread_graph,plant_payoff_ledger,finale_contract,sequel_hooks,style_bible.`},
-          {role:'user',content:JSON.stringify({
-            bookSeed:String(bookSeed||''),
-            relationshipProfile,
-            mutualWishes:arr(mutualWishes,16),
-            role_contract:{male_roles:'male_player',female_roles:'female_player'}
-          })}
+novel_id_seed,title,logline,controlling_idea,dramatic_question,genre_mix,erotic_promise,world_bible,protagonists,supporting_characters,master_plot,episodes,thread_graph,plant_payoff_ledger,finale_contract,sequel_hooks,style_bible.`;
+
+  const userPayload={
+    bookSeed:String(bookSeed||''),
+    relationshipProfile,
+    mutualWishes:arr(mutualWishes,16),
+    role_contract:{male_roles:'male_player',female_roles:'female_player'}
+  };
+
+  let last=null,lastRaw=null;
+  for(let attempt=0;attempt<3;attempt++){
+    try{
+      const raw=await generate({
+        contour:'wife',
+        requestName:'night_serial_novel_architect',
+        skipDatabaseContext:false,
+        temperature:attempt===0?.82:.68,
+        maxTokens:9000,
+        messages:[
+          {role:'system',content:systemPrompt},
+          {role:'user',content:JSON.stringify(userPayload)}
         ]
       });
+      lastRaw=raw;
       return validateSerialNovelPlan(raw,{bookSeed});
-    }catch(error){last=error;}
+    }catch(error){
+      last=error;
+      console.warn?.('NIGHT_NOVEL_ARCHITECT_RETRY',JSON.stringify({attempt:attempt+1,error:String(error?.message||error).slice(0,220)}));
+    }
   }
+
+  try{
+    const repairRaw=await generate({
+      contour:'wife',
+      requestName:'night_serial_novel_architect_repair',
+      skipDatabaseContext:false,
+      temperature:.42,
+      maxTokens:10000,
+      messages:[
+        {role:'system',content:`${systemPrompt}
+
+REPAIR MODE. Предыдущий план не прошёл структурную проверку. Верни ПОЛНЫЙ новый JSON, не патч.
+Обязательные количественные требования для repair:
+— ровно 2 protagonists;
+— 4–8 supporting_characters;
+— 10 master_plot beats;
+— 10 episodes;
+— минимум 5 thread_graph элементов, включая main и mystery;
+— минимум 10 plant_payoff_ledger элементов;
+— минимум 2 thread_graph линии с eligible_for_spinoff=true.
+Ни один обязательный массив нельзя сокращать или заменять кратким описанием.`},
+        {role:'user',content:JSON.stringify({...userPayload,previous_plan:lastRaw||null,repair_reason:String(last?.message||last||'validation_failed').slice(0,400)})}
+      ]
+    });
+    return validateSerialNovelPlan(repairRaw,{bookSeed});
+  }catch(error){
+    last=error;
+  }
+
   throw last||new Error('NIGHT_NOVEL_PLAN_FAILED');
 }
 
