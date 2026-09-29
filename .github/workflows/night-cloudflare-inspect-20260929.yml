@@ -47,7 +47,9 @@ jobs:
           origin=(bb.get("NIGHT_ORIGIN_HOST") or {}).get("text")
           binding_summary=','.join(k+':'+str(v.get('type')) for k,v in bb.items())
           lines.append(f"Baseline success={bd.get('success')} bindings={binding_summary}")
-          for item in deployments[:10]:
+          for item in deployments[:2]:
+              lines.append(f"Deployment keys={','.join(sorted(item.keys()))}")
+          for item in deployments[:4]:
               vid=(item.get("versions") or [{}])[0].get("version_id")
               vd,vr,vb=bindings(vid) if vid else ({},{},{})
               host=(vb.get("NIGHT_ORIGIN_HOST") or {}).get("text")
@@ -60,14 +62,14 @@ jobs:
           obj=t.get("result") or {}
           lines.append(f"Tunnel status={obj.get('status')} connection_count={len(obj.get('connections') or [])}")
           for conn in obj.get("connections") or []:
-              lines.append(f"Tunnel connection protocol={conn.get('protocol')} version={conn.get('client_version')} opened={conn.get('opened_at')} pending={conn.get('is_pending_reconnect')}")
+              lines.append(f"Tunnel connection keys={','.join(sorted(conn.keys()))} version={conn.get('client_version')} opened={conn.get('opened_at')} pending={conn.get('is_pending_reconnect')}")
           c=get(f"/cfd_tunnel/{os.environ['CF_TUNNEL']}/connections")
           cr=c.get("result") or []
           clients=cr if isinstance(cr,list) else cr.get("connections",[])
           lines.append(f"Tunnel client_count={len(clients)} status={c.get('http_status','ok')}")
           for client in clients:
               links=client.get("connections") or []
-              lines.append(f"Client version={client.get('client_version')} run_at={client.get('run_at')} active_connections={len(links)} protocols={','.join(str(link.get('protocol')) for link in links)}")
+              lines.append(f"Client keys={','.join(sorted(client.keys()))} version={client.get('client_version')} run_at={client.get('run_at')} active_connections={len(links)}")
           Path("ops/night-cloudflare-inspect-result.txt").parent.mkdir(exist_ok=True)
           Path("ops/night-cloudflare-inspect-result.txt").write_text("\n".join(lines)+"\n")
           print("\n".join(lines))
