@@ -39,6 +39,8 @@ jobs:
               entries=(result.get("resources") or {}).get("bindings") or []
               return data,result,{entry.get("name"):entry for entry in entries}
           lines=[]
+          separate=get("/workers/scripts/night-for-two")
+          lines.append(f"Dedicated Worker exists={separate.get('success')} status={separate.get('http_status','ok')}")
           d=get("/workers/scripts/night42/deployments")
           result=d.get("result") or []
           deployments=result if isinstance(result,list) else result.get("deployments",[])
