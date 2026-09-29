@@ -7,6 +7,7 @@ const app=fs.readFileSync(new URL('../src/night-for-two-miniapp-v3.js',import.me
 const flow=fs.readFileSync(new URL('../src/night-story-flow.js',import.meta.url),'utf8');
 const service=fs.readFileSync(new URL('../src/night-novel-generation-service.js',import.meta.url),'utf8');
 const api=fs.readFileSync(new URL('../src/night-backend-generator-api.js',import.meta.url),'utf8');
+const architect=fs.readFileSync(new URL('../src/night-serial-novel-architect.js',import.meta.url),'utf8');
 
 assert(flow.includes('STORY_TOTAL_PAGES=STORY_PAGE_PLAN.reduce'));
 assert(flow.includes('[8,10,10,10,10,10,10,10,10,12]'),'Full novel must total exactly 100 pages');
@@ -26,6 +27,9 @@ assert(service.includes('NIGHT_RESUME_NOVEL_ID')&&service.includes('NIGHT_NOVEL_
 assert(api.includes('generator.recover()'),'Backend startup must automatically recover interrupted novel generation');
 assert(generator.includes('NIGHT_LINEAR_NOVEL_RESUME')&&generator.includes('NIGHT_LINEAR_PLAN_REUSED'),'Generator must resume the same persisted novel instead of creating a duplicate');
 assert(generator.includes("if(page.image_status==='ready')continue"),'Illustration resume must skip already completed visuals');
+assert(service.includes('RETRYABLE_PLAN_ERROR'),'Recovery service must retry known planning failures on the same novel');
+assert(generator.includes('NIGHT_LINEAR_NOVEL_RETRY'),'Generator must reset a retryable failed plan without creating a duplicate novel');
+assert(architect.includes("requestName:'night_serial_novel_architect_repair'")&&architect.includes('maxTokens:10000'),'Novel architect must repair structurally thin plans before failing');
 assert(generator.includes("OPENROUTER_API_KEY_MISSING"),'Production illustration generation must require OpenRouter');
 assert(generator.includes("BOOK_PAGE:"),'Every selected illustration must use the page narrative as its image prompt');
 assert(store.includes('planned_images')||store.includes('AS planned'),'Completion must compare generated images with the selected visual plan, not with all 100 pages');
