@@ -30,6 +30,7 @@ assert(mini.includes('formatReaderText'));
 assert(mini.includes('/night/api/novel-generate'));
 assert(api.includes("PREFIX+'novel-generate'"));
 assert(api.includes("PREFIX+'novel-status'"));
+assert(api.includes('generator.recover()'));
 assert(compose.includes('night_visuals:/app/config/night-visuals'));
 
 console.log('NIGHT_PERSONALIZED_READER_CONTRACT_OK dialogue=true relationship_context=true storyboard=true exact_page_visuals=true visual_qa=true persistent_assets=true backend_generator=true');
