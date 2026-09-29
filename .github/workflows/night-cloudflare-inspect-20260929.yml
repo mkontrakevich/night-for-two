@@ -39,6 +39,14 @@ jobs:
               entries=(result.get("resources") or {}).get("bindings") or []
               return data,result,{entry.get("name"):entry for entry in entries}
           lines=[]
+          dedicated=get("/workers/scripts/night-for-two/deployments")
+          dr=dedicated.get("result") or []
+          dd=dr if isinstance(dr,list) else dr.get("deployments",[])
+          for item in dd[:3]:
+              vid=(item.get("versions") or [{}])[0].get("version_id")
+              version=get(f"/workers/scripts/night-for-two/versions/{vid}")
+              vb={b.get("name"):b for b in ((version.get("result") or {}).get("resources") or {}).get("bindings",[])}
+              lines.append(f"Dedicated deployed={item.get('created_on')} version={vid} host_app={(vb.get('NIGHT_ORIGIN_HOST') or {}).get('text')=='app'} port_5681={(vb.get('NIGHT_ORIGIN_PORT') or {}).get('text')=='5681'} tunnel_match={(vb.get('NIGHT_VPC') or {}).get('tunnel_id')==os.environ['CF_TUNNEL']}")
           separate=get("/workers/scripts/night-for-two")
           lines.append(f"Dedicated Worker exists={separate.get('success')} status={separate.get('http_status','ok')}")
           d=get("/workers/scripts/night42/deployments")
