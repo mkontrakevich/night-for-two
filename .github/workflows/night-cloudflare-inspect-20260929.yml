@@ -18,7 +18,7 @@ jobs:
       CF_TUNNEL: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect active Worker deployment and tunnel without secrets
+      - name: Compare current Worker bindings with known Reader version
         shell: bash
         run: |
           python - <<'PY'
@@ -33,22 +33,31 @@ jobs:
                       return json.load(response)
               except urllib.error.HTTPError as exc:
                   return {"success":False,"http_status":exc.code}
+          def bindings(version_id):
+              data=get(f"/workers/scripts/night42/versions/{version_id}")
+              result=data.get("result") or {}
+              entries=(result.get("resources") or {}).get("bindings") or []
+              return data,result,{entry.get("name"):entry for entry in entries}
           lines=[]
           d=get("/workers/scripts/night42/deployments")
-          lines.append(f"Deployments API success={d.get('success')} status={d.get('http_status','ok')}")
           result=d.get("result") or []
           deployments=result if isinstance(result,list) else result.get("deployments",[])
-          for item in deployments[:6]:
-              versions=item.get("versions") or []
-              version_ids=[f"{v.get('version_id')}:{v.get('percentage')}" for v in versions]
-              lines.append(f"Deployment id={item.get('id')} created_on={item.get('created_on')} source={item.get('source')} author={item.get('author')} versions={','.join(version_ids)}")
+          baseline="45bb34f4-a2cf-4fa1-9ce7-f57eedfd5f95"
+          bd,br,bb=bindings(baseline)
+          origin=(bb.get("NIGHT_ORIGIN_HOST") or {}).get("text")
+          lines.append(f"Baseline success={bd.get('success')} bindings={','.join(f'{k}:{v.get('type')}' for k,v in bb.items())}")
+          for item in deployments[:10]:
+              vid=(item.get("versions") or [{}])[0].get("version_id")
+              vd,vr,vb=bindings(vid) if vid else ({},{},{})
+              host=(vb.get("NIGHT_ORIGIN_HOST") or {}).get("text")
+              port=(vb.get("NIGHT_ORIGIN_PORT") or {}).get("text")
+              tunnel=(vb.get("NIGHT_VPC") or {}).get("tunnel_id")
+              anns=vr.get("annotations") or {}
+              safe_annotations={key:value for key,value in anns.items() if key in ("workers/triggered_by","workers/commit_hash","workers/deployment_message")}
+              lines.append(f"Deployment created={item.get('created_on')} version={vid} reader_binding={('READER_ASSETS' in vb)} host_match={host==origin} port_match={port=='5683'} tunnel_match={tunnel==os.environ['CF_TUNNEL']} version_success={vd.get('success')} source={item.get('source')} annotations={safe_annotations}")
           t=get(f"/cfd_tunnel/{os.environ['CF_TUNNEL']}")
           obj=t.get("result") or {}
-          lines.append(f"Tunnel API success={t.get('success')} status={t.get('http_status','ok')} tunnel_status={obj.get('status')} connections={len(obj.get('connections') or [])}")
-          c=get(f"/cfd_tunnel/{os.environ['CF_TUNNEL']}/connections")
-          cr=c.get("result") or []
-          conns=cr if isinstance(cr,list) else cr.get("connections",[])
-          lines.append(f"Connections API success={c.get('success')} status={c.get('http_status','ok')} count={len(conns)}")
+          lines.append(f"Tunnel status={obj.get('status')} connection_count={len(obj.get('connections') or [])}")
           Path("ops/night-cloudflare-inspect-result.txt").parent.mkdir(exist_ok=True)
           Path("ops/night-cloudflare-inspect-result.txt").write_text("\n".join(lines)+"\n")
           print("\n".join(lines))
@@ -56,5 +65,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ops/night-cloudflare-inspect-result.txt
-          git commit -m "Record temporary Night Cloudflare deployment state"
+          git commit -m "Record current Night Worker binding comparison"
           git push
