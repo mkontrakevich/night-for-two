@@ -24,6 +24,9 @@ export function installNightBackendGenerator({port=5681}={}){
   const app=installNightForTwoMiniApp({port});
   const store=createNightLinearNovelStore({pool:app.engine.db});
   const generator=createNightNovelGenerationService({store});
+  Promise.resolve(app.ready).then(()=>generator.recover()).catch(error=>{
+    console.error('NIGHT_NOVEL_RECOVERY_CHECK_FAILED',String(error?.message||error).slice(0,320));
+  });
   const previousEmit=http.Server.prototype.emit;
 
   http.Server.prototype.emit=function(event,req,res,...args){
