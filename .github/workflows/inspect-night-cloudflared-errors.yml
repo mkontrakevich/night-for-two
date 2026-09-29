@@ -1,0 +1,29 @@
+name: Inspect Night cloudflared errors
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-night-cloudflared-errors.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 8
+    steps:
+      - name: Show recent sanitized cloudflared errors
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $lines=@(docker logs night-prod-cloudflared --since 20m --tail 300 2>&1 | ForEach-Object {$_.ToString()})
+          $selected=@($lines | Where-Object {
+            $_ -match '(?i)ERR|WRN|Failed to|no recent network activity|Serve tunnel error|Connection terminated|QUIC'
+          } | Select-Object -Last 120)
+          foreach($line in $selected){
+            $safe=$line -replace '(?i)(token|secret|credential)=\S+','$1=<redacted>'
+            Write-Host $safe
+          }
+          Write-Host "SELECTED_ERROR_LINES=$($selected.Count)"
