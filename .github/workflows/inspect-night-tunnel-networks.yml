@@ -1,0 +1,34 @@
+name: Inspect Night tunnel networks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-night-tunnel-networks.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 8
+    steps:
+      - name: Inspect tunnel network attachments safely
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $raw=docker inspect night-prod-cloudflared
+          if($LASTEXITCODE -ne 0 -or -not $raw){ throw 'NIGHT_TUNNEL_MISSING' }
+          $c=@($raw|ConvertFrom-Json)[0]
+          Write-Host "State=$($c.State.Status) Running=$($c.State.Running)"
+          foreach($p in $c.NetworkSettings.Networks.PSObject.Properties){
+            $n=$p.Name
+            $v=$p.Value
+            Write-Host "NETWORK name=$n ip=$($v.IPAddress) gateway=$($v.Gateway) aliases=$((@($v.Aliases)-join ','))"
+          }
+          Write-Host '=== DOCKER NETWORKS ==='
+          docker network ls --format "table {{.Name}}\t{{.Driver}}\t{{.Scope}}"
+          Write-Host '=== LOCAL ORIGIN ==='
+          $h=Invoke-RestMethod 'http://127.0.0.1:5683/night/health' -TimeoutSec 10
+          Write-Host "night ok=$($h.ok) db=$($h.db)"
