@@ -57,6 +57,25 @@ function planDigest(plan={}){
     plant_payoff_ledger:plan.plant_payoff_ledger,finale_contract:plan.finale_contract,style_bible:plan.style_bible
   };
 }
+
+function hasPersistedPlan(plan={}){
+  return Array.isArray(plan?.episodes)&&plan.episodes.length>0;
+}
+function completedChapterBoundary(generatedPages=0){
+  const target=Math.max(0,Number(generatedPages)||0);
+  let pages=0,chapter=0;
+  for(let i=0;i<STORY_PAGE_PLAN.length;i++){
+    const next=pages+STORY_PAGE_PLAN[i];
+    if(target<next)break;
+    pages=next;
+    chapter=i+1;
+  }
+  return {chapter,pages};
+}
+function episodeSummary(plan={},index=-1){
+  if(index<0)return '';
+  return clean(JSON.stringify(plan?.episodes?.[index]||{}),1600);
+}
 function validateChapter(raw,{chapterIndex,pageCount,startPage,final=false}){
   const data=parseJson(raw),chapterTitle=clean(data?.chapter_title,180),summary=clean(data?.summary,1600);
   const pages=Array.isArray(data?.pages)?data.pages:[];
@@ -183,49 +202,80 @@ async function ensureImage({novelId,page}){
 let novel=null;
 try{
   await store.init();
-  const bookSeed=crypto.randomBytes(18).toString('hex');
-  console.log('NIGHT_LINEAR_NOVEL_START',JSON.stringify({book_seed:bookSeed,total_pages:STORY_TOTAL_PAGES}));
+  const resumeId=Math.max(0,Number(process.env.NIGHT_RESUME_NOVEL_ID)||0);
 
-  novel=await store.create({bookSeed,title:'Ночь на двоих',plan:{phase:'planning'},totalPages:STORY_TOTAL_PAGES});
-  console.log('NIGHT_LINEAR_NOVEL_RESERVED',JSON.stringify({novel_id:novel.id,total_pages:STORY_TOTAL_PAGES}));
+  if(resumeId){
+    novel=await store.get(resumeId);
+    if(!novel)throw new Error(`NIGHT_LINEAR_RESUME_NOT_FOUND:${resumeId}`);
+    if(!['generating','illustrating'].includes(String(novel.status)))throw new Error(`NIGHT_LINEAR_RESUME_STATUS_INVALID:${resumeId}:${novel.status}`);
+    console.log('NIGHT_LINEAR_NOVEL_RESUME',JSON.stringify({novel_id:novel.id,status:novel.status,generated_pages:Number(novel.generated_pages)||0,generated_images:Number(novel.generated_images)||0}));
+  }else{
+    const freshBookSeed=crypto.randomBytes(18).toString('hex');
+    console.log('NIGHT_LINEAR_NOVEL_START',JSON.stringify({book_seed:freshBookSeed,total_pages:STORY_TOTAL_PAGES}));
+    novel=await store.create({bookSeed:freshBookSeed,title:'Ночь на двоих',plan:{phase:'planning'},totalPages:STORY_TOTAL_PAGES});
+    console.log('NIGHT_LINEAR_NOVEL_RESERVED',JSON.stringify({novel_id:novel.id,total_pages:STORY_TOTAL_PAGES}));
+  }
 
+  const bookSeed=String(novel.book_seed||'');
   const relationshipProfile=await relationshipBridge.context();
   console.log('NIGHT_RELATIONSHIP_CONTEXT_READY',JSON.stringify({policy:relationshipProfile.policy,observations:relationshipProfile.observations?.length||0,preferences:relationshipProfile.preferences?.length||0,dynamics:relationshipProfile.dynamics?.length||0,raw_messages:false}));
 
-  const plan=await generateSerialNovelPlan({
-    bookSeed,
-    relationshipProfile,
-    mutualWishes:[],
-    generate:request=>completeAIText({...request,skipDatabaseContext:true})
-  });
+  let plan=novel.plan||{};
+  if(!hasPersistedPlan(plan)){
+    plan=await generateSerialNovelPlan({
+      bookSeed,
+      relationshipProfile,
+      mutualWishes:[],
+      generate:request=>completeAIText({...request,skipDatabaseContext:true})
+    });
+    novel=await store.updateNovel(novel.id,{title:plan.title||'Ночь на двоих',plan,status:'generating',error:''});
+    console.log('NIGHT_LINEAR_PLAN_READY',JSON.stringify({novel_id:novel.id,title:plan.title,episodes:plan.episodes?.length||0,resumed:Boolean(resumeId)}));
+  }else{
+    console.log('NIGHT_LINEAR_PLAN_REUSED',JSON.stringify({novel_id:novel.id,title:plan.title||novel.title,episodes:plan.episodes?.length||0}));
+  }
 
-  novel=await store.updateNovel(novel.id,{title:plan.title||'Ночь на двоих',plan,status:'generating'});
-  console.log('NIGHT_LINEAR_PLAN_READY',JSON.stringify({novel_id:novel.id,title:plan.title,episodes:plan.episodes?.length||0}));
+  let pageCounter=Math.max(0,Number(novel.generated_pages)||0),previousSummary='',previousTail='';
+  const boundary=completedChapterBoundary(pageCounter);
+  let startChapter=boundary.chapter;
+  if(pageCounter!==boundary.pages){
+    console.warn('NIGHT_LINEAR_RESUME_REWIND',JSON.stringify({novel_id:novel.id,from_pages:pageCounter,to_pages:boundary.pages,start_chapter:startChapter+1}));
+    pageCounter=boundary.pages;
+    novel=await store.updateNovel(novel.id,{generated_pages:pageCounter,status:'generating'});
+  }
+  if(pageCounter>0){
+    const previousPage=await store.page(novel.id,pageCounter);
+    previousTail=String(previousPage?.body||'').slice(-1800);
+    previousSummary=episodeSummary(plan,startChapter-1);
+  }
 
-  let pageCounter=0,plannedImages=0,previousSummary='',previousTail='';
-  for(let chapterIndex=0;chapterIndex<STORY_ARC.length;chapterIndex++){
+  if(String(novel.status)!=='illustrating'&&pageCounter<STORY_TOTAL_PAGES){
+    for(let chapterIndex=startChapter;chapterIndex<STORY_ARC.length;chapterIndex++){
     const chapter=await generateChapter({plan,chapterIndex,previousSummary,previousTail,bookSeed,relationshipProfile});
     for(const rawPage of chapter.pages){
       const visualKey=rawPage.media_prompt?`linear-novel-${novel.id}-page-${String(rawPage.page_no).padStart(3,'0')}`:'';
       await store.upsertPage(novel.id,{...rawPage,visual_key:visualKey,image_status:'planned'});
       pageCounter++;
-      if(rawPage.media_prompt)plannedImages++;
+      // Visual count is recalculated from persisted pages so resume cannot double-count illustrations.
     }
     previousSummary=chapter.summary;
     previousTail=chapter.pages.at(-1)?.body?.slice(-1800)||'';
     await store.updateNovel(novel.id,{title:plan.title,generated_pages:pageCounter,status:'generating'});
     console.log('NIGHT_LINEAR_TEXT_PROGRESS',JSON.stringify({novel_id:novel.id,chapter:chapterIndex+1,pages:pageCounter,total:STORY_TOTAL_PAGES}));
+    }
   }
 
   if(pageCounter!==STORY_TOTAL_PAGES)throw new Error(`NIGHT_LINEAR_PAGE_COUNT_MISMATCH:${pageCounter}`);
-  await store.updateNovel(novel.id,{status:'illustrating',generated_pages:pageCounter});
-  console.log('NIGHT_LINEAR_VISUAL_PLAN',JSON.stringify({novel_id:novel.id,planned_images:plannedImages,total_pages:STORY_TOTAL_PAGES}));
+  const visualStats=await store.imageStats(novel.id);
+  const plannedImages=visualStats.planned;
+  await store.updateNovel(novel.id,{status:'illustrating',generated_pages:pageCounter,generated_images:visualStats.ready});
+  console.log('NIGHT_LINEAR_VISUAL_PLAN',JSON.stringify({novel_id:novel.id,planned_images:plannedImages,ready_images:visualStats.ready,total_pages:STORY_TOTAL_PAGES,resumed:Boolean(resumeId)}));
 
-  let images=0;
+  let images=visualStats.ready;
   for(let pageNo=1;pageNo<=STORY_TOTAL_PAGES;pageNo++){
     const page=await store.page(novel.id,pageNo);
     if(!page)throw new Error(`NIGHT_LINEAR_PAGE_MISSING:${pageNo}`);
     if(!String(page.media_prompt||'').trim())continue;
+    if(page.image_status==='ready')continue;
     const image=await ensureImage({novelId:novel.id,page});
     await store.markImage(novel.id,pageNo,'ready');
     images++;
