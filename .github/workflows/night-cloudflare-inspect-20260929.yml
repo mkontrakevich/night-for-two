@@ -59,6 +59,15 @@ jobs:
           t=get(f"/cfd_tunnel/{os.environ['CF_TUNNEL']}")
           obj=t.get("result") or {}
           lines.append(f"Tunnel status={obj.get('status')} connection_count={len(obj.get('connections') or [])}")
+          for conn in obj.get("connections") or []:
+              lines.append(f"Tunnel connection protocol={conn.get('protocol')} version={conn.get('client_version')} opened={conn.get('opened_at')} pending={conn.get('is_pending_reconnect')}")
+          c=get(f"/cfd_tunnel/{os.environ['CF_TUNNEL']}/connections")
+          cr=c.get("result") or []
+          clients=cr if isinstance(cr,list) else cr.get("connections",[])
+          lines.append(f"Tunnel client_count={len(clients)} status={c.get('http_status','ok')}")
+          for client in clients:
+              links=client.get("connections") or []
+              lines.append(f"Client version={client.get('client_version')} run_at={client.get('run_at')} active_connections={len(links)} protocols={','.join(str(link.get('protocol')) for link in links)}")
           Path("ops/night-cloudflare-inspect-result.txt").parent.mkdir(exist_ok=True)
           Path("ops/night-cloudflare-inspect-result.txt").write_text("\n".join(lines)+"\n")
           print("\n".join(lines))
