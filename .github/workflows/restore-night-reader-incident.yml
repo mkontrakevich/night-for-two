@@ -1,0 +1,86 @@
+name: Restore Night Reader route during origin incident
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/restore-night-reader-incident.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: night-for-two-cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  restore-reader:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare/night-gateway
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_TUNNEL_ID: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Confirm the Reader route is missing on night42
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_ACCOUNT_ID" && test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_TUNNEL_ID"
+          code=$(curl --silent --show-error --max-time 20 -o /tmp/reader.json -w '%{http_code}' https://night42.kontrakevich.workers.dev/reader/)
+          test "$code" = 404
+          jq -e '.error == "NIGHT_ROUTE_NOT_FOUND"' /tmp/reader.json >/dev/null
+          echo 'Confirmed missing Reader route; restoring only the night42 gateway.'
+      - name: Render verified VPC binding from the prior working version
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re, urllib.request
+          from pathlib import Path
+          baseline='45bb34f4-a2cf-4fa1-9ce7-f57eedfd5f95'
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']
+          req=urllib.request.Request(
+              f'https://api.cloudflare.com/client/v4/accounts/{account}/workers/scripts/night42/versions/{baseline}',
+              headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN']})
+          with urllib.request.urlopen(req,timeout=25) as response: version=json.load(response)
+          if not version.get('success'): raise SystemExit('NIGHT_BASELINE_VERSION_UNAVAILABLE')
+          bindings=(version['result'].get('resources') or {}).get('bindings',[])
+          def binding(name): return next((item for item in bindings if item.get('name')==name),None)
+          vpc=binding('NIGHT_VPC'); host=(binding('NIGHT_ORIGIN_HOST') or {}).get('text','')
+          port=(binding('NIGHT_ORIGIN_PORT') or {}).get('text','')
+          if not vpc or vpc.get('type')!='vpc_network' or vpc.get('tunnel_id')!=os.environ['CLOUDFLARE_TUNNEL_ID']:
+              raise SystemExit('NIGHT_BASELINE_TUNNEL_MISMATCH')
+          if not re.fullmatch(r'[A-Za-z0-9.-]+',host) or port!='5683':
+              raise SystemExit('NIGHT_BASELINE_ORIGIN_INVALID')
+          print('::add-mask::'+host)
+          cfg=json.loads(Path('wrangler.jsonc').read_text())
+          if cfg.get('name')!='night42' or cfg['vpc_networks'][0]['binding']!='NIGHT_VPC':
+              raise SystemExit('NIGHT_GATEWAY_CONFIG_MISMATCH')
+          cfg['vars']['NIGHT_ORIGIN_HOST']=host
+          cfg['vpc_networks'][0]['tunnel_id']=vpc['tunnel_id']
+          Path('wrangler.deploy.json').write_text(json.dumps(cfg,indent=2)+'\n')
+          PY
+      - name: Restore the Reader capable gateway
+        run: npx --yes wrangler@4 deploy --config wrangler.deploy.json
+      - name: Verify Reader while origin recovery continues
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=https://night42.kontrakevich.workers.dev
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 -D /tmp/reader.headers -o /tmp/reader.html "$base/reader/"
+          grep -qi '^x-night-product: reader' /tmp/reader.headers
+          grep -q 'Комната №17' /tmp/reader.html
+          code=$(curl --silent --show-error --max-time 20 -o /tmp/night.json -w '%{http_code}' "$base/night/health")
+          if [ "$code" = 200 ]; then
+            jq -e '.ok == true and .db == true' /tmp/night.json >/dev/null
+          else
+            test "$code" = 502
+            jq -e '.error == "NIGHT_ORIGIN_UNREACHABLE"' /tmp/night.json >/dev/null
+            echo '::notice::Reader is restored; Night origin still requires separate recovery.'
+          fi
