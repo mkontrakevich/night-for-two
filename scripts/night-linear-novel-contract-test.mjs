@@ -21,7 +21,7 @@ assert(app.includes('novelProgressPct')&&app.includes('novelProgressFill'),'Mini
 assert(app.includes('Number(n.progress)'),'Mini App must prefer backend generation progress');
 assert(generator.includes('for(let chapterIndex=startChapter;chapterIndex<STORY_ARC.length;chapterIndex++)'),'Generator must write every remaining chapter and support resume');
 assert(generator.includes('for(let pageNo=1;pageNo<=STORY_TOTAL_PAGES;pageNo++)')&&generator.includes("if(!String(page.media_prompt||'').trim())continue"),'Generator must scan all pages but render only pages selected for illustration');
-assert(generator.includes('illustrated>2')&&generator.includes('minIllustrations'),'Each chapter must select only one or two meaningful illustration beats');
+assert(generator.includes('illustratedPages.length>2')&&generator.includes('minIllustrations'),'Each chapter must select only one or two meaningful illustration beats');
 assert(generator.includes("progress:100"),'Generator must emit an explicit 100% completion marker');
 assert(service.includes('NIGHT_RESUME_NOVEL_ID')&&service.includes('NIGHT_NOVEL_RECOVERY_STARTED'),'Generator service must recover an orphaned durable run after restart');
 assert(api.includes('generator.recover()'),'Backend startup must automatically recover interrupted novel generation');
