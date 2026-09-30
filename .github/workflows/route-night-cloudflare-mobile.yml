@@ -24,7 +24,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $wifi=Get-NetIPConfiguration | Where-Object { $_.InterfaceAlias -eq 'Беспроводная сеть' -and $_.IPv4DefaultGateway } | Select-Object -First 1
+          $wifi=Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -and $_.IPv4DefaultGateway.NextHop -eq '172.20.10.1' } | Select-Object -First 1
           if(-not $wifi){ throw 'MOBILE_WIFI_NOT_CONNECTED' }
           $ifIndex=$wifi.InterfaceIndex
           $gateway=$wifi.IPv4DefaultGateway.NextHop
