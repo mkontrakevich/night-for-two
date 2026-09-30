@@ -33,6 +33,7 @@ assert(service.includes('RESUME_STATUS_INVALID')&&generator.includes('RESUME_STA
 assert(generator.includes('NIGHT_LINEAR_NOVEL_RETRY'),'Generator must reset a retryable failed plan without creating a duplicate novel');
 assert(generator.includes("requestName:'night_linear_novel_chapter_repair'")&&generator.includes('NIGHT_LINEAR_CHAPTER_REPAIR'),'Generator must repair malformed chapters before failing the persisted novel');
 assert(generator.includes("requestName:'night_linear_novel_page_repair'")&&generator.includes('NIGHT_LINEAR_PAGE_REPAIR'),'Generator must repair only invalid pages when whole-chapter repair still leaves a short page');
+assert(generator.includes('NIGHT_LINEAR_ILLUSTRATION_DENSITY_TRIMMED'),'Generator must trim excess illustration flags instead of failing an otherwise valid chapter');
 assert(generator.includes('recoverable_generation_failure'),'Generator must resume recoverable chapter failures on the same novel');
 assert(architect.includes("requestName:'night_serial_novel_architect_repair'")&&architect.includes('maxTokens:10000'),'Novel architect must repair structurally thin plans before failing');
 assert(generator.includes("OPENROUTER_API_KEY_MISSING"),'Production illustration generation must require OpenRouter');
