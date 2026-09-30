@@ -95,6 +95,99 @@ function validateChapter(raw,{chapterIndex,pageCount,startPage,final=false}){
   return {chapter_title:chapterTitle,summary,pages:normalized};
 }
 
+function pageValidationIssue(page={},pageNo=0){
+  const body=clean(page?.text,9000),requested=Boolean(page?.illustrate),mediaPrompt=requested?clean(page?.media_prompt,1200):'';
+  if(body.length<500)return `NIGHT_LINEAR_PAGE_INVALID:${pageNo}`;
+  if(/(^|\n)\s*[—–-]\s+\p{L}/u.test(body))return `NIGHT_LINEAR_ANONYMOUS_DIALOGUE:${pageNo}`;
+  if(requested&&!mediaPrompt)return `NIGHT_LINEAR_MEDIA_PROMPT_INVALID:${pageNo}`;
+  return '';
+}
+
+async function repairInvalidChapterPages({raw,plan,chapterIndex,pageCount,startPage,final,previousSummary='',previousTail='',bookSeed='',relationshipProfile={}}){
+  const data=parseJson(raw);
+  if(!clean(data?.chapter_title,180)||!clean(data?.summary,1600)||!Array.isArray(data?.pages)||data.pages.length!==pageCount){
+    throw new Error(`NIGHT_LINEAR_PAGE_REPAIR_SHAPE_INVALID:${chapterIndex+1}`);
+  }
+
+  for(let pass=1;pass<=2;pass++){
+    let repairedAny=false;
+    for(let i=0;i<data.pages.length;i++){
+      const pageNo=startPage+i;
+      const issue=pageValidationIssue(data.pages[i],pageNo);
+      if(!issue)continue;
+
+      const original=data.pages[i]||{};
+      const illustrateRequired=Boolean(original.illustrate);
+      let repairedPage=null,last=null;
+      for(let attempt=1;attempt<=2;attempt++){
+        try{
+          console.warn('NIGHT_LINEAR_PAGE_REPAIR',JSON.stringify({chapter:chapterIndex+1,page:pageNo,pass,attempt,issue}));
+          const rawPage=await completeAIText({
+            contour:'wife',
+            requestName:'night_linear_novel_page_repair',
+            skipDatabaseContext:true,
+            temperature:.44,
+            maxTokens:2600,
+            messages:[
+              {role:'system',content:`Ты литературный редактор. Исправь ТОЛЬКО ОДНУ экранную страницу главы, не меняя событий до и после неё.
+
+Верни ТОЛЬКО JSON одного объекта:
+{"title":"","text":"","illustrate":false,"media_prompt":""}
+
+Жёсткие требования:
+— text: законченный фрагмент художественной прозы 120–190 русских слов, НЕ МЕНЕЕ 700 символов;
+— не пересказывай страницу кратко и не обрывай сцену;
+— сохрани факты, имена, пространство, одежду, мотивацию и причинно-следственную связь с соседними страницами;
+— каждая прямая реплика начинается с имени говорящего и двоеточия; анонимные реплики через тире запрещены;
+— illustrate ОБЯЗАН быть ${illustrateRequired?'true':'false'};
+— если illustrate=true, media_prompt непустой и описывает именно этот кадр; если false — media_prompt="";
+— никакого Markdown и текста вне JSON.`},
+              {role:'user',content:JSON.stringify({
+                VALIDATION_ERROR:issue,
+                PAGE_NUMBER:pageNo,
+                CHAPTER_NUMBER:chapterIndex+1,
+                ORIGINAL_PAGE:original,
+                PREVIOUS_PAGE_TAIL:clean(data.pages[i-1]?.text||previousTail,1800).slice(-1800),
+                NEXT_PAGE_HEAD:clean(data.pages[i+1]?.text||'',1800).slice(0,1800),
+                CHAPTER_TITLE:data.chapter_title,
+                CHAPTER_SUMMARY:data.summary,
+                BOOK_SEED:bookSeed,
+                NOVEL_PLAN:planDigest(plan),
+                PREVIOUS_CHAPTER_SUMMARY:previousSummary,
+                RELATIONSHIP_PROFILE:relationshipProfile
+              })}
+            ]
+          });
+          const parsed=parseJson(rawPage);
+          const candidate={
+            title:clean(parsed?.title||original?.title,180),
+            text:clean(parsed?.text,9000),
+            illustrate:illustrateRequired,
+            media_prompt:illustrateRequired?clean(parsed?.media_prompt,1200):''
+          };
+          const candidateIssue=pageValidationIssue(candidate,pageNo);
+          if(candidateIssue)throw new Error(candidateIssue);
+          repairedPage=candidate;
+          break;
+        }catch(error){
+          last=error;
+          console.warn('NIGHT_LINEAR_PAGE_REPAIR_FAILED',JSON.stringify({chapter:chapterIndex+1,page:pageNo,pass,attempt,error:String(error?.message||error).slice(0,220)}));
+          await sleep(900*attempt);
+        }
+      }
+      if(!repairedPage)throw last||new Error(`NIGHT_LINEAR_PAGE_REPAIR_FAILED:${pageNo}`);
+      data.pages[i]=repairedPage;
+      repairedAny=true;
+    }
+
+    try{return validateChapter(data,{chapterIndex,pageCount,startPage,final})}
+    catch(error){
+      if(!repairedAny||pass===2)throw error;
+    }
+  }
+  return validateChapter(data,{chapterIndex,pageCount,startPage,final});
+}
+
 async function generateChapter({plan,chapterIndex,previousSummary='',previousTail='',bookSeed='',relationshipProfile={}}) {
   const narrativeSkill=await narrativeSkillExcerpt();
   const pageCount=STORY_PAGE_PLAN[chapterIndex],arc=STORY_ARC[chapterIndex],startPage=storyPageOffset(chapterIndex)+1,final=chapterIndex===STORY_ARC.length-1;
@@ -198,6 +291,17 @@ ${narrativeSkill?`\nКАНОНИЧЕСКИЙ NARRATIVE SKILL:\n${narrativeSkill}
       last=error;
       console.warn('NIGHT_LINEAR_CHAPTER_REPAIR_FAILED',JSON.stringify({chapter:chapterIndex+1,attempt:repairAttempt,error:String(error?.message||error).slice(0,220)}));
       await sleep(1200*repairAttempt);
+    }
+  }
+  if(repairSource){
+    try{
+      return await repairInvalidChapterPages({
+        raw:repairSource,plan,chapterIndex,pageCount,startPage,final,
+        previousSummary,previousTail,bookSeed,relationshipProfile
+      });
+    }catch(error){
+      last=error;
+      console.warn('NIGHT_LINEAR_PAGE_REPAIR_EXHAUSTED',JSON.stringify({chapter:chapterIndex+1,error:String(error?.message||error).slice(0,220)}));
     }
   }
   throw last||new Error(`NIGHT_LINEAR_CHAPTER_FAILED:${chapterIndex+1}`);
