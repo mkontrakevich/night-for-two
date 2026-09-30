@@ -28,3 +28,4 @@ jobs:
           docker top night-for-two-app-1
           Write-Host '=== RECENT GENERATOR LOGS ==='
           docker logs night-for-two-app-1 --since 20m 2>&1 | Select-String -Pattern 'NIGHT_LINEAR_|NIGHT_RELATIONSHIP_CONTEXT_READY|ai_gateway|NOVEL|generation|OPENROUTER|failed|error' | Select-Object -Last 160 | ForEach-Object { $_.Line }
+# runtime-inspect-trigger: 2026-09-30T18:20Z
