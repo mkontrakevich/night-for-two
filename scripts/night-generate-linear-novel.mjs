@@ -455,22 +455,31 @@ try{
   await store.updateNovel(novel.id,{status:'illustrating',generated_pages:pageCounter,generated_images:visualStats.ready});
   console.log('NIGHT_LINEAR_VISUAL_PLAN',JSON.stringify({novel_id:novel.id,planned_images:plannedImages,ready_images:visualStats.ready,total_pages:STORY_TOTAL_PAGES,resumed:Boolean(resumeId)}));
 
-  let images=visualStats.ready;
+  let images=visualStats.ready,failedImages=0;
   for(let pageNo=1;pageNo<=STORY_TOTAL_PAGES;pageNo++){
     const page=await store.page(novel.id,pageNo);
     if(!page)throw new Error(`NIGHT_LINEAR_PAGE_MISSING:${pageNo}`);
     if(!String(page.media_prompt||'').trim())continue;
     if(page.image_status==='ready')continue;
-    const image=await ensureImage({novelId:novel.id,page});
-    await store.markImage(novel.id,pageNo,'ready');
-    images++;
-    await store.updateNovel(novel.id,{status:'illustrating',generated_pages:STORY_TOTAL_PAGES,generated_images:images});
-    console.log('NIGHT_LINEAR_IMAGE_PROGRESS',JSON.stringify({novel_id:novel.id,page:pageNo,images,planned:plannedImages,cached:image.cached,model:image.model,qa_score:image.qa?.score??null,qa_model:image.qa?.model||'',qa_passed:Boolean(image.qa?.passed)}));
+    try{
+      const image=await ensureImage({novelId:novel.id,page});
+      await store.markImage(novel.id,pageNo,'ready');
+      images++;
+      await store.updateNovel(novel.id,{status:'illustrating',generated_pages:STORY_TOTAL_PAGES,generated_images:images});
+      console.log('NIGHT_LINEAR_IMAGE_PROGRESS',JSON.stringify({novel_id:novel.id,page:pageNo,images,planned:plannedImages,cached:image.cached,model:image.model,qa_score:image.qa?.score??null,qa_model:image.qa?.model||'',qa_passed:Boolean(image.qa?.passed)}));
+    }catch(error){
+      failedImages++;
+      await store.markImage(novel.id,pageNo,'failed').catch(()=>{});
+      console.error('NIGHT_LINEAR_IMAGE_SKIPPED',JSON.stringify({novel_id:novel.id,page:pageNo,error:String(error?.message||error).slice(0,420)}));
+    }
   }
 
-  if(images!==plannedImages)throw new Error(`NIGHT_LINEAR_IMAGE_COUNT_MISMATCH:${images}:${plannedImages}`);
-  await store.updateNovel(novel.id,{status:'complete',generated_pages:STORY_TOTAL_PAGES,generated_images:images,error:''});
-  console.log('NIGHT_LINEAR_NOVEL_COMPLETE',JSON.stringify({novel_id:novel.id,title:plan.title,pages:STORY_TOTAL_PAGES,images,planned_images:plannedImages,progress:100}));
+  const finalStats=await store.imageStats(novel.id);
+  images=finalStats.ready;
+  const pendingImages=Math.max(0,plannedImages-images);
+  const illustrationWarning=pendingImages?`NIGHT_LINEAR_ILLUSTRATIONS_PENDING:${pendingImages}`:'';
+  await store.updateNovel(novel.id,{status:'complete',generated_pages:STORY_TOTAL_PAGES,generated_images:images,error:illustrationWarning});
+  console.log('NIGHT_LINEAR_NOVEL_COMPLETE',JSON.stringify({novel_id:novel.id,title:plan.title,pages:STORY_TOTAL_PAGES,images,planned_images:plannedImages,pending_images:pendingImages,failed_images:failedImages,illustrations_complete:pendingImages===0,progress:100}));
 }catch(error){
   const message=String(error?.stack||error?.message||error).slice(0,1600);
   if(novel?.id)await store.updateNovel(novel.id,{status:'failed',error:message}).catch(()=>{});
