@@ -1,0 +1,31 @@
+name: Persist Night restart policy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/persist-night-restart-policy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  configure:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 6
+    steps:
+      - name: Make existing Night containers restart with Docker
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($name in @('night-for-two-postgres-1','night-for-two-app-1')){
+            $raw=docker inspect $name
+            if($LASTEXITCODE -ne 0 -or -not $raw){throw "NIGHT_CONTAINER_MISSING:$name"}
+            $c=@($raw|ConvertFrom-Json)[0]
+            if($c.Config.Labels.'com.docker.compose.project' -ne 'night-for-two'){throw "NIGHT_CONTAINER_IDENTITY_MISMATCH:$name"}
+            docker update --restart unless-stopped $name | Out-Null
+            if($LASTEXITCODE -ne 0){throw "NIGHT_RESTART_POLICY_UPDATE_FAILED:$name"}
+            $v=@((docker inspect $name | ConvertFrom-Json))[0]
+            Write-Host "$name restart=$($v.HostConfig.RestartPolicy.Name) running=$($v.State.Running)"
+            if($v.HostConfig.RestartPolicy.Name -ne 'unless-stopped'){throw "NIGHT_RESTART_POLICY_VERIFY_FAILED:$name"}
+          }
