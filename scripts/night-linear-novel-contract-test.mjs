@@ -28,7 +28,10 @@ assert(api.includes('generator.recover()'),'Backend startup must automatically r
 assert(generator.includes('NIGHT_LINEAR_NOVEL_RESUME')&&generator.includes('NIGHT_LINEAR_PLAN_REUSED'),'Generator must resume the same persisted novel instead of creating a duplicate');
 assert(generator.includes("if(page.image_status==='ready')continue"),'Illustration resume must skip already completed visuals');
 assert(service.includes('RETRYABLE_PLAN_ERROR'),'Recovery service must retry known planning failures on the same novel');
+assert(service.includes('RETRYABLE_GENERATION_ERROR'),'Recovery service must retry recoverable chapter and image failures on the same novel');
 assert(generator.includes('NIGHT_LINEAR_NOVEL_RETRY'),'Generator must reset a retryable failed plan without creating a duplicate novel');
+assert(generator.includes("requestName:'night_linear_novel_chapter_repair'")&&generator.includes('NIGHT_LINEAR_CHAPTER_REPAIR'),'Generator must repair malformed chapters before failing the persisted novel');
+assert(generator.includes('recoverable_generation_failure'),'Generator must resume recoverable chapter failures on the same novel');
 assert(architect.includes("requestName:'night_serial_novel_architect_repair'")&&architect.includes('maxTokens:10000'),'Novel architect must repair structurally thin plans before failing');
 assert(generator.includes("OPENROUTER_API_KEY_MISSING"),'Production illustration generation must require OpenRouter');
 assert(generator.includes("BOOK_PAGE:"),'Every selected illustration must use the page narrative as its image prompt');
