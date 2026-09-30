@@ -1,0 +1,62 @@
+name: Probe Night HTTP2 quick tunnel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/probe-night-http2-quick-tunnel.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 8
+    steps:
+      - name: Probe public HTTP2 tunnel without changing production
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $local=Invoke-RestMethod 'http://127.0.0.1:5683/night/health' -TimeoutSec 10
+          if($local.ok -ne $true -or $local.db -ne $true){throw 'LOCAL_NIGHT_NOT_HEALTHY'}
+
+          $cmd=Get-Command cloudflared.exe -ErrorAction Stop
+          $exe=$cmd.Source
+          $out=Join-Path $env:RUNNER_TEMP 'night-quick-http2.stdout.log'
+          $err=Join-Path $env:RUNNER_TEMP 'night-quick-http2.stderr.log'
+          Remove-Item $out,$err -Force -ErrorAction SilentlyContinue
+
+          $args=@('tunnel','--protocol','http2','--url','http://127.0.0.1:5683','--no-autoupdate')
+          $p=Start-Process -FilePath $exe -ArgumentList $args -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err
+          try{
+            $url=''
+            for($i=1;$i -le 30;$i++){
+              Start-Sleep -Seconds 2
+              $lines=@((Get-Content $out -ErrorAction SilentlyContinue)+(Get-Content $err -ErrorAction SilentlyContinue))
+              $joined=[string]::Join([Environment]::NewLine,$lines)
+              $match=[regex]::Match($joined,'https://[a-z0-9-]+\.trycloudflare\.com')
+              if($match.Success){$url=$match.Value;break}
+              if($p.HasExited){break}
+            }
+            if(-not $url){throw 'QUICK_TUNNEL_URL_NOT_FOUND'}
+            Write-Host 'QUICK_TUNNEL_CREATED=true'
+
+            $ready=$false
+            for($i=1;$i -le 15;$i++){
+              Start-Sleep -Seconds 2
+              try{
+                $h=Invoke-RestMethod "$url/night/health" -TimeoutSec 10 -ErrorAction Stop
+                if($h.ok -eq $true -and $h.db -eq $true){
+                  Write-Host "QUICK_TUNNEL_HEALTH_OK attempt=$i"
+                  $ready=$true
+                  break
+                }
+              }catch{
+                Write-Host "QUICK_TUNNEL_WAIT attempt=$i"
+              }
+            }
+            if(-not $ready){throw 'QUICK_TUNNEL_HEALTH_FAILED'}
+          }finally{
+            if(-not $p.HasExited){Stop-Process -Id $p.Id -Force}
+          }
