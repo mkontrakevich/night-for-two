@@ -17,6 +17,7 @@ assert.equal(Object.keys(NIGHT_V2_DISPLAY).length,13);
 assert.equal(new Set(Object.values(NIGHT_V2_DISPLAY).map(x=>x.title)).size,13);
 assert(runtime.includes('./integrations/relationship-context-connector.js'));
 for(const forbidden of ['./lovestory-learning-engine.js','./lovestory-harmony-director.js','./lovestory-event-feedback.js','./night-relationship-bridge.js'])assert(!runtime.includes(forbidden),`standalone runtime imports bot-only module: ${forbidden}`);
+assert(!runtime.includes('INSERT INTO lovestory_experiences'),'standalone Night runtime must not depend on the reminder-bot LoveStory experiences table');
 assert(connector.includes('RELATIONSHIP_CONTEXT_RAW_MESSAGES_FORBIDDEN'));
 assert(connector.includes('raw_messages:false'));
 assert(runtime.includes('night_v2_round_feedback'));
