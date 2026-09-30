@@ -1,0 +1,60 @@
+name: Resume Night novel id4
+
+on:
+  push:
+    branches:
+      - ops/resume-novel-id4-20260930
+    paths:
+      - .github/workflows/resume-night-novel-id4.yml
+
+permissions:
+  contents: read
+
+jobs:
+  resume:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 8
+    steps:
+      - name: Resume persisted novel only if QA failed and no generator is running
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $container='night-for-two-app-1'
+          $statusRaw=docker exec $container node scripts/night-linear-novel-status.mjs
+          if($LASTEXITCODE -ne 0){throw 'STATUS_SCRIPT_FAILED'}
+          $line=@($statusRaw | Where-Object { $_ -match 'NIGHT_LINEAR_NOVEL_STATUS' })[-1]
+          if(-not $line){throw 'STATUS_LINE_MISSING'}
+          $json=$line.Substring($line.IndexOf('{')) | ConvertFrom-Json
+          Write-Host "novel id=$($json.id) status=$($json.status) images=$($json.generated_images)/$($json.planned_images) progress=$($json.progress)"
+          if([string]$json.id -ne '4'){throw 'UNEXPECTED_NOVEL_ID'}
+          if([string]$json.status -ne 'failed'){throw 'NOVEL_NOT_FAILED'}
+          if([string]$json.error -notmatch 'NIGHT_VISUAL_QA_REJECTED'){throw 'FAILURE_NOT_QA_REJECT'}
+
+          $top=docker top $container
+          if($top -match 'night-generate-linear-novel\.mjs'){throw 'GENERATOR_ALREADY_RUNNING'}
+
+          docker exec -d -e NIGHT_RESUME_NOVEL_ID=4 $container node scripts/night-generate-linear-novel.mjs
+          if($LASTEXITCODE -ne 0){throw 'GENERATOR_RESUME_START_FAILED'}
+          Start-Sleep -Seconds 4
+          $top2=docker top $container
+          if($top2 -notmatch 'night-generate-linear-novel\.mjs'){throw 'GENERATOR_NOT_RUNNING_AFTER_START'}
+          Write-Host 'NIGHT_NOVEL_ID4_RESUMED=true'
+
+      - name: Verify progress resumes
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $container='night-for-two-app-1'
+          $ok=$false
+          for($i=1;$i -le 30;$i++){
+            Start-Sleep -Seconds 3
+            $statusRaw=docker exec $container node scripts/night-linear-novel-status.mjs
+            $line=@($statusRaw | Where-Object { $_ -match 'NIGHT_LINEAR_NOVEL_STATUS' })[-1]
+            if($line){
+              $json=$line.Substring($line.IndexOf('{')) | ConvertFrom-Json
+              Write-Host "CHECK attempt=$i status=$($json.status) images=$($json.generated_images)/$($json.planned_images) progress=$($json.progress)"
+              if([string]$json.status -in @('illustrating','complete') -and [int]$json.generated_images -ge 14){$ok=$true;break}
+              if([string]$json.status -eq 'failed'){throw "NOVEL_FAILED_AGAIN:$($json.error)"}
+            }
+          }
+          if(-not $ok){throw 'NOVEL_RESUME_NOT_CONFIRMED'}
