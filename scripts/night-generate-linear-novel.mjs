@@ -328,14 +328,17 @@ async function ensureImage({novelId,page}){
   const key=page.visual_key||`linear-novel-${novelId}-page-${String(page.page_no).padStart(3,'0')}`;
   const qaRequired=process.env.NIGHT_VISUAL_QA_REQUIRED!=='0';
   const qaThreshold=Math.max(0.5,Math.min(0.99,Number(process.env.NIGHT_VISUAL_QA_THRESHOLD)||0.78));
-  let last=null;
-  for(let attempt=1;attempt<=3;attempt++){
+  let last=null,qaFeedback='';
+  for(let attempt=1;attempt<=5;attempt++){
     try{
+      const correction=qaFeedback
+        ? `\nSTRICT VISUAL QA CORRECTION FOR RETRY ${attempt}: ${qaFeedback}\nPreserve all other scene details, but fix this mismatch exactly. Do not invert who touches whom, camera direction, body orientation, relative position, or action.`
+        : '';
       const result=await visualAI.ensure({
         key,
         theme:'boudoir',
         mode:page.page_no===STORY_TOTAL_PAGES?'story_final':'story_scene',
-        variant:`BOOK_PAGE: ${page.media_prompt}`,
+        variant:`BOOK_PAGE: ${page.media_prompt}${correction}`,
         pageText:page.body,
         force:attempt>1
       });
@@ -353,8 +356,11 @@ async function ensureImage({novelId,page}){
       await visualAI.recordQuality({key,qa:{...qa,threshold:qaThreshold,passed}});
 
       if(!passed){
+        const mismatches=(qa.mismatches||[]).map(v=>String(v).trim()).filter(Boolean);
+        qaFeedback=mismatches.join(' | ').slice(0,1200)||`QA score ${Number(qa.score||0).toFixed(2)} below required threshold ${qaThreshold.toFixed(2)}`;
+        console.warn('NIGHT_VISUAL_QA_FEEDBACK',JSON.stringify({page:page.page_no,attempt,score:Number(qa.score||0),feedback:qaFeedback.slice(0,500)}));
         await visualAI.archiveRejected({key,attempt,qa:{...qa,threshold:qaThreshold,passed:false}});
-        throw new Error(`NIGHT_VISUAL_QA_REJECTED:${page.page_no}:${Number(qa.score||0).toFixed(2)}:${(qa.mismatches||[]).join('|').slice(0,500)}`);
+        throw new Error(`NIGHT_VISUAL_QA_REJECTED:${page.page_no}:${Number(qa.score||0).toFixed(2)}:${qaFeedback.slice(0,500)}`);
       }
 
       return {key,model:result.model||'',cached:Boolean(result.cached),qa:{...qa,threshold:qaThreshold,passed:true}};
