@@ -13,47 +13,57 @@ permissions:
 jobs:
   resume:
     runs-on: [self-hosted, windows, x64, marins-production]
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
-      - name: Resume persisted novel only if QA failed and no generator is running
+      - name: Normalize persisted id4 state and resume generator
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $container='night-for-two-app-1'
-          $statusRaw=docker exec $container node scripts/night-linear-novel-status.mjs
+          $app='night-for-two-app-1'
+          $db='night-for-two-postgres-1'
+
+          $statusRaw=docker exec $app node scripts/night-linear-novel-status.mjs
           if($LASTEXITCODE -ne 0){throw 'STATUS_SCRIPT_FAILED'}
           $line=@($statusRaw | Where-Object { $_ -match 'NIGHT_LINEAR_NOVEL_STATUS' })[-1]
           if(-not $line){throw 'STATUS_LINE_MISSING'}
           $json=$line.Substring($line.IndexOf('{')) | ConvertFrom-Json
-          Write-Host "novel id=$($json.id) status=$($json.status) images=$($json.generated_images)/$($json.planned_images) progress=$($json.progress)"
+          Write-Host "before id=$($json.id) status=$($json.status) pages=$($json.generated_pages) images=$($json.generated_images)/$($json.planned_images) progress=$($json.progress)"
+
           if([string]$json.id -ne '4'){throw 'UNEXPECTED_NOVEL_ID'}
           if([string]$json.status -ne 'failed'){throw 'NOVEL_NOT_FAILED'}
-          if([string]$json.error -notmatch 'NIGHT_VISUAL_QA_REJECTED'){throw 'FAILURE_NOT_QA_REJECT'}
+          if([int]$json.generated_pages -ne 100){throw 'UNEXPECTED_PAGE_COUNT'}
+          if([int]$json.generated_images -ne 14 -or [int]$json.planned_images -ne 20){throw 'UNEXPECTED_IMAGE_COUNTS'}
+          if([string]$json.error -notmatch 'NIGHT_(VISUAL_QA_REJECTED|LINEAR_RESUME_STATUS_INVALID)'){throw 'UNEXPECTED_FAILURE_REASON'}
 
-          $top=docker top $container
+          $top=docker top $app
           if($top -match 'night-generate-linear-novel\.mjs'){throw 'GENERATOR_ALREADY_RUNNING'}
 
-          docker exec -d -e NIGHT_RESUME_NOVEL_ID=4 $container node scripts/night-generate-linear-novel.mjs
+          $sql="UPDATE night_linear_novels SET status='illustrating', error='' WHERE id=4 AND status='failed' AND generated_pages=100 AND generated_images=14 RETURNING id;"
+          $updated=docker exec $db psql -U night -d night_for_two -tA -c $sql
+          if($LASTEXITCODE -ne 0 -or (($updated -join '') -notmatch '4')){throw 'NOVEL_STATE_NORMALIZE_FAILED'}
+          Write-Host 'NIGHT_NOVEL_ID4_STATE_NORMALIZED=true'
+
+          docker exec -d -e NIGHT_RESUME_NOVEL_ID=4 $app node scripts/night-generate-linear-novel.mjs
           if($LASTEXITCODE -ne 0){throw 'GENERATOR_RESUME_START_FAILED'}
           Start-Sleep -Seconds 4
-          $top2=docker top $container
+          $top2=docker top $app
           if($top2 -notmatch 'night-generate-linear-novel\.mjs'){throw 'GENERATOR_NOT_RUNNING_AFTER_START'}
           Write-Host 'NIGHT_NOVEL_ID4_RESUMED=true'
 
-      - name: Verify progress resumes
+      - name: Verify illustration progress resumes
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $container='night-for-two-app-1'
+          $app='night-for-two-app-1'
           $ok=$false
-          for($i=1;$i -le 30;$i++){
+          for($i=1;$i -le 40;$i++){
             Start-Sleep -Seconds 3
-            $statusRaw=docker exec $container node scripts/night-linear-novel-status.mjs
+            $statusRaw=docker exec $app node scripts/night-linear-novel-status.mjs
             $line=@($statusRaw | Where-Object { $_ -match 'NIGHT_LINEAR_NOVEL_STATUS' })[-1]
             if($line){
               $json=$line.Substring($line.IndexOf('{')) | ConvertFrom-Json
               Write-Host "CHECK attempt=$i status=$($json.status) images=$($json.generated_images)/$($json.planned_images) progress=$($json.progress)"
-              if([string]$json.status -in @('illustrating','complete') -and [int]$json.generated_images -ge 14){$ok=$true;break}
+              if([string]$json.status -eq 'complete' -or ([string]$json.status -eq 'illustrating' -and [int]$json.generated_images -gt 14)){$ok=$true;break}
               if([string]$json.status -eq 'failed'){throw "NOVEL_FAILED_AGAIN:$($json.error)"}
             }
           }
