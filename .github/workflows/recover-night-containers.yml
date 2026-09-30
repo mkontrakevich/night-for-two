@@ -1,0 +1,88 @@
+name: Recover Night containers after Docker restart
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/recover-night-containers.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 12
+    steps:
+      - name: Start existing Night database and app only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $db='night-for-two-postgres-1'
+          $app='night-for-two-app-1'
+          foreach($name in @($db,$app)){
+            $raw=docker inspect $name
+            if($LASTEXITCODE -ne 0 -or -not $raw){throw "NIGHT_CONTAINER_MISSING:$name"}
+            $c=@($raw|ConvertFrom-Json)[0]
+            if($c.Config.Labels.'com.docker.compose.project' -ne 'night-for-two'){throw "NIGHT_CONTAINER_IDENTITY_MISMATCH:$name"}
+            Write-Host "$name state=$($c.State.Status) running=$($c.State.Running)"
+          }
+
+          docker start $db | Out-Null
+          if($LASTEXITCODE -ne 0){throw 'NIGHT_DB_START_FAILED'}
+
+          $dbReady=$false
+          for($i=1;$i -le 30;$i++){
+            Start-Sleep -Seconds 2
+            $state=@((docker inspect $db | ConvertFrom-Json))[0]
+            if($state.State.Health.Status -eq 'healthy'){
+              Write-Host "NIGHT_DB_HEALTHY attempt=$i"
+              $dbReady=$true
+              break
+            }
+          }
+          if(-not $dbReady){throw 'NIGHT_DB_NOT_HEALTHY'}
+
+          docker start $app | Out-Null
+          if($LASTEXITCODE -ne 0){throw 'NIGHT_APP_START_FAILED'}
+
+          $appReady=$false
+          for($i=1;$i -le 40;$i++){
+            Start-Sleep -Seconds 2
+            try{
+              $h=Invoke-RestMethod 'http://127.0.0.1:5683/night/health' -TimeoutSec 6 -ErrorAction Stop
+              $a=Invoke-RestMethod 'http://127.0.0.1:5683/actions/health' -TimeoutSec 6 -ErrorAction Stop
+              if($h.ok -eq $true -and $h.db -eq $true -and $a.ok -eq $true){
+                Write-Host "NIGHT_LOCAL_RECOVERED attempt=$i"
+                $appReady=$true
+                break
+              }
+            }catch{}
+          }
+          if(-not $appReady){throw 'NIGHT_APP_NOT_HEALTHY'}
+
+          docker ps --filter "name=night-for-two" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+      - name: Reconnect dedicated Night tunnel and verify public health
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          docker restart night-prod-cloudflared | Out-Null
+          if($LASTEXITCODE -ne 0){throw 'NIGHT_TUNNEL_RESTART_FAILED'}
+
+          $publicReady=$false
+          for($i=1;$i -le 30;$i++){
+            Start-Sleep -Seconds 3
+            try{
+              $h=Invoke-RestMethod 'https://night42.kontrakevich.workers.dev/night/health' -TimeoutSec 8 -ErrorAction Stop
+              $a=Invoke-RestMethod 'https://night42.kontrakevich.workers.dev/actions/health' -TimeoutSec 8 -ErrorAction Stop
+              if($h.ok -eq $true -and $h.db -eq $true -and $a.ok -eq $true){
+                Write-Host "NIGHT_PUBLIC_RECOVERED attempt=$i"
+                $publicReady=$true
+                break
+              }
+            }catch{
+              Write-Host "NIGHT_PUBLIC_WAIT attempt=$i"
+            }
+          }
+          if(-not $publicReady){throw 'NIGHT_PUBLIC_STILL_UNREACHABLE'}
