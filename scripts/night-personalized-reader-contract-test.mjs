@@ -23,6 +23,8 @@ assert(visual.includes('source_text_hash'));
 assert(visual.includes('prompt_hash'));
 assert(visual.includes('visualQARequest'));
 assert(visual.includes('qaPromptFor'));
+assert(visual.includes('explicit\\s+nude')&&visual.includes('full-body adult artistic nude'));
+assert(visual.includes('Sensitive anatomy must remain concealed'));
 assert(generator.includes('NIGHT_VISUAL_QA_REJECTED'));
 assert(generator.includes('NIGHT_VISUAL_QA_REQUIRED'));
 assert(mini.includes('pageText:page.body'));
