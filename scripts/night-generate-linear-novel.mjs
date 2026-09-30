@@ -87,8 +87,25 @@ function validateChapter(raw,{chapterIndex,pageCount,startPage,final=false}){
     if(requested&&!mediaPrompt)throw new Error(`NIGHT_LINEAR_MEDIA_PROMPT_INVALID:${startPage+i}`);
     return {page_no:startPage+i,chapter_no:chapterIndex+1,chapter_title:chapterTitle,page_title:pageTitle,body,media_prompt:mediaPrompt,illustrate:Boolean(mediaPrompt)};
   });
-  const illustrated=normalized.filter(p=>p.illustrate).length,minIllustrations=(chapterIndex===0||final)?2:1;
-  if(illustrated<minIllustrations||illustrated>2)throw new Error(`NIGHT_LINEAR_ILLUSTRATION_DENSITY_INVALID:${chapterIndex+1}:${illustrated}`);
+  let illustratedPages=normalized.filter(p=>p.illustrate);
+  if(illustratedPages.length>2){
+    const keep=new Set([illustratedPages[0].page_no,illustratedPages.at(-1).page_no]);
+    for(const page of normalized){
+      if(page.illustrate&&!keep.has(page.page_no)){
+        page.illustrate=false;
+        page.media_prompt='';
+      }
+    }
+    console.warn('NIGHT_LINEAR_ILLUSTRATION_DENSITY_TRIMMED',JSON.stringify({
+      chapter:chapterIndex+1,
+      from:illustratedPages.length,
+      to:2,
+      kept:[...keep]
+    }));
+    illustratedPages=normalized.filter(p=>p.illustrate);
+  }
+  const illustrated=illustratedPages.length,minIllustrations=(chapterIndex===0||final)?2:1;
+  if(illustrated<minIllustrations)throw new Error(`NIGHT_LINEAR_ILLUSTRATION_DENSITY_INVALID:${chapterIndex+1}:${illustrated}`);
   if(final&&!/конец|утро|тишин|рассвет|финал|после/i.test(normalized.at(-1)?.body||'')){
     console.warn('NIGHT_LINEAR_FINALE_SOFT_CHECK',JSON.stringify({chapter:chapterIndex+1}));
   }
