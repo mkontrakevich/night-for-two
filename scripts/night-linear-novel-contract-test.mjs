@@ -41,6 +41,11 @@ assert(architect.includes("requestName:'night_serial_novel_architect_repair'")&&
 assert(generator.includes("OPENROUTER_API_KEY_MISSING"),'Production illustration generation must require OpenRouter');
 assert(generator.includes("BOOK_PAGE:"),'Every selected illustration must use the page narrative as its image prompt');
 assert(store.includes('planned_images')||store.includes('AS planned'),'Completion must compare generated images with the selected visual plan, not with all 100 pages');
+assert(store.includes('async function latestReadable()')&&store.includes('async function list({limit=20}={})'),'Saved novels must be queryable as a library and readable when text is complete');
+assert(store.includes('generated_pages>=total_pages'),'A novel with complete text must remain readable even when illustration generation is incomplete or failed');
+assert(app.includes("api/novel-library")&&app.includes("mode:'novel_library'"),'Mini App must expose a saved-story library');
+assert(app.includes("Мои истории")&&app.includes("data-novel-id"),'Mini App must let the user choose a previously generated story');
+assert(app.includes("readerState(body.page||1,body.novelId||0)"),'Reader must open the selected saved novel instead of only the latest complete novel');
 assert(app.includes("api/novel-page")||app.includes("/api/novel-page"),'Mini App must expose the completed linear novel');
 assert(app.includes("api/novel-visual")||app.includes("/api/novel-visual"),'Mini App must serve the matching page illustration');
 assert(app.includes("query.get('reader')==='novel'"),'The full novel must have a direct reader URL mode');
