@@ -89,6 +89,9 @@ jobs:
           $health = Wait-NightHealth "http://127.0.0.1:5683/night/health" "NIGHT_ORIGIN_HEALTH_NOT_OK"
           $actionsHealth = Wait-NightHealth "http://127.0.0.1:5683/actions/health" "NIGHT_ACTIONS_HEALTH_NOT_OK"
           Write-Host "NIGHT_ORIGIN_READY port=5683 actions=true"
+          $novelStatus = docker exec night-for-two-app-1 node scripts/night-linear-novel-status.mjs
+          $novelStatus | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "NIGHT_NOVEL_STATUS_PROBE_FAILED:$LASTEXITCODE" }
 
       - name: Publish Telegram pair menu
         shell: powershell
