@@ -30,6 +30,15 @@ CREATE TABLE IF NOT EXISTS night_linear_novel_pages(
   PRIMARY KEY(novel_id,page_no)
 );
 CREATE INDEX IF NOT EXISTS night_linear_novel_pages_chapter_idx ON night_linear_novel_pages(novel_id,chapter_no,page_no);
+
+CREATE TABLE IF NOT EXISTS night_linear_novel_interactions(
+  novel_id bigint NOT NULL REFERENCES night_linear_novels(id) ON DELETE CASCADE,
+  page_no integer NOT NULL CHECK(page_no>=1),
+  card jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(novel_id,page_no)
+);
 `;
 
 function int(value,min,max,fallback){const n=Number(value);return Number.isFinite(n)?Math.max(min,Math.min(max,Math.trunc(n))):fallback;}
@@ -114,8 +123,27 @@ export function createNightLinearNovelStore({pool}={}){
     await init();
     const novel=await get(novelId);if(!novel)return null;
     const p=int(pageNo,1,novel.total_pages,1);
-    const {rows}=await pool.query('SELECT * FROM night_linear_novel_pages WHERE novel_id=$1 AND page_no=$2',[Number(novelId),p]);
+    const {rows}=await pool.query(`SELECT p.*,
+      NOT EXISTS(
+        SELECT 1 FROM night_linear_novel_pages n
+        WHERE n.novel_id=p.novel_id AND n.page_no=p.page_no+1 AND n.chapter_no=p.chapter_no
+      ) AS chapter_end
+      FROM night_linear_novel_pages p
+      WHERE p.novel_id=$1 AND p.page_no=$2`,[Number(novelId),p]);
     return rows[0]||null;
+  }
+  async function interaction(novelId,pageNo){
+    await init();
+    const {rows}=await pool.query('SELECT card FROM night_linear_novel_interactions WHERE novel_id=$1 AND page_no=$2',[Number(novelId),Number(pageNo)]);
+    return rows[0]?.card||null;
+  }
+  async function saveInteraction(novelId,pageNo,card={}){
+    await init();
+    const {rows}=await pool.query(`INSERT INTO night_linear_novel_interactions(novel_id,page_no,card)
+      VALUES($1,$2,$3::jsonb)
+      ON CONFLICT(novel_id,page_no) DO UPDATE SET card=EXCLUDED.card,updated_at=now()
+      RETURNING card`,[Number(novelId),Number(pageNo),JSON.stringify(card||{})]);
+    return rows[0]?.card||null;
   }
   async function imageStats(novelId){
     await init();
@@ -152,5 +180,5 @@ export function createNightLinearNovelStore({pool}={}){
     const stageProgress=stage==='planning'?0:stage==='text'?Math.floor(Math.min(100,(Number(novel.generated_pages)||0)/Math.max(1,Number(novel.total_pages)||100)*100)):stage==='illustrations'?Math.floor(Math.min(100,stats.ready/Math.max(1,stats.planned)*100)):complete?100:0;
     return {id:novel.id,title:novel.title,status:novel.status,stage,stage_label:stageLabel,stage_progress:stageProgress,progress,total_pages:novel.total_pages,generated_pages:novel.generated_pages,generated_images:stats.ready,planned_images:stats.planned,failed_images:stats.failed,current_image_page:stats.next_page,updated_at:novel.updated_at,error:novel.error,text_complete:textComplete,readable:textComplete,illustrations_complete:illustrationsComplete,complete};
   }
-  return {init,create,updateNovel,get,latest,latestComplete,latestReadable,list,upsertPage,markImage,page,imageStats,readerState,status};
+  return {init,create,updateNovel,get,latest,latestComplete,latestReadable,list,upsertPage,markImage,page,interaction,saveInteraction,imageStats,readerState,status};
 }
