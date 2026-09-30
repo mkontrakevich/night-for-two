@@ -29,6 +29,7 @@ assert(generator.includes('NIGHT_LINEAR_NOVEL_RESUME')&&generator.includes('NIGH
 assert(generator.includes("if(page.image_status==='ready')continue"),'Illustration resume must skip already completed visuals');
 assert(service.includes('RETRYABLE_PLAN_ERROR'),'Recovery service must retry known planning failures on the same novel');
 assert(service.includes('RETRYABLE_GENERATION_ERROR'),'Recovery service must retry recoverable chapter and image failures on the same novel');
+assert(service.includes('RESUME_STATUS_INVALID')&&generator.includes('RESUME_STATUS_INVALID'),'Transitional resume-status failures must remain recoverable on the same novel');
 assert(generator.includes('NIGHT_LINEAR_NOVEL_RETRY'),'Generator must reset a retryable failed plan without creating a duplicate novel');
 assert(generator.includes("requestName:'night_linear_novel_chapter_repair'")&&generator.includes('NIGHT_LINEAR_CHAPTER_REPAIR'),'Generator must repair malformed chapters before failing the persisted novel');
 assert(generator.includes('recoverable_generation_failure'),'Generator must resume recoverable chapter failures on the same novel');
