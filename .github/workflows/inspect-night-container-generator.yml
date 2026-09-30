@@ -1,0 +1,24 @@
+name: Inspect Night container generator code
+
+on:
+  push:
+    branches:
+      - ops/resume-novel-id4-20260930
+    paths:
+      - .github/workflows/inspect-night-container-generator.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 5
+    steps:
+      - name: Inspect runtime generator recovery code
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $container='night-for-two-app-1'
+          docker exec $container node -e "const fs=require('fs');const s=fs.readFileSync('/app/scripts/night-generate-linear-novel.mjs','utf8');const i=s.indexOf('const retryablePlan');console.log(s.slice(i,i+1200));console.log('HAS_QA_FEEDBACK='+s.includes('NIGHT_VISUAL_QA_FEEDBACK'));console.log('HAS_RESUME_STATUS_INVALID='+s.includes('RESUME_STATUS_INVALID'));"
+          if($LASTEXITCODE -ne 0){throw 'RUNTIME_CODE_INSPECT_FAILED'}
