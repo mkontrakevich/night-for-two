@@ -2,11 +2,17 @@ import {spawn} from 'node:child_process';
 
 const ACTIVE=new Set(['generating','illustrating']);
 const RETRYABLE_PLAN_ERROR=/NIGHT_NOVEL_(?:STRUCTURE_TOO_THIN|PROTAGONISTS_INVALID|ROLE_PAIR_INVALID|PLAN_FAILED)/;
+const RETRYABLE_GENERATION_ERROR=/NIGHT_LINEAR_(?:CHAPTER_INVALID|PAGE_INVALID|ANONYMOUS_DIALOGUE|MEDIA_PROMPT_INVALID|ILLUSTRATION_DENSITY_INVALID|PAGE_COUNT_MISMATCH|PAGE_MISSING|IMAGE_FAILED|IMAGE_COUNT_MISMATCH|VISUAL_QA_REJECTED)/;
 
 function canResume(current={}){
   const status=String(current?.status||'');
   if(ACTIVE.has(status))return true;
-  return status==='failed'&&Number(current?.generated_pages||0)===0&&RETRYABLE_PLAN_ERROR.test(String(current?.error||''));
+  if(status!=='failed')return false;
+  const error=String(current?.error||'');
+  const generated=Math.max(0,Number(current?.generated_pages)||0);
+  const total=Math.max(1,Number(current?.total_pages)||100);
+  if(generated===0&&RETRYABLE_PLAN_ERROR.test(error))return true;
+  return generated<=total&&RETRYABLE_GENERATION_ERROR.test(error);
 }
 
 export function createNightNovelGenerationService({store}={}){
