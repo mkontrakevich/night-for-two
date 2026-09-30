@@ -67,6 +67,32 @@ export function createNightLinearNovelStore({pool}={}){
     return rows[0]||null;
   }
   async function latestComplete(){await init();const {rows}=await pool.query(`SELECT * FROM night_linear_novels WHERE status='complete' ORDER BY completed_at DESC NULLS LAST,id DESC LIMIT 1`);return rows[0]||null;}
+  async function latestReadable(){
+    await init();
+    const {rows}=await pool.query(`SELECT * FROM night_linear_novels WHERE generated_pages>=total_pages ORDER BY updated_at DESC,id DESC LIMIT 1`);
+    return rows[0]||null;
+  }
+  async function list({limit=20}={}){
+    await init();
+    const lim=int(limit,1,50,20);
+    const {rows}=await pool.query(
+      `SELECT n.*,
+        COUNT(p.page_no) FILTER (WHERE BTRIM(COALESCE(p.media_prompt,''))<>'')::int AS planned_images,
+        COUNT(p.page_no) FILTER (WHERE BTRIM(COALESCE(p.media_prompt,''))<>'' AND p.image_status='ready')::int AS ready_images
+       FROM night_linear_novels n
+       LEFT JOIN night_linear_novel_pages p ON p.novel_id=n.id
+       GROUP BY n.id
+       ORDER BY n.created_at DESC,n.id DESC
+       LIMIT $1`,[lim]
+    );
+    return rows.map(row=>({
+      ...row,
+      planned_images:Number(row.planned_images)||0,
+      ready_images:Number(row.ready_images)||0,
+      text_complete:(Number(row.generated_pages)||0)>=(Number(row.total_pages)||100),
+      readable:(Number(row.generated_pages)||0)>=(Number(row.total_pages)||100)
+    }));
+  }
   async function upsertPage(novelId,page={}){
     await init();
     const {rows}=await pool.query(
@@ -96,19 +122,21 @@ export function createNightLinearNovelStore({pool}={}){
     const {rows}=await pool.query(`SELECT COUNT(*) FILTER (WHERE BTRIM(media_prompt)<>'')::int AS planned,COUNT(*) FILTER (WHERE BTRIM(media_prompt)<>'' AND image_status='ready')::int AS ready FROM night_linear_novel_pages WHERE novel_id=$1`,[Number(novelId)]);
     return {planned:Number(rows[0]?.planned)||0,ready:Number(rows[0]?.ready)||0};
   }
-  async function readerState(pageNo=1){
-    const novel=await latestComplete();
-    if(!novel){
-      const progress=await latest();
+  async function readerState(pageNo=1,novelId=0){
+    const requestedId=Math.max(0,Number(novelId)||0);
+    const selected=requestedId?await get(requestedId):await latestReadable();
+    const selectedReadable=selected&&(Number(selected.generated_pages)||0)>=(Number(selected.total_pages)||100);
+    if(!selectedReadable){
+      const progress=selected||await latest();
       if(!progress)return {mode:'linear_novel_unavailable',novel:null};
       const stats=await imageStats(progress.id),textRatio=Math.min(1,(Number(progress.generated_pages)||0)/Math.max(1,Number(progress.total_pages)||100)),visualRatio=stats.planned?Math.min(1,stats.ready/stats.planned):(['illustrating','complete'].includes(String(progress.status))?1:0);
       const pct=Math.floor(Math.min(99,textRatio*75+visualRatio*25));
-      return {mode:'linear_novel_unavailable',novel:{id:progress.id,title:progress.title,status:progress.status,progress:pct,total_pages:progress.total_pages,generated_pages:progress.generated_pages,generated_images:stats.ready,planned_images:stats.planned,error:progress.error}};
+      return {mode:'linear_novel_unavailable',novel:{id:progress.id,title:progress.title,status:progress.status,progress:pct,total_pages:progress.total_pages,generated_pages:progress.generated_pages,generated_images:stats.ready,planned_images:stats.planned,error:progress.error,text_complete:false,readable:false}};
     }
-    const stats=await imageStats(novel.id);
-    const p=await page(novel.id,pageNo);
+    const stats=await imageStats(selected.id);
+    const p=await page(selected.id,pageNo);
     if(!p)throw new Error('NIGHT_LINEAR_NOVEL_PAGE_NOT_FOUND');
-    return {mode:'linear_novel',novel:{id:novel.id,title:novel.title,status:novel.status,total_pages:novel.total_pages,generated_pages:novel.generated_pages,generated_images:stats.ready,planned_images:stats.planned},page:p,ui_theme:'boudoir'};
+    return {mode:'linear_novel',novel:{id:selected.id,title:selected.title,status:selected.status,total_pages:selected.total_pages,generated_pages:selected.generated_pages,generated_images:stats.ready,planned_images:stats.planned,text_complete:true,readable:true,illustrations_complete:stats.planned>0&&stats.ready>=stats.planned},page:p,ui_theme:'boudoir'};
   }
   async function status(){
     const novel=await latest();
@@ -116,7 +144,7 @@ export function createNightLinearNovelStore({pool}={}){
     const stats=await imageStats(novel.id),textRatio=Math.min(1,(Number(novel.generated_pages)||0)/Math.max(1,Number(novel.total_pages)||100)),visualRatio=stats.planned?Math.min(1,stats.ready/stats.planned):(['illustrating','complete'].includes(String(novel.status))?1:0);
     const complete=novel.status==='complete'&&novel.generated_pages>=novel.total_pages&&stats.planned>0&&stats.ready>=stats.planned;
     const progress=complete?100:Math.floor(Math.min(99,textRatio*75+visualRatio*25));
-    return {id:novel.id,title:novel.title,status:novel.status,progress,total_pages:novel.total_pages,generated_pages:novel.generated_pages,generated_images:stats.ready,planned_images:stats.planned,error:novel.error,complete};
+    return {id:novel.id,title:novel.title,status:novel.status,progress,total_pages:novel.total_pages,generated_pages:novel.generated_pages,generated_images:stats.ready,planned_images:stats.planned,error:novel.error,text_complete:(Number(novel.generated_pages)||0)>=(Number(novel.total_pages)||100),readable:(Number(novel.generated_pages)||0)>=(Number(novel.total_pages)||100),complete};
   }
-  return {init,create,updateNovel,get,latest,latestComplete,upsertPage,markImage,page,imageStats,readerState,status};
+  return {init,create,updateNovel,get,latest,latestComplete,latestReadable,list,upsertPage,markImage,page,imageStats,readerState,status};
 }
