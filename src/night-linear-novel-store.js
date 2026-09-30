@@ -142,9 +142,11 @@ export function createNightLinearNovelStore({pool}={}){
     const novel=await latest();
     if(!novel)return {status:'missing',progress:0,total_pages:100,generated_pages:0,generated_images:0,planned_images:0,complete:false};
     const stats=await imageStats(novel.id),textRatio=Math.min(1,(Number(novel.generated_pages)||0)/Math.max(1,Number(novel.total_pages)||100)),visualRatio=stats.planned?Math.min(1,stats.ready/stats.planned):(['illustrating','complete'].includes(String(novel.status))?1:0);
-    const complete=novel.status==='complete'&&novel.generated_pages>=novel.total_pages&&stats.planned>0&&stats.ready>=stats.planned;
+    const textComplete=(Number(novel.generated_pages)||0)>=(Number(novel.total_pages)||100);
+    const illustrationsComplete=stats.planned>0&&stats.ready>=stats.planned;
+    const complete=novel.status==='complete'&&textComplete;
     const progress=complete?100:Math.floor(Math.min(99,textRatio*75+visualRatio*25));
-    return {id:novel.id,title:novel.title,status:novel.status,progress,total_pages:novel.total_pages,generated_pages:novel.generated_pages,generated_images:stats.ready,planned_images:stats.planned,error:novel.error,text_complete:(Number(novel.generated_pages)||0)>=(Number(novel.total_pages)||100),readable:(Number(novel.generated_pages)||0)>=(Number(novel.total_pages)||100),complete};
+    return {id:novel.id,title:novel.title,status:novel.status,progress,total_pages:novel.total_pages,generated_pages:novel.generated_pages,generated_images:stats.ready,planned_images:stats.planned,error:novel.error,text_complete:textComplete,readable:textComplete,illustrations_complete:illustrationsComplete,complete};
   }
   return {init,create,updateNovel,get,latest,latestComplete,latestReadable,list,upsertPage,markImage,page,imageStats,readerState,status};
 }
