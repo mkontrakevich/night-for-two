@@ -12,7 +12,7 @@ const THEMES=Object.freeze({
   boudoir:'theatrical boudoir, velvet curtains, antique mirror, candles, satin, lace, perfume-glass reflections',
   domination:'dark leather room, black leather straps, brushed brass rings, controlled crimson practical light, refined BDSM atmosphere',
   romance:'romantic bed interior, crumpled satin sheets, rose petals, candlelight, soft tactile closeness',
-  artistic_nude:'fine-art implied nudity, back or side silhouette, draped fabric or sheet coverage, sculptural light and shadow, restrained museum-editorial composition'
+  artistic_nude:'full-body adult artistic nude, clearly unclothed adult figures, frontal back or side composition with sensitive anatomy concealed by pose, hands, fabric, framing or shadow, sculptural light and shadow, premium erotic editorial mood, restrained museum-photography finish'
 });
 const MODES=Object.freeze({
   home:'introductory cinematic hero image, seductive but elegant, inviting negative space for interface text',
@@ -46,7 +46,7 @@ function promptFor({theme='domination',mode='home',variant='',pageText=''}) {
       : 'Create a contextual atmosphere image for the current app screen.',
     'Recurring visual language: two clearly adult partners, elegant contemporary styling, realistic anatomy, tactile fabrics, cinematic depth, natural body language and emotionally readable distance.',
     'Continuity rule: preserve the same broad couple archetype, lighting language, wardrobe palette and location details already implied by the narrative whenever the prompt indicates continuity.',
-    'Tasteful sensuality only: artistic implied nudity is allowed only when the page explicitly supports an undressed state; preserve clothing otherwise. no visible genitals, no nipples, no explicit sexual act, no pornographic framing, no fetishized close-up, no text, no logo, no watermark.',
+    'Adult sensuality only: when the page explicitly supports an undressed state, show a clearly nude adult body in a full-body artistic editorial composition rather than merely suggesting nudity; preserve clothing otherwise. Sensitive anatomy must remain concealed by pose, hands, fabric, framing, reflection or shadow. no visible genitals, no nipples, no explicit sexual act, no pornographic framing, no fetishized close-up, no text, no logo, no watermark.',
     'Faces may be shown only as non-identifiable fictional adults; never imitate or identify a real person.',
     'Romantic intimacy can be conveyed through gaze, embrace, hands, silhouette, clothing, bedding, reflections, atmosphere and implied off-screen action.',
     `Evening visual theme: ${themeText}.`,
@@ -152,7 +152,7 @@ async function visualQARequest({buffer,pageText='',mediaPrompt=''}) {
 
 export function createNightVisualAI(){
   async function ensure({key,theme='domination',mode='home',variant='',pageText='',force=false}) {
-    const nudeCue=/\b(nude|undressed|bare skin|обнажен|обнажён|без одежды|раздет|раздета|нагое тело)\b/i.test(String(pageText||'')+' '+String(variant||''));
+    const nudeCue=/\b(explicit\s+nude|full\s+nude|nude|undressed|bare skin|обнажен|обнажён|полностью обнажен|полностью обнажён|полностью обнажена|без одежды|раздет|раздета|нагое тело)\b/i.test(String(pageText||'')+' '+String(variant||''));
     if(nudeCue&&theme==='boudoir')theme='artistic_nude';
     const id=safeKey(key),dir=cacheDir(),file=path.join(dir,`${id}.jpg`);
     if(!force){try{return {buffer:await fs.readFile(file),cached:true,key:id,meta:await readMeta(dir,id)};}catch{}}
