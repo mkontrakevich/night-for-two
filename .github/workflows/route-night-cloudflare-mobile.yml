@@ -1,0 +1,88 @@
+name: Route Night Cloudflare via mobile WiFi
+
+on:
+  push:
+    branches:
+      - ops/mobile-cloudflare-route-20260930
+    paths:
+      - .github/workflows/route-night-cloudflare-mobile.yml
+
+permissions:
+  contents: read
+
+jobs:
+  route:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 10
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      PRIMARY_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
+      PARTNER_TELEGRAM_ID: ${{ secrets.PARTNER_TELEGRAM_ID }}
+      NIGHT_URL: https://night42.kontrakevich.workers.dev
+    steps:
+      - name: Route only Cloudflare Tunnel edges through mobile WiFi
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $wifi=Get-NetIPConfiguration | Where-Object { $_.InterfaceAlias -eq 'Беспроводная сеть' -and $_.IPv4DefaultGateway } | Select-Object -First 1
+          if(-not $wifi){ throw 'MOBILE_WIFI_NOT_CONNECTED' }
+          $ifIndex=$wifi.InterfaceIndex
+          $gateway=$wifi.IPv4DefaultGateway.NextHop
+          Write-Host "WIFI ifIndex=$ifIndex gateway=$gateway"
+
+          foreach($prefix in @('198.41.192.0/24','198.41.200.0/24')){
+            Get-NetRoute -DestinationPrefix $prefix -InterfaceIndex $ifIndex -ErrorAction SilentlyContinue | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
+            New-NetRoute -DestinationPrefix $prefix -InterfaceIndex $ifIndex -NextHop $gateway -RouteMetric 5 -PolicyStore ActiveStore | Out-Null
+            Write-Host "MOBILE_ROUTE_ADDED prefix=$prefix"
+          }
+
+          foreach($ip in @('198.41.192.7','198.41.200.33')){
+            $route=Find-NetRoute -RemoteIPAddress $ip -ErrorAction Stop
+            Write-Host "EDGE_ROUTE ip=$ip interface=$($route.IPInterface.InterfaceAlias) nextHop=$($route.NetRoute.NextHop) metric=$($route.NetRoute.RouteMetric)"
+          }
+
+      - name: Restart only Night tunnel and verify public health
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $local=Invoke-RestMethod 'http://127.0.0.1:5683/night/health' -TimeoutSec 10
+          if($local.ok -ne $true -or $local.db -ne $true){ throw 'LOCAL_NIGHT_NOT_HEALTHY' }
+
+          docker restart night-prod-cloudflared | Out-Null
+          if($LASTEXITCODE -ne 0){ throw 'NIGHT_TUNNEL_RESTART_FAILED' }
+
+          $ok=$false
+          for($i=1;$i -le 30;$i++){
+            Start-Sleep -Seconds 3
+            try{
+              $h=Invoke-RestMethod "$env:NIGHT_URL/night/health" -TimeoutSec 8 -ErrorAction Stop
+              $a=Invoke-RestMethod "$env:NIGHT_URL/actions/health" -TimeoutSec 8 -ErrorAction Stop
+              if($h.ok -eq $true -and $h.db -eq $true -and $a.ok -eq $true){
+                Write-Host "NIGHT_PUBLIC_RECOVERED_VIA_MOBILE=true attempt=$i"
+                $ok=$true
+                break
+              }
+            }catch{
+              Write-Host "NIGHT_PUBLIC_WAIT attempt=$i"
+            }
+          }
+          if(-not $ok){ throw 'NIGHT_PUBLIC_NOT_RECOVERED_VIA_MOBILE' }
+
+      - name: Restore paired 18+ menu and verify
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if(-not $env:TELEGRAM_BOT_TOKEN){ throw 'TELEGRAM_BOT_TOKEN_MISSING' }
+          foreach($chatId in @($env:PRIMARY_OWNER_ID,$env:PARTNER_TELEGRAM_ID)){
+            if(-not $chatId){ throw 'PAIR_CHAT_ID_MISSING' }
+            $setBody=@{chat_id=$chatId;menu_button=@{type='web_app';text='18+';web_app=@{url="$env:NIGHT_URL/night"}}} | ConvertTo-Json -Depth 6 -Compress
+            $set=Invoke-RestMethod -Method Post -Uri "https://api.telegram.org/bot$env:TELEGRAM_BOT_TOKEN/setChatMenuButton" -ContentType 'application/json' -Body $setBody
+            if($set.ok -ne $true){ throw 'PAIR_MENU_SET_FAILED' }
+
+            $getBody=@{chat_id=$chatId} | ConvertTo-Json -Compress
+            $get=Invoke-RestMethod -Method Post -Uri "https://api.telegram.org/bot$env:TELEGRAM_BOT_TOKEN/getChatMenuButton" -ContentType 'application/json' -Body $getBody
+            if($get.ok -ne $true -or $get.result.type -ne 'web_app' -or $get.result.text -ne '18+' -or $get.result.web_app.url -ne "$env:NIGHT_URL/night"){
+              throw 'PAIR_MENU_VERIFY_FAILED'
+            }
+            Write-Host 'PAIR_MENU_VERIFIED=true'
+          }
