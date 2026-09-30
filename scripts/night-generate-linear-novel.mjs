@@ -98,15 +98,15 @@ function validateChapter(raw,{chapterIndex,pageCount,startPage,final=false}){
 async function generateChapter({plan,chapterIndex,previousSummary='',previousTail='',bookSeed='',relationshipProfile={}}) {
   const narrativeSkill=await narrativeSkillExcerpt();
   const pageCount=STORY_PAGE_PLAN[chapterIndex],arc=STORY_ARC[chapterIndex],startPage=storyPageOffset(chapterIndex)+1,final=chapterIndex===STORY_ARC.length-1;
-  let last=null;
+  let last=null,lastRaw='';
   for(let attempt=1;attempt<=3;attempt++){
     try{
       const raw=await completeAIText({
         contour:'wife',
         requestName:'night_linear_novel_chapter',
         skipDatabaseContext:true,
-        temperature:.82,
-        maxTokens:7000,
+        temperature:.72,
+        maxTokens:9000,
         messages:[
           {role:'system',content:`Ты пишешь полностью оригинальный литературный сериал для двух вымышленных совершеннолетних героев — мужчины и женщины. Это законченный роман для приватного мобильного чтения, а не анкета и не инструкция игрокам.
 
@@ -146,11 +146,58 @@ ${narrativeSkill?`\nКАНОНИЧЕСКИЙ NARRATIVE SKILL:\n${narrativeSkill}
           })}
         ]
       });
+      lastRaw=raw;
       return validateChapter(raw,{chapterIndex,pageCount,startPage,final});
     }catch(error){
       last=error;
       console.warn('NIGHT_LINEAR_CHAPTER_RETRY',JSON.stringify({chapter:chapterIndex+1,attempt,error:String(error?.message||error).slice(0,220)}));
       await sleep(1200*attempt);
+    }
+  }
+  let repairSource=lastRaw;
+  for(let repairAttempt=1;repairSource&&repairAttempt<=2;repairAttempt++){
+    try{
+      console.warn('NIGHT_LINEAR_CHAPTER_REPAIR',JSON.stringify({chapter:chapterIndex+1,attempt:repairAttempt,error:String(last?.message||last||'validation_failed').slice(0,220)}));
+      const repaired=await completeAIText({
+        contour:'wife',
+        requestName:'night_linear_novel_chapter_repair',
+        skipDatabaseContext:true,
+        temperature:.48,
+        maxTokens:10000,
+        messages:[
+          {role:'system',content:`Ты литературный редактор. Исправь JSON главы романа так, чтобы он СТРОГО прошёл машинную валидацию, не меняя сюжет и имена.
+
+Верни ТОЛЬКО полный JSON вида:
+{"chapter_title":"","summary":"","pages":[{"title":"","text":"","illustrate":false,"media_prompt":""}]}
+
+Обязательные требования:
+— ровно ${pageCount} элементов pages;
+— text каждой страницы: полноценная художественная проза, 120–190 русских слов и НЕ МЕНЕЕ 650 символов;
+— никаких пустых или конспективных страниц;
+— каждая прямая реплика начинается с имени говорящего и двоеточия; анонимных реплик через тире быть не должно;
+— chapter_title и summary непустые;
+— illustrate=true только на 1–2 страницах; для ${chapterIndex===0||final?'этой главы — РОВНО 2':'этой главы — от 1 до 2'};
+— при illustrate=true media_prompt непустой, при false media_prompt="";
+— сохрани непрерывность истории, факты NOVEL_PLAN и последствия предыдущей главы;
+— не добавляй Markdown, комментарии, пояснения или текст вне JSON.`},
+          {role:'user',content:JSON.stringify({
+            VALIDATION_ERROR:String(last?.message||last||'validation_failed').slice(0,500),
+            PREVIOUS_OUTPUT:repairSource,
+            BOOK_SEED:bookSeed,
+            NOVEL_PLAN:planDigest(plan),
+            PREVIOUS_CHAPTER_SUMMARY:previousSummary,
+            PREVIOUS_TAIL:previousTail,
+            CHAPTER:{index:chapterIndex+1,label:arc.label,purpose:arc.purpose,page_count:pageCount,start_page:startPage,final},
+            RELATIONSHIP_PROFILE:relationshipProfile
+          })}
+        ]
+      });
+      repairSource=repaired;
+      return validateChapter(repaired,{chapterIndex,pageCount,startPage,final});
+    }catch(error){
+      last=error;
+      console.warn('NIGHT_LINEAR_CHAPTER_REPAIR_FAILED',JSON.stringify({chapter:chapterIndex+1,attempt:repairAttempt,error:String(error?.message||error).slice(0,220)}));
+      await sleep(1200*repairAttempt);
     }
   }
   throw last||new Error(`NIGHT_LINEAR_CHAPTER_FAILED:${chapterIndex+1}`);
@@ -207,11 +254,17 @@ try{
   if(resumeId){
     novel=await store.get(resumeId);
     if(!novel)throw new Error(`NIGHT_LINEAR_RESUME_NOT_FOUND:${resumeId}`);
-    const retryableFailed=String(novel.status)==='failed'&&Number(novel.generated_pages||0)===0&&/NIGHT_NOVEL_(?:STRUCTURE_TOO_THIN|PROTAGONISTS_INVALID|ROLE_PAIR_INVALID|PLAN_FAILED)/.test(String(novel.error||''));
+    const failedError=String(novel.error||'');
+    const generatedPages=Math.max(0,Number(novel.generated_pages)||0);
+    const totalPages=Math.max(1,Number(novel.total_pages)||STORY_TOTAL_PAGES);
+    const retryablePlan=generatedPages===0&&/NIGHT_NOVEL_(?:STRUCTURE_TOO_THIN|PROTAGONISTS_INVALID|ROLE_PAIR_INVALID|PLAN_FAILED)/.test(failedError);
+    const retryableGeneration=/NIGHT_LINEAR_(?:CHAPTER_INVALID|PAGE_INVALID|ANONYMOUS_DIALOGUE|MEDIA_PROMPT_INVALID|ILLUSTRATION_DENSITY_INVALID|PAGE_COUNT_MISMATCH|PAGE_MISSING|IMAGE_FAILED|IMAGE_COUNT_MISMATCH|VISUAL_QA_REJECTED)/.test(failedError);
+    const retryableFailed=String(novel.status)==='failed'&&(retryablePlan||retryableGeneration);
     if(!['generating','illustrating'].includes(String(novel.status))&&!retryableFailed)throw new Error(`NIGHT_LINEAR_RESUME_STATUS_INVALID:${resumeId}:${novel.status}`);
     if(retryableFailed){
-      novel=await store.updateNovel(novel.id,{status:'generating',error:''});
-      console.log('NIGHT_LINEAR_NOVEL_RETRY',JSON.stringify({novel_id:novel.id,reason:'recoverable_plan_failure'}));
+      const retryStatus=generatedPages>=totalPages?'illustrating':'generating';
+      novel=await store.updateNovel(novel.id,{status:retryStatus,error:''});
+      console.log('NIGHT_LINEAR_NOVEL_RETRY',JSON.stringify({novel_id:novel.id,reason:retryablePlan?'recoverable_plan_failure':'recoverable_generation_failure',status:retryStatus}));
     }
     console.log('NIGHT_LINEAR_NOVEL_RESUME',JSON.stringify({novel_id:novel.id,status:novel.status,generated_pages:Number(novel.generated_pages)||0,generated_images:Number(novel.generated_images)||0}));
   }else{
