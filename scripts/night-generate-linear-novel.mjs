@@ -385,7 +385,7 @@ try{
     const generatedPages=Math.max(0,Number(novel.generated_pages)||0);
     const totalPages=Math.max(1,Number(novel.total_pages)||STORY_TOTAL_PAGES);
     const retryablePlan=generatedPages===0&&/NIGHT_NOVEL_(?:STRUCTURE_TOO_THIN|PROTAGONISTS_INVALID|ROLE_PAIR_INVALID|PLAN_FAILED)/.test(failedError);
-    const retryableGeneration=/NIGHT_LINEAR_(?:CHAPTER_INVALID|PAGE_INVALID|ANONYMOUS_DIALOGUE|MEDIA_PROMPT_INVALID|ILLUSTRATION_DENSITY_INVALID|PAGE_COUNT_MISMATCH|PAGE_MISSING|IMAGE_FAILED|IMAGE_COUNT_MISMATCH|VISUAL_QA_REJECTED|RESUME_STATUS_INVALID)/.test(failedError);
+    const retryableGeneration=/(?:NIGHT_LINEAR_(?:CHAPTER_INVALID|PAGE_INVALID|ANONYMOUS_DIALOGUE|MEDIA_PROMPT_INVALID|ILLUSTRATION_DENSITY_INVALID|PAGE_COUNT_MISMATCH|PAGE_MISSING|IMAGE_FAILED|IMAGE_COUNT_MISMATCH|RESUME_STATUS_INVALID)|NIGHT_VISUAL_QA_REJECTED)/.test(failedError);
     const retryableFailed=String(novel.status)==='failed'&&(retryablePlan||retryableGeneration);
     if(!['generating','illustrating'].includes(String(novel.status))&&!retryableFailed)throw new Error(`NIGHT_LINEAR_RESUME_STATUS_INVALID:${resumeId}:${novel.status}`);
     if(retryableFailed){
