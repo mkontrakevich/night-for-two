@@ -1,0 +1,50 @@
+name: Recover Latest Night Novel
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/recover-night-latest.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 8
+    steps:
+      - name: Resume latest recoverable novel
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = 'night-for-two-app-1'
+          $statusRaw = docker exec $app node scripts/night-linear-novel-status.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'NIGHT_STATUS_FAILED' }
+          $line = @($statusRaw | Where-Object { $_ -match 'NIGHT_LINEAR_NOVEL_STATUS' })[-1]
+          if (-not $line) { throw 'NIGHT_STATUS_LINE_MISSING' }
+          $state = $line.Substring($line.IndexOf('{')) | ConvertFrom-Json
+          Write-Host "NIGHT_RECOVERY_BEFORE id=$($state.id) status=$($state.status) pages=$($state.generated_pages)/$($state.total_pages) images=$($state.generated_images)/$($state.planned_images) readable=$($state.readable)"
+          if (-not $state.id) { throw 'NIGHT_RECOVERY_NO_NOVEL' }
+          if ($state.complete -eq $true) {
+            Write-Host 'NIGHT_RECOVERY_NOT_NEEDED complete=true'
+            exit 0
+          }
+          $top = docker top $app
+          if ($top -match 'night-generate-linear-novel\.mjs') {
+            Write-Host 'NIGHT_RECOVERY_ALREADY_RUNNING=true'
+            exit 0
+          }
+          docker exec -d -e NIGHT_RESUME_NOVEL_ID=$($state.id) $app node scripts/night-generate-linear-novel.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'NIGHT_RECOVERY_START_FAILED' }
+          Start-Sleep -Seconds 4
+          $top2 = docker top $app
+          $statusAfter = docker exec $app node scripts/night-linear-novel-status.mjs
+          $statusAfter | Out-Host
+          if ($top2 -match 'night-generate-linear-novel\.mjs') {
+            Write-Host 'NIGHT_RECOVERY_RUNNING=true'
+          } else {
+            Write-Host 'NIGHT_RECOVERY_PROCESS_EXITED_EARLY=true'
+            docker logs $app --since 3m 2>&1 | Select-String -Pattern 'NIGHT_LINEAR_|NIGHT_NOVEL_|OPENROUTER|failed|error' | Select-Object -Last 120 | ForEach-Object { $_.Line }
+          }
