@@ -40,24 +40,16 @@ jobs:
           AUTH=(-H "Authorization: Bearer $CF_TOKEN")
 
           curl --fail --silent --show-error "${AUTH[@]}" "$API/workers/subdomain" > /tmp/account.json
-          SUBDOMAIN="$(python - <<'PY'
-import json
-d=json.load(open('/tmp/account.json',encoding='utf-8'))
-print((d.get('result') or {}).get('subdomain',''))
-PY
-)"
+          SUBDOMAIN="$(python -c "import json; d=json.load(open('/tmp/account.json',encoding='utf-8')); print((d.get('result') or {}).get('subdomain',''))")"
           report "workers_subdomain=$SUBDOMAIN"
           URL="https://$SCRIPT_NAME.$SUBDOMAIN.workers.dev"
           report "public_url=$URL"
 
           curl --fail --silent --show-error "${AUTH[@]}" "$API/workers/scripts/$SCRIPT_NAME/subdomain" > /tmp/script-subdomain.json
-          python - <<'PY' >> "$REPORT"
-import json
-d=json.load(open('/tmp/script-subdomain.json',encoding='utf-8'))
-r=d.get('result') or {}
-print("workers_dev_enabled="+str(bool(r.get('enabled'))).lower())
-print("previews_enabled="+str(bool(r.get('previews_enabled'))).lower())
-PY
+          ENABLED="$(python -c "import json; d=json.load(open('/tmp/script-subdomain.json',encoding='utf-8')); r=d.get('result') or {}; print(str(bool(r.get('enabled'))).lower())")"
+          PREVIEWS="$(python -c "import json; d=json.load(open('/tmp/script-subdomain.json',encoding='utf-8')); r=d.get('result') or {}; print(str(bool(r.get('previews_enabled'))).lower())")"
+          report "workers_dev_enabled=$ENABLED"
+          report "previews_enabled=$PREVIEWS"
 
           HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/page.html --write-out '%{http_code}' "$URL" || true)"
           report "public_http=$HTTP"
