@@ -14,5 +14,5 @@ assert.equal(captured.body.provider.data_collection,'deny');
 assert.equal(captured.options.headers['content-type'],'application/json');
 const connector=fs.readFileSync(new URL('../src/integrations/relationship-context-connector.js',import.meta.url),'utf8');
 assert.match(connector,/RELATIONSHIP_CONTEXT_TOKEN_REQUIRED/);
-assert.match(connector,/authorization:\`Bearer \\${token}\\`/);
+assert.ok(connector.includes('authorization:`Bearer ${token}`'));
 console.log('NIGHT_OPENROUTER_PRIVACY_OK zdr=true data_collection=deny relationship_token=required');
