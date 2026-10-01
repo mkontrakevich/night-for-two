@@ -1,0 +1,8 @@
+TEREM_CLOUDFLARE_RECOVERY
+started=2026-10-01T13:07:46Z
+cloudflare_credentials=AVAILABLE
+workers_subdomain=kontrakevich
+public_url=https://terem-visual-dna.kontrakevich.workers.dev
+worker=FOUND
+latest_version=FOUND
+workers_dev=ENABLED
