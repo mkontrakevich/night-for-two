@@ -20,6 +20,8 @@ for(const forbidden of ['./lovestory-learning-engine.js','./lovestory-harmony-di
 assert(!runtime.includes('INSERT INTO lovestory_experiences'),'standalone Night runtime must not depend on the reminder-bot LoveStory experiences table');
 assert(connector.includes('RELATIONSHIP_CONTEXT_RAW_MESSAGES_FORBIDDEN'));
 assert(connector.includes('raw_messages:false'));
+assert(connector.includes('moments:')&&connector.includes('narrative_weight'),'Sanitized daily relationship moments must reach Night for Two');
+assert(connector.includes('BLOCKED_TEXT'),'Night connector must filter sensitive daily-context text before story generation');
 assert(runtime.includes('night_v2_round_feedback'));
 assert(runtime.includes('night_personal_ideas'));
 assert(runtime.includes('generatePersonalIdea'));
