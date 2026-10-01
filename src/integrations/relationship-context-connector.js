@@ -45,7 +45,10 @@ function sanitize(input={}){
       kind:MOMENT_KINDS.has(String(x.kind))?String(x.kind):'everyday',
       summary:clean(x.summary,420),
       confidence:clamp(x.confidence),
-      narrative_weight:clamp(x.narrative_weight)
+      relationship_relevance:clamp(x.relationship_relevance),
+      emotional_signal:clamp(x.emotional_signal),
+      narrative_weight:clamp(x.narrative_weight),
+      story_score:clamp(x.story_score)
     })).filter(x=>x.summary&&x.confidence>=.70&&!BLOCKED_TEXT.test(x.summary))
   };
 }
