@@ -55,8 +55,9 @@ function sanitize(input={}){
 async function request(path='',options={}){
   const base=String(process.env.RELATIONSHIP_CONTEXT_URL||'').replace(/\/$/,'');
   if(!base) return null;
-  const token=String(process.env.RELATIONSHIP_CONTEXT_TOKEN||'');
-  const response=await fetch(base+path,{...options,headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{}),...(options.headers||{})},signal:AbortSignal.timeout(8_000)});
+  const token=String(process.env.RELATIONSHIP_CONTEXT_TOKEN||'').trim();
+  if(!token) throw new Error('RELATIONSHIP_CONTEXT_TOKEN_REQUIRED');
+  const response=await fetch(base+path,{...options,headers:{'content-type':'application/json',authorization:`Bearer ${token}`,...(options.headers||{})},signal:AbortSignal.timeout(8_000)});
   if(!response.ok) throw new Error(`RELATIONSHIP_CONTEXT_HTTP_${response.status}`);
   return response.json();
 }
