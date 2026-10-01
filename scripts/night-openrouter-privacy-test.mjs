@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {completeOpenRouter} from '../src/ai/openrouter-client.js';
 import fs from 'node:fs';
 
+process.env.OPENROUTER_API_KEY='privacy-contract-test-key';
 let captured=null;
 const fetcher=async(url,options)=>{
   captured={url,options,body:JSON.parse(options.body)};
