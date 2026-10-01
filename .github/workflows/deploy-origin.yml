@@ -1,15 +1,9 @@
 name: Deploy Standalone Origin
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "Dockerfile"
-      - "docker-compose.yml"
-      - "src/**"
-      - "scripts/**"
-      - "skills/**"
-      - ".github/workflows/deploy-origin.yml"
+  # Production is deployed by the marins-reminder-bot bridge, which owns the
+  # persistent DB credential and private relationship-context token.
+  # Keep this workflow only as an explicit emergency/manual path.
   workflow_dispatch:
 
 concurrency:
