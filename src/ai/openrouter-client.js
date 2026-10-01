@@ -10,7 +10,7 @@ export async function completeOpenRouter({messages=[],model='',maxTokens=900,tem
       'HTTP-Referer':'https://github.com/mkontrakevich/night-for-two',
       'X-Title':'Night for Two'
     },
-    body:JSON.stringify({model:selected,temperature,max_tokens:maxTokens,messages}),
+    body:JSON.stringify({model:selected,temperature,max_tokens:maxTokens,messages,provider:{zdr:true,data_collection:'deny'}}),
     signal:AbortSignal.timeout(45_000)
   });
   const json=await response.json().catch(()=>({}));
