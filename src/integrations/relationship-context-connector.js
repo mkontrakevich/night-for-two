@@ -4,11 +4,14 @@ const EMPTY=Object.freeze({
   raw_messages:false,
   observations:[],
   preferences:[],
-  dynamics:[]
+  dynamics:[],
+  moments:[]
 });
 
 function clean(v='',n=500){return String(v||'').replace(/\s+/g,' ').trim().slice(0,n);}
 function clamp(v){const n=Number(v);return Number.isFinite(n)?Math.max(0,Math.min(1,n)):0;}
+const MOMENT_KINDS=new Set(['care','plan','shared_activity','ritual','support','humor','everyday','milestone','place','interest']);
+const BLOCKED_TEXT=/\b(?:sex|sexual|erotic|fetish|fantas|nude|bdsm|intimac|consent|boundary|diagnos|toxic|narciss|trauma|medic|health|finance|salary|politic|religion)\b|секс|эрот|фетиш|фантази|интим|согласи(?:е|я|ю|ем|и)|границ|диагноз|токсич|нарцисс|травм|здоров|медицин|финанс|зарплат|политик|религи/iu;
 function sanitize(input={}){
   if(input?.raw_messages===true) throw new Error('RELATIONSHIP_CONTEXT_RAW_MESSAGES_FORBIDDEN');
   return {
@@ -36,7 +39,14 @@ function sanitize(input={}){
       status:clean(x.status,32),
       confidence:clamp(x.confidence),
       evidence_count:Math.max(0,Number(x.evidence_count)||0)
-    }))
+    })),
+    moments:(Array.isArray(input.moments)?input.moments:[]).slice(0,24).map(x=>({
+      day:/^\d{4}-\d{2}-\d{2}$/.test(String(x.day||''))?String(x.day):'',
+      kind:MOMENT_KINDS.has(String(x.kind))?String(x.kind):'everyday',
+      summary:clean(x.summary,420),
+      confidence:clamp(x.confidence),
+      narrative_weight:clamp(x.narrative_weight)
+    })).filter(x=>x.summary&&x.confidence>=.70&&!BLOCKED_TEXT.test(x.summary))
   };
 }
 async function request(path='',options={}){
