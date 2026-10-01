@@ -1,0 +1,171 @@
+name: TEREM Visual DNA — Recover Existing Cloudflare Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/terem-cloudflare-recover.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: terem-existing-worker-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SCRIPT_NAME: terem-visual-dna
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Recover existing TEREM Worker without exposing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          REPORT="ops/terem-cloudflare-recover-result.txt"
+          : > "$REPORT"
+          report(){ printf '%s\n' "$1" | tee -a "$REPORT"; }
+
+          report "TEREM_CLOUDFLARE_RECOVERY"
+          report "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          if [[ -z "${CF_ACCOUNT:-}" ]]; then
+            report "cloudflare_account_id=MISSING"
+            exit 1
+          fi
+          if [[ -z "${CF_TOKEN:-}" ]]; then
+            report "cloudflare_api_token=MISSING"
+            exit 1
+          fi
+          echo "::add-mask::$CF_ACCOUNT"
+          echo "::add-mask::$CF_TOKEN"
+          report "cloudflare_credentials=AVAILABLE"
+
+          API="https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT"
+          AUTH=(-H "Authorization: Bearer $CF_TOKEN")
+          JSON=(-H "Content-Type: application/json")
+
+          curl --fail --silent --show-error "${AUTH[@]}" "$API/workers/subdomain" > /tmp/account-subdomain.json
+          python - <<'PY' > /tmp/account-subdomain.txt
+          import json
+          d=json.load(open('/tmp/account-subdomain.json',encoding='utf-8'))
+          if not d.get('success'):
+              raise SystemExit('ACCOUNT_SUBDOMAIN_QUERY_FAILED')
+          print((d.get('result') or {}).get('subdomain',''))
+          PY
+          SUBDOMAIN="$(cat /tmp/account-subdomain.txt)"
+          if [[ -z "$SUBDOMAIN" ]]; then
+            report "workers_subdomain=UNAVAILABLE"
+            exit 1
+          fi
+          report "workers_subdomain=$SUBDOMAIN"
+          PUBLIC_URL="https://$SCRIPT_NAME.$SUBDOMAIN.workers.dev"
+          report "public_url=$PUBLIC_URL"
+
+          set +e
+          curl --silent --show-error "${AUTH[@]}"             -o /tmp/script-subdomain.json             -w '%{http_code}'             "$API/workers/scripts/$SCRIPT_NAME/subdomain" > /tmp/script-subdomain.status
+          SUB_STATUS="$(cat /tmp/script-subdomain.status)"
+          set -e
+
+          if [[ "$SUB_STATUS" == "404" ]]; then
+            report "worker=NOT_FOUND_IN_THIS_ACCOUNT"
+            exit 2
+          fi
+          if [[ "$SUB_STATUS" -lt 200 || "$SUB_STATUS" -ge 300 ]]; then
+            report "worker_lookup=FAILED_HTTP_$SUB_STATUS"
+            exit 1
+          fi
+          report "worker=FOUND"
+
+          curl --fail --silent --show-error "${AUTH[@]}"             "$API/workers/scripts/$SCRIPT_NAME/deployments" > /tmp/deployments.json
+
+          python - <<'PY' > /tmp/latest-version.txt
+          import json, sys
+          d=json.load(open('/tmp/deployments.json',encoding='utf-8'))
+          if not d.get('success'):
+              raise SystemExit('DEPLOYMENTS_QUERY_FAILED')
+          result=d.get('result') or {}
+          deps=result.get('deployments',[]) if isinstance(result,dict) else result
+          deps=sorted(deps,key=lambda x:x.get('created_on',''),reverse=True)
+          if not deps:
+              raise SystemExit('NO_DEPLOYMENTS')
+          versions=deps[0].get('versions') or []
+          if not versions:
+              raise SystemExit('NO_VERSION_IN_LATEST_DEPLOYMENT')
+          versions=sorted(versions,key=lambda x:float(x.get('percentage',0)),reverse=True)
+          print(versions[0]['version_id'])
+          PY
+          VERSION_ID="$(cat /tmp/latest-version.txt)"
+          report "latest_version=FOUND"
+
+          curl --fail --silent --show-error "${AUTH[@]}" "${JSON[@]}"             -X POST             "$API/workers/scripts/$SCRIPT_NAME/subdomain"             --data '{"enabled":true,"previews_enabled":false}'             > /tmp/subdomain-enable.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/subdomain-enable.json',encoding='utf-8'))
+          if not d.get('success'):
+              raise SystemExit('SUBDOMAIN_ENABLE_FAILED')
+          r=d.get('result') or {}
+          if r.get('enabled') is not True:
+              raise SystemExit('SUBDOMAIN_NOT_ENABLED')
+          PY
+          report "workers_dev=ENABLED"
+
+          python - <<PY > /tmp/redeploy-body.json
+          import json
+          print(json.dumps({
+              "strategy":"percentage",
+              "versions":[{"percentage":100,"version_id":"$VERSION_ID"}],
+              "annotations":{
+                  "workers/message":"Recover TEREM Visual DNA public deployment",
+                  "workers/triggered_by":"github-actions"
+              }
+          }))
+          PY
+
+          curl --fail --silent --show-error "${AUTH[@]}" "${JSON[@]}"             -X POST             "$API/workers/scripts/$SCRIPT_NAME/deployments?force=true"             --data-binary @/tmp/redeploy-body.json             > /tmp/redeploy.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/redeploy.json',encoding='utf-8'))
+          if not d.get('success'):
+              raise SystemExit('REDEPLOY_FAILED')
+          PY
+          report "redeploy=SUCCESS"
+
+          sleep 3
+          HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/terem.html --write-out '%{http_code}' "$PUBLIC_URL" || true)"
+          report "public_http=$HTTP"
+          if [[ "$HTTP" == "200" ]] && grep -q "TEREM Visual DNA" /tmp/terem.html; then
+            report "public_content=OK"
+          else
+            report "public_content=FAILED"
+            exit 1
+          fi
+          report "finished=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Persist safe recovery report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f ops/terem-cloudflare-recover-result.txt ]]; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/terem-cloudflare-recover-result.txt
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Record TEREM Cloudflare recovery result"
+          git pull --rebase origin main
+          git push origin HEAD:main
