@@ -21,6 +21,7 @@ assert(!runtime.includes('INSERT INTO lovestory_experiences'),'standalone Night 
 assert(connector.includes('RELATIONSHIP_CONTEXT_RAW_MESSAGES_FORBIDDEN'));
 assert(connector.includes('raw_messages:false'));
 assert(connector.includes('moments:')&&connector.includes('narrative_weight'),'Sanitized daily relationship moments must reach Night for Two');
+assert(connector.includes('relationship_relevance')&&connector.includes('emotional_signal')&&connector.includes('story_score'),'Night must preserve relationship relevance, emoji/emotional signal and final story score');
 assert(connector.includes('BLOCKED_TEXT'),'Night connector must filter sensitive daily-context text before story generation');
 assert(runtime.includes('night_v2_round_feedback'));
 assert(runtime.includes('night_personal_ideas'));
