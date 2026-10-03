@@ -65,7 +65,7 @@ assert(!html.includes("bind('#openActions',renderActions)"),'Standalone Actions 
 assert(!html.includes('id="joinCode"')&&!html.includes('placeholder="КОД · 6 ЗНАКОВ"'),'Room-code login must not be exposed to the fixed pair');
 assert(html.includes('interactionReal')&&html.includes('interactionSimulate')&&html.includes('/night/api/novel-interaction'),'Novel reader must embed real-action and AI-simulation branches between chapters');
 assert(app.includes("engine.join({userId,name:clampName(auth.user),code:inviteCode||''})"),'Invited fixed pair user must auto-connect without entering a code');
-assert(html.includes('data-reader-prev')&&html.includes('data-reader-next'));
+assert(html.includes('readerSentinel')&&html.includes('IntersectionObserver'),'Novel reader must use vertical lazy infinite scroll instead of horizontal page navigation');
 assert(html.includes('Тестировать с ИИ-партнёром'));
 assert(storyFlow.includes('НЕ иллюстрируй каждую страницу')&&storyFlow.includes('1–2 визуально значимые страницы'));
 assert(visualAI.includes('OPENROUTER_API_KEY'));
