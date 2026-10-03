@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   deploy:
@@ -43,10 +43,51 @@ jobs:
         run: |
           set -euo pipefail
           URL="https://terem-pattern-lab.kontrakevich.workers.dev"
-          curl --fail --silent --show-error --retry 5 --retry-delay 3 "$URL/" -o /tmp/lab.html
-          grep -q "Pattern Laboratory" /tmp/lab.html
-          curl --fail --silent --show-error "$URL/grammar.v1.json" -o /tmp/grammar.json
-          python -c "import json; d=json.load(open('/tmp/grammar.json')); assert d['pipeline']==['SOURCE','DNA','RULES','GENERATE']"
-          curl --fail --silent --show-error "$URL/library-index" -o /tmp/library.html
-          grep -q "TEREM Visual DNA" /tmp/library.html
+          REPORT="ops/terem-pattern-lab-canary-result.txt"
+          mkdir -p ops
+          : > "$REPORT"
+          probe(){
+            local path="$1" out="$2"
+            local status
+            status="$(curl --silent --show-error --location --max-time 30 --output "$out" --write-out '%{http_code}' "$URL$path" || true)"
+            printf '%s=%s\n' "$path" "$status" | tee -a "$REPORT"
+          }
+          probe "/" /tmp/lab.html
+          probe "/grammar.v1.json" /tmp/grammar.json
+          probe "/library-index" /tmp/library.html
+          probe "/source/assets/thumbs/0026-TRM-0031_PASSAGE_HALLS_wall_0_B.jpg" /tmp/source.jpg
+          if grep -q "Pattern Laboratory" /tmp/lab.html 2>/dev/null; then echo "root_content=OK" | tee -a "$REPORT"; else echo "root_content=FAILED" | tee -a "$REPORT"; fi
+          if python -c "import json; d=json.load(open('/tmp/grammar.json')); assert d['pipeline']==['SOURCE','DNA','RULES','GENERATE']" 2>/dev/null; then echo "grammar=OK" | tee -a "$REPORT"; else echo "grammar=FAILED" | tee -a "$REPORT"; fi
+          if grep -q "TEREM Visual DNA" /tmp/library.html 2>/dev/null; then echo "library_index=OK" | tee -a "$REPORT"; else echo "library_index=FAILED" | tee -a "$REPORT"; fi
+          if test -s /tmp/source.jpg; then echo "source_proxy=OK" | tee -a "$REPORT"; else echo "source_proxy=FAILED" | tee -a "$REPORT"; fi
+          grep -q '^/=200
+ "$REPORT"
+          grep -q '^/grammar.v1.json=200
+ "$REPORT"
+          grep -q '^/library-index=200
+ "$REPORT"
+          grep -q '^/source/assets/thumbs/0026-TRM-0031_PASSAGE_HALLS_wall_0_B.jpg=200
+ "$REPORT"
+          grep -q '^root_content=OK
+ "$REPORT"
+          grep -q '^grammar=OK
+ "$REPORT"
+          grep -q '^library_index=OK
+ "$REPORT"
+          grep -q '^source_proxy=OK
+ "$REPORT"
           echo "TEREM_PATTERN_LAB_CANARY_OK"
+
+      - name: Persist canary diagnostics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ops/terem-pattern-lab-canary-result.txt || exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/terem-pattern-lab-canary-result.txt
+          git diff --cached --quiet && exit 0
+          git commit -m "Record TEREM Pattern Lab canary diagnostics"
+          git pull --rebase origin main
+          git push origin HEAD:main
