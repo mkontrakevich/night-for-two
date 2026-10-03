@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: terem-pattern-lab-mobile-canary
@@ -46,13 +46,41 @@ jobs:
       - name: Verify canary
         shell: bash
         run: |
-          set -euo pipefail
+          set -u
           URL="https://terem-pattern-lab-mobile.kontrakevich.workers.dev"
-          curl --fail --silent --show-error --retry 5 --retry-delay 3 "$URL/" -o /tmp/lab.html
-          grep -q "Pattern Laboratory" /tmp/lab.html
-          grep -q "mobile-nav-toggle" /tmp/lab.html
-          curl --fail --silent --show-error "$URL/library-index" -o /tmp/library.html
-          grep -q "TEREM Visual DNA" /tmp/library.html
-          curl --fail --silent --show-error "$URL/grammar.v1.json" -o /tmp/grammar.json
-          python -c "import json; d=json.load(open('/tmp/grammar.json')); assert d['pipeline']==['SOURCE','DNA','RULES','GENERATE']"
-          echo "TEREM_MOBILE_CANARY_OK"
+          REPORT="$GITHUB_WORKSPACE/ops/terem-mobile-canary-report.txt"
+          mkdir -p "$GITHUB_WORKSPACE/ops"
+          : > "$REPORT"
+
+          ROOT_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/lab.html --write-out '%{http_code}' "$URL/" || true)"
+          echo "root_http=$ROOT_HTTP" | tee -a "$REPORT"
+          if grep -q "Pattern Laboratory" /tmp/lab.html 2>/dev/null; then echo "root_pattern_lab=OK" | tee -a "$REPORT"; else echo "root_pattern_lab=FAILED" | tee -a "$REPORT"; fi
+          if grep -q "mobile-nav-toggle" /tmp/lab.html 2>/dev/null; then echo "root_mobile_drawer=OK" | tee -a "$REPORT"; else echo "root_mobile_drawer=FAILED" | tee -a "$REPORT"; fi
+
+          LIB_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/library.html --write-out '%{http_code}' "$URL/library-index" || true)"
+          echo "library_http=$LIB_HTTP" | tee -a "$REPORT"
+          if grep -q "TEREM Visual DNA" /tmp/library.html 2>/dev/null; then echo "library_content=OK" | tee -a "$REPORT"; else echo "library_content=FAILED" | tee -a "$REPORT"; fi
+
+          GRAMMAR_HTTP="$(curl --silent --show-error --location --max-time 30 --output /tmp/grammar.json --write-out '%{http_code}' "$URL/grammar.v1.json" || true)"
+          echo "grammar_http=$GRAMMAR_HTTP" | tee -a "$REPORT"
+          if python -c "import json; d=json.load(open('/tmp/grammar.json')); assert d['pipeline']==['SOURCE','DNA','RULES','GENERATE']" 2>/dev/null; then echo "grammar_contract=OK" | tee -a "$REPORT"; else echo "grammar_contract=FAILED" | tee -a "$REPORT"; fi
+
+          if grep -q '=FAILED' "$REPORT" || grep -Eq 'http=(000|4[0-9][0-9]|5[0-9][0-9])' "$REPORT"; then
+            exit 1
+          fi
+          echo "TEREM_MOBILE_CANARY_OK" | tee -a "$REPORT"
+
+      - name: Persist canary verification
+        if: always()
+        shell: bash
+        working-directory: .
+        run: |
+          set -euo pipefail
+          test -f ops/terem-mobile-canary-report.txt || exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/terem-mobile-canary-report.txt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Record TEREM mobile canary verification"
+          git pull --rebase origin main
+          git push origin HEAD:main
