@@ -1,10 +1,10 @@
 /=200
 /health=200
 /grammar.v1.json=200
-/library-index=404
-/source/assets/thumbs/0026-TRM-0031_PASSAGE_HALLS_wall_0_B.jpg=404
+/library-index=200
+/source/assets/thumbs/0026-TRM-0031_PASSAGE_HALLS_wall_0_B.jpg=200
 root_content=OK
 health=OK
 grammar=OK
-library_index=FAILED
+library_index=OK
 source_proxy=OK
