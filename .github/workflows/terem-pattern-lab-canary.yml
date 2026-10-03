@@ -60,22 +60,14 @@ jobs:
           if python -c "import json; d=json.load(open('/tmp/grammar.json')); assert d['pipeline']==['SOURCE','DNA','RULES','GENERATE']" 2>/dev/null; then echo "grammar=OK" | tee -a "$REPORT"; else echo "grammar=FAILED" | tee -a "$REPORT"; fi
           if grep -q "TEREM Visual DNA" /tmp/library.html 2>/dev/null; then echo "library_index=OK" | tee -a "$REPORT"; else echo "library_index=FAILED" | tee -a "$REPORT"; fi
           if test -s /tmp/source.jpg; then echo "source_proxy=OK" | tee -a "$REPORT"; else echo "source_proxy=FAILED" | tee -a "$REPORT"; fi
-          grep -q '^/=200
- "$REPORT"
-          grep -q '^/grammar.v1.json=200
- "$REPORT"
-          grep -q '^/library-index=200
- "$REPORT"
-          grep -q '^/source/assets/thumbs/0026-TRM-0031_PASSAGE_HALLS_wall_0_B.jpg=200
- "$REPORT"
-          grep -q '^root_content=OK
- "$REPORT"
-          grep -q '^grammar=OK
- "$REPORT"
-          grep -q '^library_index=OK
- "$REPORT"
-          grep -q '^source_proxy=OK
- "$REPORT"
+          grep -Fxq "/=200" "$REPORT"
+          grep -Fxq "/grammar.v1.json=200" "$REPORT"
+          grep -Fxq "/library-index=200" "$REPORT"
+          grep -Fxq "/source/assets/thumbs/0026-TRM-0031_PASSAGE_HALLS_wall_0_B.jpg=200" "$REPORT"
+          grep -Fxq "root_content=OK" "$REPORT"
+          grep -Fxq "grammar=OK" "$REPORT"
+          grep -Fxq "library_index=OK" "$REPORT"
+          grep -Fxq "source_proxy=OK" "$REPORT"
           echo "TEREM_PATTERN_LAB_CANARY_OK"
 
       - name: Persist canary diagnostics
