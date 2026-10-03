@@ -2,7 +2,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const base = "https://terem-visual-dna.kontrakevich.workers.dev";
-    if (url.pathname === "/library-index") {
+    if (url.pathname === "/library-index" || url.pathname === "/library-index/") {
       const upstream = await fetch(base + "/index.html");
       return new Response(upstream.body, {
         status: upstream.status,
