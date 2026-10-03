@@ -36,6 +36,13 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN"
       - name: Deploy canary
         run: npx --yes wrangler@4 deploy
+      - name: Enable workers.dev route
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             -H "Content-Type: application/json"             -X POST             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/terem-pattern-lab-mobile/subdomain"             --data '{"enabled":true,"previews_enabled":false}' > /tmp/subdomain.json
+          python -c "import json; d=json.load(open('/tmp/subdomain.json')); assert d.get('success') is True; assert (d.get('result') or {}).get('enabled') is True"
+
       - name: Verify canary
         shell: bash
         run: |
