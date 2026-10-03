@@ -3,7 +3,7 @@ export default {
     const url = new URL(request.url);
     const base = "https://terem-visual-dna.kontrakevich.workers.dev";
     if (url.pathname === "/library-index" || url.pathname === "/library-index/") {
-      const upstream = await fetch(base + "/index.html");
+      const upstream = await fetch(base + "/");
       return new Response(upstream.body, {
         status: upstream.status,
         headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" }
