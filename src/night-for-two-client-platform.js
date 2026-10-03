@@ -51,12 +51,16 @@ const NightPlatform=(()=>{
     }
     location.href=target;
   }
+  function fullscreen(){
+    const app=telegram();
+    try{if(app?.requestFullscreen){app.requestFullscreen();return true}app?.expand?.();return Boolean(app)}catch{return false}
+  }
   function close(){
     const app=telegram();
     if(app?.close){app.close();return;}
     if(history.length>1)history.back();
   }
-  return {telegram,kind,hasAuth,authHeaders,haptic,ready,share,close,launchParam,localTest};
+  return {telegram,kind,hasAuth,authHeaders,haptic,ready,share,fullscreen,close,launchParam,localTest};
 })();
 function tg(){return NightPlatform.telegram()}
 function haptic(kind='select'){return NightPlatform.haptic(kind)}
