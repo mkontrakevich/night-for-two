@@ -1,0 +1,538 @@
+name: TEREM Pattern Lab — Canary Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/terem-pattern-lab-canary.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Cloudflare authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+      - name: Materialize canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/terem-pattern-lab
+          mkdir -p /tmp/terem-pattern-lab/public /tmp/terem-pattern-lab/src
+          cat > /tmp/terem-pattern-lab/public/index.html <<'TEREMLABHTML'
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b0b0c">
+  <title>TEREM Pattern Laboratory</title>
+  <style>
+    *{box-sizing:border-box}
+    :root{--bg:#0b0b0c;--panel:#121316;--line:#2b2d31;--text:#f2f0eb;--muted:#96989e;--soft:#191b1f;--accent:#d9c7a0}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Arial,sans-serif}
+    a{color:inherit}
+    .shell{min-height:100vh;display:grid;grid-template-columns:minmax(300px,410px) 1fr}
+    aside{border-right:1px solid var(--line);padding:28px 28px 36px;position:sticky;top:0;height:100vh;overflow:auto;background:#0d0e10}
+    main{padding:30px 3vw 60px;min-width:0}
+    .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.18em;color:#8d9097}
+    h1{font-size:clamp(30px,3vw,48px);line-height:1;margin:10px 0 12px}
+    .lead{color:#a9abb1;line-height:1.55;font-size:14px}
+    .status{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 26px}
+    .badge{border:1px solid #383b41;border-radius:999px;padding:7px 10px;font-size:11px;color:#c7c9cd}
+    .badge.derived{border-color:#6b5d42;color:#e5d2aa}
+    label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8f9299;margin:15px 0 7px}
+    select,input[type=range],button{width:100%}
+    select{appearance:none;background:var(--panel);color:var(--text);border:1px solid var(--line);padding:12px;border-radius:10px;font-size:14px}
+    input[type=range]{accent-color:#d2c09c}
+    .range-line{display:grid;grid-template-columns:1fr 54px;gap:12px;align-items:center}
+    .value{border:1px solid var(--line);background:var(--soft);border-radius:8px;text-align:center;padding:8px 4px;font-size:12px;color:#c8c9cd}
+    .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px}
+    button,.button{border:1px solid #44474e;background:#17191d;color:#fff;border-radius:10px;padding:12px 14px;cursor:pointer;text-decoration:none;text-align:center;font-size:13px}
+    button.primary{background:#eee9df;color:#111;border-color:#eee9df}
+    button:hover,.button:hover{filter:brightness(1.08)}
+    .topbar{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px}
+    .topbar .links{display:flex;gap:8px;flex-wrap:wrap}
+    .stage{background:#101114;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 30px 90px #0008}
+    .canvas-wrap{aspect-ratio:1/1;width:min(100%,980px);margin:0 auto;background:#08090a;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+    canvas{width:100%;height:100%;display:block}
+    .recipe{margin-top:18px;display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px}
+    pre{margin:0;background:#0f1012;border:1px solid var(--line);border-radius:12px;padding:16px;overflow:auto;color:#bfc2c8;font-size:11px;line-height:1.55;min-height:160px}
+    .source-card{background:#0f1012;border:1px solid var(--line);border-radius:12px;padding:12px}
+    .source-card img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:#090a0b}
+    .source-name{font-size:11px;color:#9da0a7;margin-top:10px;word-break:break-all}
+    .note{font-size:11px;color:#777b83;line-height:1.5;margin-top:20px}
+    .error{color:#e4b2aa}
+    @media(max-width:980px){.shell{display:block}aside{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}.recipe{grid-template-columns:1fr}.topbar{display:block}.topbar .links{margin-top:12px}}
+  </style>
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <div class="eyebrow">TEREM Visual DNA · Generator v1</div>
+    <h1>Pattern Laboratory</h1>
+    <div class="lead">Автоматическая сборка новых орнаментальных композиций из принятой Visual DNA. Генератор не добавляет новые исторические символы и не меняет исходную палитру.</div>
+    <div class="status">
+      <span class="badge derived">DERIVED</span>
+      <span class="badge">historical attribution: UNKNOWN</span>
+      <span class="badge" id="asset-count">DNA loading…</span>
+    </div>
+
+    <label for="room">Помещение</label>
+    <select id="room"></select>
+
+    <label for="category">Категория DNA</label>
+    <select id="category"></select>
+
+    <label for="source">Исходный asset</label>
+    <select id="source"></select>
+
+    <label for="composition">Композиция</label>
+    <select id="composition">
+      <option value="rapport">Раппорт</option>
+      <option value="mirror">Зеркальная система</option>
+      <option value="half_drop">Полусдвиг</option>
+      <option value="radial">Радиальная композиция</option>
+      <option value="border">Бордюр / рама</option>
+    </select>
+
+    <label for="symmetry">Симметрия</label>
+    <select id="symmetry">
+      <option value="none">Без дополнительной</option>
+      <option value="x">Зеркальная X</option>
+      <option value="xy">Зеркальная X/Y</option>
+    </select>
+
+    <label for="density">Плотность</label>
+    <div class="range-line"><input id="density" type="range" min="2" max="8" value="4"><div class="value" id="density-value">4</div></div>
+
+    <label for="scale">Масштаб элемента</label>
+    <div class="range-line"><input id="scale" type="range" min="65" max="180" value="100"><div class="value" id="scale-value">100%</div></div>
+
+    <div class="actions">
+      <button class="primary" id="generate">Сгенерировать</button>
+      <button id="next">Другой asset</button>
+      <button id="export">PNG</button>
+      <button id="copy">Копировать рецепт</button>
+    </div>
+    <div class="note">v1 — rule-based compositor. Источник каждого результата сохраняется в recipe. Следующий слой системы — motif segmentation и параметрическое векторное построение.</div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div>
+        <div class="eyebrow">SOURCE → DNA → RULES → GENERATE</div>
+        <div class="lead" id="grammar-status">Visual Grammar loading…</div>
+      </div>
+      <div class="links">
+        <a class="button" href="https://terem-visual-dna.kontrakevich.workers.dev/">DNA Library</a>
+      </div>
+    </div>
+
+    <section class="stage">
+      <div class="canvas-wrap"><canvas id="canvas" width="1024" height="1024"></canvas></div>
+      <div class="recipe">
+        <pre id="recipe"></pre>
+        <div class="source-card">
+          <img id="source-preview" alt="DNA source">
+          <div class="source-name" id="source-name"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+(() => {
+  const els = Object.fromEntries(["room","category","source","composition","symmetry","density","scale","generate","next","export","copy","canvas","recipe","source-preview","source-name","asset-count","grammar-status","density-value","scale-value"].map(id=>[id,document.getElementById(id)]));
+  const ctx = els.canvas.getContext("2d");
+  let cards = [], grammar = null, filtered = [], image = new Image();
+
+  const uniq = xs => [...new Set(xs)].sort((a,b)=>a.localeCompare(b,"ru"));
+  const option = (value,label=value) => { const o=document.createElement("option"); o.value=value; o.textContent=label; return o; };
+  const centerCrop = img => {
+    const s=Math.min(img.naturalWidth,img.naturalHeight);
+    return {sx:(img.naturalWidth-s)/2,sy:(img.naturalHeight-s)/2,sw:s,sh:s};
+  };
+  function fillSelect(el,values,current){
+    el.innerHTML="";
+    values.forEach(v=>el.appendChild(option(v)));
+    if(current && values.includes(current)) el.value=current;
+  }
+  function refreshCategories(){
+    const current=els.category.value;
+    fillSelect(els.category,uniq(cards.filter(c=>c.room===els.room.value).map(c=>c.section)),current);
+    refreshSources();
+  }
+  function refreshSources(){
+    const prev=els.source.value;
+    filtered=cards.filter(c=>c.room===els.room.value && c.section===els.category.value);
+    els.source.innerHTML="";
+    filtered.forEach((c,i)=>els.source.appendChild(option(String(i),c.name)));
+    if(filtered.some((c,i)=>String(i)===prev)) els.source.value=prev;
+    loadSelected();
+  }
+  function asset(){
+    return filtered[Number(els.source.value)||0] || filtered[0] || cards[0];
+  }
+  function loadSelected(){
+    const a=asset();
+    if(!a) return;
+    image=new Image();
+    image.onload=render;
+    image.src="/source/"+a.full;
+    els["source-preview"].src="/source/"+a.src;
+    els["source-name"].textContent=a.name;
+  }
+  function drawTile(x,y,w,h,fx=false,fy=false){
+    const c=centerCrop(image);
+    ctx.save();
+    ctx.translate(x+w/2,y+h/2);
+    ctx.scale(fx?-1:1,fy?-1:1);
+    ctx.drawImage(image,c.sx,c.sy,c.sw,c.sh,-w/2,-h/2,w,h);
+    ctx.restore();
+  }
+  function drawGrid(mode){
+    const density=Number(els.density.value);
+    const scale=Number(els.scale.value)/100;
+    const base=1024/density*scale;
+    const rows=Math.ceil(1024/base)+2, cols=Math.ceil(1024/base)+2;
+    for(let r=-1;r<rows;r++){
+      const shift=(mode==="half_drop" && Math.abs(r)%2===1)?base/2:0;
+      for(let c=-1;c<cols;c++){
+        let fx=false,fy=false;
+        if(mode==="mirror"){fx=Math.abs(c)%2===1;fy=Math.abs(r)%2===1}
+        if(els.symmetry.value==="x") fx=Math.abs(c)%2===1;
+        if(els.symmetry.value==="xy"){fx=Math.abs(c)%2===1;fy=Math.abs(r)%2===1}
+        drawTile(c*base+shift,r*base,base,base,fx,fy);
+      }
+    }
+  }
+  function drawRadial(){
+    const c=centerCrop(image), segments=Number(els.density.value)<=4?8:12;
+    ctx.save();
+    ctx.translate(512,512);
+    for(let i=0;i<segments;i++){
+      ctx.save();
+      ctx.rotate(i*Math.PI*2/segments);
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.arc(0,0,760,-Math.PI/segments,Math.PI/segments);
+      ctx.closePath();ctx.clip();
+      if(i%2) ctx.scale(-1,1);
+      ctx.drawImage(image,c.sx,c.sy,c.sw,c.sh,-512,-512,1024,1024);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  function drawBorder(){
+    const c=centerCrop(image);
+    ctx.fillStyle="#11100e";ctx.fillRect(0,0,1024,1024);
+    ctx.globalAlpha=.42;
+    ctx.drawImage(image,c.sx,c.sy,c.sw,c.sh,190,190,644,644);
+    ctx.globalAlpha=1;
+    const n=Math.max(4,Number(els.density.value)+2), cell=1024/n, thick=Math.max(92,cell);
+    for(let i=0;i<n;i++){
+      const x=i*cell;
+      drawTile(x,0,cell,thick,i%2===1,false);
+      drawTile(x,1024-thick,cell,thick,i%2===1,true);
+      const y=i*cell;
+      drawTile(0,y,thick,cell,false,i%2===1);
+      drawTile(1024-thick,y,thick,cell,true,i%2===1);
+    }
+  }
+  function recipe(){
+    const a=asset();
+    return {
+      project:"TEREM Visual DNA",
+      generator:"Pattern Laboratory v1",
+      fidelity:"DERIVED",
+      historical_attribution:"UNKNOWN",
+      source_asset:a?.name||null,
+      source_room:a?.room||null,
+      source_category:a?.section||null,
+      composition:els.composition.value,
+      symmetry:els.symmetry.value,
+      density:Number(els.density.value),
+      scale_percent:Number(els.scale.value),
+      color_policy:"preserve source color",
+      generated_at:new Date().toISOString()
+    };
+  }
+  function render(){
+    if(!image.complete || !image.naturalWidth) return;
+    ctx.clearRect(0,0,1024,1024);
+    const mode=els.composition.value;
+    if(mode==="radial") drawRadial();
+    else if(mode==="border") drawBorder();
+    else drawGrid(mode);
+    els.recipe.textContent=JSON.stringify(recipe(),null,2);
+  }
+  async function boot(){
+    try{
+      const [indexText,g]=await Promise.all([
+        fetch("/library-index",{cache:"no-store"}).then(r=>r.text()),
+        fetch("grammar.v1.json",{cache:"no-store"}).then(r=>r.json())
+      ]);
+      grammar=g;
+      const doc=new DOMParser().parseFromString(indexText,"text/html");
+      cards=[...doc.querySelectorAll(".card")].map(card=>{
+        const img=card.querySelector("img");
+        return {room:card.dataset.room,section:card.dataset.section,name:img.alt,src:img.getAttribute("src"),full:img.dataset.full};
+      }).filter(c=>c.section!=="SOURCE" && c.full);
+      els["asset-count"].textContent=cards.length+" accepted DNA views";
+      els["grammar-status"].textContent="Visual Grammar v"+grammar.schema_version+" · fidelity contract active";
+      fillSelect(els.room,uniq(cards.map(c=>c.room)));
+      refreshCategories();
+    }catch(err){
+      els["grammar-status"].innerHTML='<span class="error">Pattern Laboratory bootstrap failed</span>';
+      els.recipe.textContent=String(err);
+    }
+  }
+  els.room.addEventListener("change",refreshCategories);
+  els.category.addEventListener("change",refreshSources);
+  els.source.addEventListener("change",loadSelected);
+  els.composition.addEventListener("change",render);
+  els.symmetry.addEventListener("change",render);
+  els.density.addEventListener("input",()=>{els["density-value"].textContent=els.density.value;render()});
+  els.scale.addEventListener("input",()=>{els["scale-value"].textContent=els.scale.value+"%";render()});
+  els.generate.addEventListener("click",render);
+  els.next.addEventListener("click",()=>{if(!filtered.length)return;els.source.value=String(((Number(els.source.value)||0)+1)%filtered.length);loadSelected()});
+  els.export.addEventListener("click",()=>{const a=document.createElement("a");a.download="TEREM_DERIVED_PATTERN.png";a.href=els.canvas.toDataURL("image/png");a.click()});
+  els.copy.addEventListener("click",async()=>{await navigator.clipboard.writeText(els.recipe.textContent);els.copy.textContent="Скопировано";setTimeout(()=>els.copy.textContent="Копировать рецепт",1200)});
+  boot();
+})();
+</script>
+</body>
+</html>
+
+TEREMLABHTML
+          cat > /tmp/terem-pattern-lab/public/grammar.v1.json <<'TEREMGRAMMAR'
+{
+  "schema_version": "1.0.0",
+  "project": "TEREM Visual DNA",
+  "target_action": "Generate new decorative patterns from accepted TEREM Visual DNA without presenting derived output as a historical original",
+  "pipeline": [
+    "SOURCE",
+    "DNA",
+    "RULES",
+    "GENERATE"
+  ],
+  "fidelity_levels": {
+    "SOURCE": "Directly extracted from rectified source imagery",
+    "RECONSTRUCTED": "Mechanically restored/vectorized from SOURCE without invented historical detail",
+    "DERIVED": "New repeat or composition assembled only from accepted DNA assets"
+  },
+  "historical_policy": {
+    "generated_output_attribution": "UNKNOWN",
+    "rule": "A generated pattern is never described as a historical original unless independently confirmed by an authoritative museum source.",
+    "ai_inpainting_source_or_reconstructed": false
+  },
+  "room_profiles": [
+    {
+      "code": "STAIRCASE_CHURCHES",
+      "name": "Лестница и Теремные церкви",
+      "preferred_category": "03_BORDERS_FRAMES"
+    },
+    {
+      "code": "PASSAGE_HALLS",
+      "name": "Переходные палаты",
+      "preferred_category": "01_FLORAL"
+    },
+    {
+      "code": "DUMA_CHAMBER",
+      "name": "Думная палата",
+      "preferred_category": "02_GEOMETRIC_INTERLACE"
+    },
+    {
+      "code": "THRONE_CHAMBER",
+      "name": "Престольная палата",
+      "preferred_category": "05_GOLD_ELEMENTS"
+    },
+    {
+      "code": "TSAR_BEDCHAMBER",
+      "name": "Опочивальня",
+      "preferred_category": "01_FLORAL"
+    }
+  ],
+  "motif_families": [
+    {
+      "code": "01_FLORAL",
+      "name": "Орнаменты",
+      "default_repeat": "half_drop"
+    },
+    {
+      "code": "02_GEOMETRIC_INTERLACE",
+      "name": "Геометрия",
+      "default_repeat": "mirror"
+    },
+    {
+      "code": "03_BORDERS_FRAMES",
+      "name": "Бордюры",
+      "default_repeat": "border"
+    },
+    {
+      "code": "04_ROSETTES_MEDALLIONS",
+      "name": "Розетки",
+      "default_repeat": "radial"
+    },
+    {
+      "code": "05_GOLD_ELEMENTS",
+      "name": "Золото",
+      "default_repeat": "mirror"
+    },
+    {
+      "code": "06_TILES_STOVES",
+      "name": "Изразцы",
+      "default_repeat": "straight"
+    },
+    {
+      "code": "07_WOOD_DOORS",
+      "name": "Дерево",
+      "default_repeat": "mirror"
+    },
+    {
+      "code": "08_TEXTILE",
+      "name": "Текстиль",
+      "default_repeat": "half_drop"
+    }
+  ],
+  "composition_sequence": [
+    "ARCHITECTURAL_FRAME",
+    "BORDER",
+    "PRIMARY_FIELD",
+    "RAPPORT",
+    "CENTRAL_ELEMENT",
+    "GOLD_HIERARCHY_ACCENT"
+  ],
+  "generator_modes": {
+    "rapport": {
+      "label": "Раппорт",
+      "allowed_repeats": [
+        "straight",
+        "mirror",
+        "half_drop"
+      ]
+    },
+    "mirror": {
+      "label": "Зеркальная система",
+      "allowed_repeats": [
+        "mirror"
+      ]
+    },
+    "half_drop": {
+      "label": "Полусдвиг",
+      "allowed_repeats": [
+        "half_drop"
+      ]
+    },
+    "radial": {
+      "label": "Радиальная композиция",
+      "allowed_repeats": [
+        "radial"
+      ],
+      "segments": [
+        4,
+        8,
+        12
+      ]
+    },
+    "border": {
+      "label": "Бордюр / рама",
+      "allowed_repeats": [
+        "border",
+        "mirror"
+      ]
+    }
+  },
+  "constraints": [
+    "Use only assets that passed the production quality gate",
+    "Preserve source color by default",
+    "Do not invent heraldry, inscriptions, iconography or historical symbols",
+    "Do not claim museum or period attribution for DERIVED output",
+    "Every generated result must retain source asset identity and generation recipe"
+  ],
+  "generator_contract": {
+    "inputs": [
+      "room",
+      "category",
+      "source_asset",
+      "composition",
+      "density",
+      "scale",
+      "symmetry"
+    ],
+    "outputs": [
+      "preview_png",
+      "recipe_json",
+      "source_asset_reference",
+      "fidelity=DERIVED",
+      "historical_attribution=UNKNOWN"
+    ]
+  }
+}
+
+TEREMGRAMMAR
+          cat > /tmp/terem-pattern-lab/src/index.js <<'TEREMWORKER'
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const base = "https://terem-visual-dna.kontrakevich.workers.dev";
+    if (url.pathname === "/library-index") {
+      const upstream = await fetch(base + "/index.html");
+      return new Response(upstream.body, {status: upstream.status, headers: {"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=60"}});
+    }
+    if (url.pathname.startsWith("/source/")) {
+      const target = base + "/" + url.pathname.slice("/source/".length) + url.search;
+      const upstream = await fetch(target);
+      const headers = new Headers(upstream.headers);
+      headers.set("cache-control","public, max-age=86400");
+      return new Response(upstream.body,{status:upstream.status,headers});
+    }
+    return env.ASSETS.fetch(request);
+  }
+};
+
+TEREMWORKER
+          cat > /tmp/terem-pattern-lab/wrangler.jsonc <<'TEREMWRANGLER'
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "terem-pattern-lab",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-03",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "auto-trailing-slash"
+  },
+  "observability": { "enabled": true }
+}
+TEREMWRANGLER
+      - name: Deploy canary
+        working-directory: /tmp/terem-pattern-lab
+        run: npx --yes wrangler@4 deploy
+      - name: Verify canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://terem-pattern-lab.kontrakevich.workers.dev"
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 "$URL/" -o /tmp/lab.html
+          grep -q "Pattern Laboratory" /tmp/lab.html
+          curl --fail --silent --show-error "$URL/grammar.v1.json" -o /tmp/grammar.json
+          python -c "import json; d=json.load(open('/tmp/grammar.json')); assert d['pipeline']==['SOURCE','DNA','RULES','GENERATE']"
+          curl --fail --silent --show-error "$URL/library-index" -o /tmp/library.html
+          grep -q "TEREM Visual DNA" /tmp/library.html
+          echo "TEREM_PATTERN_LAB_CANARY_OK"
