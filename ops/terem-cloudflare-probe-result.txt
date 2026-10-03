@@ -1,6 +1,0 @@
-workers_subdomain=kontrakevich
-public_url=https://terem-visual-dna.kontrakevich.workers.dev
-workers_dev_enabled=true
-previews_enabled=false
-public_http=200
-public_content=OK
