@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          URL="https://terem-pattern-lab.kontrakevich.workers.dev"
+          URL="https://terem-pattern-lab-v2.kontrakevich.workers.dev"
           REPORT="ops/terem-pattern-lab-canary-result.txt"
           mkdir -p ops
           : > "$REPORT"
