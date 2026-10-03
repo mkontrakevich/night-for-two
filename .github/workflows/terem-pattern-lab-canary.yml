@@ -36,6 +36,20 @@ jobs:
       - name: Deploy canary
         working-directory: /tmp/terem-pattern-lab
         run: npx --yes wrangler@4 deploy
+      - name: Enable workers.dev route
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/terem-pattern-lab-v2/subdomain"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -X POST "$API" \
+            --data '{"enabled":true,"previews_enabled":false}' \
+            -o /tmp/subdomain.json
+          python -c "import json; d=json.load(open('/tmp/subdomain.json')); assert d.get('success') is True and (d.get('result') or {}).get('enabled') is True"
+          sleep 3
+
       - name: Verify canary
         shell: bash
         run: |
