@@ -55,6 +55,8 @@ assert.equal(scene.options.length,3);
 assert.equal(scene.options[0].key,prologue[0].key);
 assert(scene.options.every(x=>x.branch_effect),'Every player choice must carry a causal branch effect');
 assert.equal(scene.reader_pages.length,8);
+assert.equal(scene.interaction.kind,'choice','Interactive novel must stop for an in-world character decision, never replace it with a real-world task');
+assert(scene.options.every(x=>x.branch_effect),'Every character decision must carry a causal consequence into the next scene');
 assert.equal(scene.reader_meta.episode_page_offset,0);
 assert.equal(scene.reader_meta.episode_page_total,100);
 assert.equal(scene.reader_meta.chapter_page_total,8);
