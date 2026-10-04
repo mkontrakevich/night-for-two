@@ -34,7 +34,7 @@ async function narrativeSkillExcerpt(){
   try{
     const url=new URL('../skills/couple-space/intimate-narrative/SKILL.md',import.meta.url);
     const raw=await fs.readFile(url,'utf8');
-    const sections=['## 3. Storyteller behavior','## 6. Professional visual language','## 9. Image master prompt template','## 15. Provider refusal behavior','## 16. Quality control','## 17A. Dialogue contract','## 17B. Story illustration contract','## 17C. Prose complexity contract'];
+    const sections=['## 3. Storyteller behavior','## 6. Professional visual language','## 9. Image master prompt template','## 15. Provider refusal behavior','## 16. Quality control','## 17A. Dialogue contract','## 17B. Story illustration contract','## 17C. Prose complexity contract','## 17D. Character interaction and purposeful dialogue contract'];
     const chunks=[];
     for(const title of sections){
       const start=raw.indexOf(title);if(start<0)continue;
