@@ -7,7 +7,7 @@ async function interactionSkillExcerpt(){
   if(interactionSkillCache)return interactionSkillCache;
   try{
     const raw=await fs.readFile(new URL('../skills/couple-space/intimate-narrative/SKILL.md',import.meta.url),'utf8');
-    const sections=['## 3. Storyteller behavior','## 17A. Dialogue contract','## 17C. Prose complexity contract'],chunks=[];
+    const sections=['## 3. Storyteller behavior','## 17A. Dialogue contract','## 17C. Prose complexity contract','## 17D. Character interaction and purposeful dialogue contract','## 17E. Consequential player-choice contract'],chunks=[];
     for(const title of sections){const start=raw.indexOf(title);if(start<0)continue;const next=raw.indexOf('\n## ',start+4);chunks.push(raw.slice(start,next<0?raw.length:next));}
     interactionSkillCache=chunks.join('\n\n').slice(0,9000);
   }catch(error){console.warn('NIGHT_INTERACTION_SKILL_LOAD_FAILED',String(error?.message||error).slice(0,160));interactionSkillCache='';}
@@ -22,9 +22,9 @@ function parse(raw){
 
 function fallback(page={}){
   const choices=[
-    {permission:'words',title:'Одна фраза',action_text:'Остановитесь на минуту и по очереди скажите, какая деталь этой главы зацепила сильнее всего. Можно ничего не объяснять и сразу продолжить чтение.',simulation_text:'Герои задержались у границы следующей сцены и каждый назвал одну деталь, которую не хотел отпускать. После этого история двинулась дальше.'},
-    {permission:'embrace',title:'Пауза между главами',action_text:'Если обоим комфортно, обнимитесь на несколько спокойных вдохов и затем продолжайте чтение. Любой может просто перейти к следующей странице.',simulation_text:'Герои ненадолго остановились и обнялись, будто проверяя, готовы ли идти дальше. Пауза закончилась сама собой, и следующая глава началась.'},
-    {permission:'touch',title:'Ладонь',action_text:'Если обоим комфортно, на несколько секунд соприкоснитесь ладонями и продолжайте читать. Это предложение можно пропустить без объяснений.',simulation_text:'Герои молча соприкоснулись ладонями. Этого короткого жеста оказалось достаточно, чтобы напряжение сцены изменилось и путь продолжился.'}
+    {version:2,permission:'words',heat:1,title:'Секрет сцены',setup:'Оставьте телефон рядом и выберите одну деталь только что прочитанной главы.',action_text:'Один задаёт короткий вопрос от лица своего героя, второй отвечает от лица другого — но ответ должен содержать одну настоящую мысль о вас двоих. Затем поменяйтесь ролями.',alternative_text:'Если не хочется говорить от лица героев, каждый называет одну деталь главы, которую хотел бы перенести в ваш вечер.',simulation_text:'Герои задержались на границе следующей сцены и впервые ответили друг другу без заготовленных слов.'},
+    {version:2,permission:'kiss',heat:2,title:'Стоп-кадр',setup:'Выберите момент главы, в котором расстояние между героями стало важнее слов.',action_text:'Встаньте так, как вы представляете этот кадр. Один начинает движение, второй решает, сократить ли дистанцию. Если желание взаимно — завершите момент поцелуем и только после этого продолжайте читать.',alternative_text:'Оставьте дистанцию и вместо поцелуя скажите друг другу по одной фразе, которую герои не решились произнести.',simulation_text:'Герои остановились слишком близко, чтобы продолжать притворяться, будто эта дистанция ничего не значит.'},
+    {version:2,permission:'touch',heat:2,title:'Повторить жест',setup:'Найдите в сцене жест, предмет или движение, которое можно безопасно перенести из истории в комнату.',action_text:'Один воспроизводит этот жест без слов, второй отвечает своим движением. Продолжайте только пока обоим интересно; затем поменяйтесь ролями.',alternative_text:'Если не хочется повторять жест буквально, придумайте его символическую версию только руками.',simulation_text:'Герои повторили знакомый жест иначе, и его смысл изменился вместе с ними.'}
   ];
   return choices[Math.abs(Number(page.page_no)||0)%choices.length];
 }
@@ -34,31 +34,22 @@ export async function createNovelInteraction({page={},novel={}}={}){
   const narrativeSkill=await interactionSkillExcerpt();
   try{
     const raw=await completeAIText({
-      contour:'wife',
-      requestName:'night_novel_interaction',
-      skipDatabaseContext:true,
-      temperature:.45,
-      maxTokens:420,
+      contour:'wife',requestName:'night_novel_couple_challenge',skipDatabaseContext:true,temperature:.62,maxTokens:650,
       messages:[
-        {role:'system',content:`Ты создаёшь одну короткую интерактивную паузу между главами художественного романа для двух совершеннолетних партнёров.
+        {role:'system',content:`Ты создаёшь одно короткое игровое задание Couple Adventure для двух совершеннолетних партнёров внутри художественного романа.
 
 ${narrativeSkill?`КАНОНИЧЕСКИЙ NARRATIVE SKILL:\n${narrativeSkill}\n`:``}
 
-Действие должно вытекать из конкретной главы, а не быть универсальной романтической карточкой. Используй предмет, реплику, конфликт, выбор или мотив именно этой сцены. Формулируй точно и просто: без цепочек эпитетов, декоративной чувственности и повторения настроения главы другими словами.
+Это НЕ «момент выбора» и не универсальная романтическая пауза. Задание должно переносить конкретный конфликт, предмет, реплику, жест или ситуацию только что прочитанной главы в реальное взаимодействие пары на 2–5 минут. Оно должно ощущаться как часть приключения: кто начинает, что конкретно сделать, как второй отвечает, чем заканчивается раунд.
 
-Верни только JSON с полями permission, title, action_text, simulation_text. permission только words, embrace, kiss, touch или skip. action_text — необязательное предложение реальным читателям, максимум 1–2 минуты, без давления, без утверждения согласия, с явной возможностью пропустить. simulation_text — короткое продолжение только про героев романа: ассистент сам выбирает, как это же действие произошло в вымышленной сцене, не утверждая, что реальные читатели что-либо сделали. Не добавляй откровенные сексуальные инструкции, наготу, предметы, рискованные действия или цитаты личной переписки.`},
-        {role:'user',content:JSON.stringify({novel_title:String(novel.title||'').slice(0,160),chapter:String(page.chapter_title||'').slice(0,160),page_text:String(page.body||'').slice(-1800)})}
+Верни только JSON: {"version":2,"permission":"words|embrace|kiss|touch|massage","heat":1|2|3,"title":"...","setup":"...","action_text":"...","alternative_text":"...","simulation_text":"..."}.
+
+Требования: title короткий и предметный; setup связывает задание с конкретной сценой; action_text — одно выполнимое действие для пары; alternative_text — полноценная мягкая альтернатива, а не «ничего не делать»; simulation_text — как мотив продолжается только между вымышленными героями. Не повторяй банальные «почувствуйте близость», «несколько вдохов», «скажите что-то от сердца». Не утверждай согласие за участников. Любой вариант можно пропустить. Не добавляй графические сексуальные инструкции, опасные практики или публичные действия.`},
+        {role:'user',content:JSON.stringify({novel_title:String(novel.title||'').slice(0,160),chapter:String(page.chapter_title||'').slice(0,160),page_text:String(page.body||'').slice(-2600)})}
       ]
     });
-    const card=parse(raw);
-    const permission=String(card?.permission||'');
-    const title=String(card?.title||'').trim();
-    const actionText=String(card?.action_text||'').trim();
-    const simulationText=String(card?.simulation_text||'').trim();
-    if(!PERMISSIONS.has(permission)||title.length<3||title.length>90||actionText.length<30||actionText.length>520||simulationText.length<40||simulationText.length>700)throw new Error('NIGHT_NOVEL_INTERACTION_INVALID');
-    return {permission,title,action_text:actionText,simulation_text:simulationText};
-  }catch(error){
-    console.warn('NIGHT_NOVEL_INTERACTION_FALLBACK',String(error?.message||error).slice(0,120));
-    return safeFallback;
-  }
+    const card=parse(raw),permission=String(card?.permission||''),heat=Math.max(1,Math.min(3,Number(card?.heat)||1)),title=String(card?.title||'').trim(),setup=String(card?.setup||'').trim(),actionText=String(card?.action_text||'').trim(),alternativeText=String(card?.alternative_text||'').trim(),simulationText=String(card?.simulation_text||'').trim();
+    if(!PERMISSIONS.has(permission)||title.length<3||title.length>90||setup.length<20||setup.length>420||actionText.length<50||actionText.length>700||alternativeText.length<40||alternativeText.length>600||simulationText.length<40||simulationText.length>700)throw new Error('NIGHT_NOVEL_CHALLENGE_INVALID');
+    return {version:2,permission,heat,title,setup,action_text:actionText,alternative_text:alternativeText,simulation_text:simulationText};
+  }catch(error){console.warn('NIGHT_NOVEL_CHALLENGE_FALLBACK',String(error?.message||error).slice(0,120));return safeFallback;}
 }
