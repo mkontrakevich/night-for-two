@@ -1,5 +1,5 @@
 name: Recover Night containers after Docker restart
-# recovery-trigger: 2026-10-03-night42-origin
+# recovery-trigger: 2026-10-04-interactive-novel-2-production-acceptance
 
 on:
   push:
@@ -62,7 +62,7 @@ jobs:
           }
           if(-not $appReady){throw 'NIGHT_APP_NOT_HEALTHY'}
 
-          docker ps --filter "name=night-for-two" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          docker ps --filter "name=night-for-two" --format "table {{.Names}}	{{.Status}}	{{.Ports}}"
 
       - name: Reconnect dedicated Night tunnel and verify public health
         shell: powershell
