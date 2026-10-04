@@ -331,7 +331,7 @@ ${narrativeSkill?`\nКАНОНИЧЕСКИЙ NARRATIVE SKILL:\n${narrativeSkill}
   throw last||new Error(`NIGHT_LINEAR_CHAPTER_FAILED:${chapterIndex+1}`);
 }
 
-async function ensureImage({novelId,page}){
+async function ensureImage({novelId,page,visualCanon={}}){
   const key=page.visual_key||`linear-novel-${novelId}-page-${String(page.page_no).padStart(3,'0')}`;
   const qaRequired=process.env.NIGHT_VISUAL_QA_REQUIRED!=='0';
   const qaThreshold=Math.max(0.5,Math.min(0.99,Number(process.env.NIGHT_VISUAL_QA_THRESHOLD)||0.78));
@@ -347,6 +347,7 @@ async function ensureImage({novelId,page}){
         mode:page.page_no===STORY_TOTAL_PAGES?'story_final':'story_scene',
         variant:`BOOK_PAGE: ${page.media_prompt}${correction}`,
         pageText:page.body,
+        visualCanon,
         force:attempt>1
       });
       if(!result?.buffer?.length)throw new Error('NIGHT_LINEAR_IMAGE_EMPTY');
@@ -469,7 +470,8 @@ try{
     if(!String(page.media_prompt||'').trim())continue;
     if(page.image_status==='ready')continue;
     try{
-      const image=await ensureImage({novelId:novel.id,page});
+      const visualCanon={world:{setting:clean(plan?.world_bible?.setting||plan?.world_bible?.location||'',180),location_bible:clean(JSON.stringify(plan?.world_bible||{}),2400),visual_style:clean(JSON.stringify(plan?.style_bible||{}),1800)},heroes:{A:Array.isArray(plan?.protagonists)?plan.protagonists[0]||{}:plan?.protagonists?.A||{},B:Array.isArray(plan?.protagonists)?plan.protagonists[1]||{}:plan?.protagonists?.B||{}}};
+      const image=await ensureImage({novelId:novel.id,page,visualCanon});
       await store.markImage(novel.id,pageNo,'ready');
       images++;
       await store.updateNovel(novel.id,{status:'illustrating',generated_pages:STORY_TOTAL_PAGES,generated_images:images});
