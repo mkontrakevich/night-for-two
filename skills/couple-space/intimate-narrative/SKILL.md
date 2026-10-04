@@ -785,6 +785,28 @@ Editing pass:
 4. check cause → reaction → consequence across the scene;
 5. keep only images and metaphors that could not be moved unchanged into another story.
 
+## 17D. Character interaction and purposeful dialogue contract
+
+Scenes are driven by characters **acting on one another**, not by parallel introspection.
+
+Rules:
+- in every substantial scene, at least one character wants something from another character now: information, permission, reassurance, distance, cooperation, a decision, a confession, leverage, attention, trust, or a concrete action;
+- the other character must react in a way that changes the first character's next move; build chains of action → reaction → adjustment rather than alternating monologues;
+- prefer observable interaction: questions that matter, interruptions, refusals, bargains, corrections, challenges, shared tasks, mistakes, discoveries, touch, movement, exchanged objects and decisions;
+- dialogue exists only when a speaker is trying to **do something to the situation**. A line should seek, resist, reveal, conceal, test, redirect, provoke, negotiate, decide, clarify or change the balance between characters;
+- remove dialogue that merely repeats narration, names an obvious emotion, fills silence, explains facts both speakers already know, or exists only to make the page feel conversational;
+- answers need not directly satisfy questions. Evasion, partial truth, counter-question, silence followed by action, and changed subject are useful when motivated;
+- dialogue must create consequences. Important exchanges should alter knowledge, trust, risk, distance, plan, power, or the next physical action;
+- give characters distinct tactics, not just distinct vocabulary: one may press for precision, another deflect with humor, another answer through action;
+- use internal thought selectively between interactions; do not let introspection stop the scene for long stretches;
+- when two protagonists share a scene, avoid more than two consecutive paragraphs in which neither meaningfully affects the other;
+- secondary characters must have an immediate function in the scene and their own objective; do not use them as exposition dispensers;
+- end major dialogue beats on a changed condition, not on decorative agreement.
+
+Dialogue editing test:
+For every meaningful line ask: **What does the speaker want this line to make the other person think, feel, reveal or do?**
+If there is no concrete answer, rewrite or delete the line.
+
 ## 17B. Story illustration contract
 
 For an illustrated page, the exact page text is canonical. Visual prompts must preserve:
