@@ -214,6 +214,16 @@ visual_prompt — краткое описание вертикального к�
           })}
         ]
       });
+      if(Number(stage)===0){
+        const parsedScene=parse(raw);
+        const generatedIdentity=normalizeStoryIdentity(parsedScene?.story_identity);
+        if(!storyIdentityValid(generatedIdentity)){
+          parsedScene.story_identity=await generateStoryIdentity({
+            mode,stage,scene:parsedScene,history,relationshipProfile,mutualWishes,bookSeed,generate
+          });
+          return validateGeneratedScene(JSON.stringify(parsedScene),{mode,stage,blueprint,final,preferredKind});
+        }
+      }
       return validateGeneratedScene(raw,{mode,stage,blueprint,final,preferredKind});
     }catch(error){last=error;}
   }
