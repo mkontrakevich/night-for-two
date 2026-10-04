@@ -84,7 +84,13 @@ jobs:
           }
           open("/tmp/visualize-request.json","w").write(json.dumps(payload))
           PY
-          curl --fail --silent --show-error --max-time 180             -H "Content-Type: application/json"             -X POST "$URL/api/visualize"             --data-binary @/tmp/visualize-request.json             -o /tmp/visualize-response.json
+          status="$(curl --silent --show-error --max-time 180 \
+            -H "Content-Type: application/json" \
+            -X POST "$URL/api/visualize" \
+            --data-binary @/tmp/visualize-request.json \
+            -o /tmp/visualize-response.json \
+            -w '%{http_code}' || true)"
+          echo "VISUALIZE_HTTP=$status"
           python - <<'PY'
           import json
           d=json.load(open("/tmp/visualize-response.json"))
