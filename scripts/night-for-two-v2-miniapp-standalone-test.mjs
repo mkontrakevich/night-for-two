@@ -60,7 +60,7 @@ new Script(clientScript,{filename:'night-v3-inline.js'});
 for(const endpoint of ['/api/visual','/api/connection-ack','/api/selection','/api/done','/api/rate','/api/overall','/api/story-choice','/api/story-finish'])assert(app.includes(endpoint),`missing server endpoint ${endpoint}`);
 for(const action of ['connection-ack','selection','done','rate','overall','story-choice','story-finish'])assert(html.includes(`api('${action}'`),`missing client action ${action}`);
 assert(html.includes('readerBook')&&html.includes('renderEpisodeReader'));
-assert(html.includes('ТЕКУЩАЯ СЕССИЯ')&&html.includes('Продолжить с места остановки'),'Pair-only dashboard must expose the authenticated session without room-code login');
+assert(html.includes('ТЕКУЩАЯ ИСТОРИЯ')&&html.includes('Продолжить текущую историю')&&html.includes('Открыть мои истории'),'Pair-only dashboard must expose the authenticated session as two explicit routes without room-code login');
 assert(!html.includes("bind('#openActions',renderActions)"),'Standalone Actions button must not be exposed on the first screen');
 assert(!html.includes('id="joinCode"')&&!html.includes('placeholder="КОД · 6 ЗНАКОВ"'),'Room-code login must not be exposed to the fixed pair');
 assert(html.includes('data-interaction-real')&&html.includes('data-interaction-simulate')&&html.includes('/night/api/novel-interaction'),'Novel reader must embed real-action and AI-simulation branches between chapters');
