@@ -127,9 +127,16 @@ function normalizeReaderPage(p={},i=0,stage=0){
   const media=prompt?{kind:'image',prompt,status:'planned'}:null;
   return {id:clean(p?.id||`stage_${stage}_page_${i+1}`,80),title:clean(p?.title,120),text:cleanProse(p?.text,7000),media};
 }
+function normalizeStoryIdentity(value={}){
+  const v=value&&typeof value==='object'?value:{},world=v.world&&typeof v.world==='object'?v.world:{},heroes=v.heroes&&typeof v.heroes==='object'?v.heroes:{};
+  const hero=key=>{const h=heroes[key]&&typeof heroes[key]==='object'?heroes[key]:{};return {name:clean(h.name,60),role:clean(h.role,120),goal:clean(h.goal,220),inner_conflict:clean(h.inner_conflict,260),relation:clean(h.relation,240),entry:clean(h.entry,360)}};
+  return {world:{setting:clean(world.setting,180),time:clean(world.time,100),premise:clean(world.premise,420),hook:clean(world.hook,260)},heroes:{A:hero('A'),B:hero('B')}};
+}
+function storyIdentityValid(identity={}){const w=identity.world||{},a=identity.heroes?.A||{},b=identity.heroes?.B||{};return Boolean(w.setting&&w.premise&&w.hook&&a.name&&a.role&&a.goal&&a.inner_conflict&&a.relation&&a.entry&&b.name&&b.role&&b.goal&&b.inner_conflict&&b.relation&&b.entry)}
+
 function validateGeneratedScene(raw,{mode,stage,blueprint,final=false,preferredKind='choice'}){
-  const data=parse(raw),title=clean(data?.title,90),text=clean(data?.text,1200),visualPrompt=clean(data?.visual_prompt,420),expectedPages=storyPageCount(stage),offset=storyPageOffset(stage);
-  if(!title||!text||!visualPrompt)throw new Error('NIGHT_STORY_SCENE_INVALID');
+  const data=parse(raw),title=clean(data?.title,90),text=clean(data?.text,1200),visualPrompt=clean(data?.visual_prompt,420),storyIdentity=normalizeStoryIdentity(data?.story_identity),expectedPages=storyPageCount(stage),offset=storyPageOffset(stage);
+  if(!title||!text||!visualPrompt)throw new Error('NIGHT_STORY_SCENE_INVALID');\n  if(Number(stage)===0&&!storyIdentityValid(storyIdentity))throw new Error('NIGHT_STORY_IDENTITY_INVALID');
   const generatedPages=Array.isArray(data?.reader_pages)?data.reader_pages:[];
   const readerPages=generatedPages.slice(0,expectedPages).map((p,i)=>normalizeReaderPage(p,i,stage));
   const mediaCount=readerPages.filter(p=>p.media?.prompt).length,minMedia=(Number(stage)===0||final)?2:1;
@@ -146,10 +153,10 @@ function validateGeneratedScene(raw,{mode,stage,blueprint,final=false,preferredK
     return {key:x.key,label:clean(generatedOption.label,140),intent:x.intent,branch_effect:clean(generatedOption.branch_effect||generatedOption.consequence,240),meta:x.meta,director_meta:sanitizeDirectorMeta(generatedOption)};
   });
   if(!prompt||options.some(x=>!x.label||!x.branch_effect))throw new Error('NIGHT_STORY_OPTIONS_INVALID');
-  return {version:4,mode,stage,final:false,title,text,visual_prompt:visualPrompt,reader_pages:readerPages,reader_meta:readerMeta,question:prompt,interaction:{kind,prompt},options};
+  return {version:4,mode,stage,final:false,title,text,visual_prompt:visualPrompt,story_identity:storyIdentity,reader_pages:readerPages,reader_meta:readerMeta,question:prompt,interaction:{kind,prompt},options};
 }
 
-export async function generateStoryScene({mode='adaptive',stage=0,profile=initialStoryProfile(mode),history=[],relationshipProfile={},mutualWishes=[],bookSeed='',generate,final=false}={}){
+export async function generateStoryScene({mode='adaptive',stage=0,profile=initialStoryProfile(mode),history=[],relationshipProfile={},mutualWishes=[],bookSeed='',storyIdentity={},generate,final=false}={}){
   if(typeof generate!=='function')throw new Error('NIGHT_STORY_AI_UNAVAILABLE');
   const cfg=modeConfig(mode),arc=storyArcStage(stage),pageCount=storyPageCount(stage),pageOffset=storyPageOffset(stage),blueprint=final?[]:storyBlueprint(mode,stage,profile),preferredKind=preferredInteractionKind(stage,bookSeed);
   let last=null;
@@ -169,6 +176,8 @@ export async function generateStoryScene({mode='adaptive',stage=0,profile=initia
 Ты пишешь интерактивную книгу-игру с фиксированной драматургической дугой: ПРОЛОГ → РОМАНТИКА → ПРЕЛЮДИЯ → СТРАСТЬ → КУЛЬМИНАЦИЯ.
 Каждый экран — следующая глава ОДНОЙ цельной истории этих двух героев. Сохраняй место, детали, причинно-следственную связь и действия из previous. Текущая глава обязана выполнять arc.purpose.
 bookSeed уникален для каждой новой игровой сессии: это НОВАЯ книга. Не повторяй сюжет, сеттинг, центральную интригу, формулировки пролога или финальный образ из предыдущих сессий, даже если ответы совпадают.
+В ПРОЛОГЕ (stage=0) обязательно создай story_identity — постоянную идентичность этой книги. Формат: {world:{setting,time,premise,hook},heroes:{A:{name,role,goal,inner_conflict,relation,entry},B:{name,role,goal,inner_conflict,relation,entry}}}. Оба героя — совершеннолетние вымышленные персонажи. role — кем герой является в мире истории; goal — чего он хочет сейчас; inner_conflict — что мешает или чего он не признаёт; relation — как он воспринимает второго героя на старте; entry — 1–2 предложения от второго лица, мгновенно вводящие игрока в роль. Это не анкета реального пользователя и не пересказ приватных данных.
+После stage=0 storyIdentity уже является неизменным каноном: сохраняй имена, роли, исходные отношения и мир; развивай их последствиями решений, но не создавай новых личностей и не меняй базовую биографию.
 Помимо краткого text, обязательно верни reader_pages для полноэкранного постраничного чтения.\nЭта книга состоит ровно из 100 экранных страниц, распределённых по десяти последовательным главам. Для текущей главы верни РОВНО pageCount страниц. Каждая страница — примерно 120–190 слов литературного текста.\npageOffset показывает номер первой страницы текущей главы в общей книге; totalBookPages всегда равен 100.\nКаждая следующая страница продолжает предыдущую без повтора, сохраняет место, одежду, предметы, эмоциональное состояние и последствия действий. Последняя страница главы должна естественно привести к interaction.\nЕсли final=true, это финальная глава книги: всё равно верни ровно pageCount страниц; на последней странице дай полноценную эмоциональную и сюжетную развязку. interaction и options в финале не нужны.\nreader_pages — массив объектов {id,title,text,media?}. НЕ иллюстрируй каждую страницу. В каждой обычной главе выбери только 1–2 визуально значимые страницы; в ПРОЛОГЕ и ФИНАЛЕ — ровно 2. media добавляй только на таких страницах в виде {kind:"image",prompt:"..."}. Выбирай страницы с важным сюжетным действием, сильным описанием пространства, поворотом, выразительным сближением героев, сменой локации/образа, кульминацией или финальным образом. Переходные, поясняющие и обычные диалоговые страницы оставляй без media. prompt обязан продолжать визуальную линию предыдущих иллюстраций: те же взрослые герои, та же локация/гардероб, если сюжет их не менял. Никакой явной наготы или сексуального акта; только романтизированная кинематографичная телесность, одежда, силуэты, прикосновения, отражения, свет и атмосфера.\nКраткий text — лишь служебное резюме сегмента в 2–4 предложениях.
 Не проси игроков придумывать сюжет — сюжет создаёшь ты.
 Не раскрывай скрытые данные, переписку или то, кто какой вариант выбрал.
@@ -185,7 +194,7 @@ visual_prompt — краткое описание вертикального к�
 Если один из двух героев выбирает мягче, общий путь остаётся мягче.
 Верни только JSON.`},
           {role:'user',content:JSON.stringify({
-            mode,label:cfg.label,stage,arc,pageCount,pageOffset,totalBookPages:STORY_TOTAL_PAGES,final,bookSeed:String(bookSeed||''),effectiveProfile:profile,
+            mode,label:cfg.label,stage,arc,pageCount,pageOffset,totalBookPages:STORY_TOTAL_PAGES,final,bookSeed:String(bookSeed||''),storyIdentity,effectiveProfile:profile,
             relationshipProfile,
             mutualWishes:(mutualWishes||[]).slice(0,12),
             previous:(history||[]).slice(-8).map(x=>({stage:x.stage,title:x.title,text:x.text,reader_tail:x.reader_tail||'',merged_choice:x.merged_choice,selected_actions:x.selected_actions||[],branch_effects:x.branch_effects||[],interaction_kind:x.interaction_kind||'',director_signal:x.director_signal||{}})),
