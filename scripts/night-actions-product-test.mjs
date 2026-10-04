@@ -53,7 +53,7 @@ for(const [i,scene] of ACTION_SCENES.entries()){
 assert.match(actionCard(0,'skip').text,/Ничего объяснять/);
 console.log('NIGHT_ACTIONS_PRODUCT_OK scenes=3 private_intersection=true story_anchors=true skip=true');
 const {storyActionSnapshot,actionScene,fallbackStoryCard}=await import('../src/night-actions-core.js');
-const flow={final:true,history:[{title:'Станция',text:'Они встретились у часов.',raw_messages:['PRIVATE']},{title:'Платформа',text:'Поезд задержался.',director_signal:{secret:'PRIVATE'}}],scene:{title:'Последний поезд',text:'Они решили остаться вместе.',reader_pages:[{text:'PRIVATE'}]}};
+const flow={final:false,history:[{title:'Станция',text:'Они встретились у часов.',raw_messages:['PRIVATE']},{title:'Платформа',text:'Поезд задержался.',director_signal:{secret:'PRIVATE'}}],scene:{title:'Последний поезд',text:'Они решили остаться вместе.',reader_pages:[{text:'PRIVATE'}]}};
 const snapshot=storyActionSnapshot(flow,27);
 assert.equal(snapshot.source_session_id,27);
 assert.equal(snapshot.anchors[0].chapter,'Станция');
@@ -62,7 +62,7 @@ assert.ok(!JSON.stringify(snapshot).includes('PRIVATE'));
 assert.match(fallbackStoryCard(0,'words',snapshot).text,/Станция/);
 const {directStoryAction}=await import('../src/night-actions-director.js');
 const calls=[];
-const generated=await directStoryAction({stage:0,permission:'words',snapshot,relationshipContext:{raw_messages:false,preferences:[]},generate:async request=>{calls.push(request);return calls.length===1?JSON.stringify({title:'Встреча у часов',text:'Встаньте рядом и по очереди скажите, что запомнили в этой сцене. Любой может остановиться без объяснений.'}):JSON.stringify({safe:true})}});
+const generated=await directStoryAction({stage:0,permission:'words',snapshot,relationshipContext:{raw_messages:false,preferences:[]},generate:async request=>{calls.push(request);return calls.length===1?JSON.stringify({practice:'compliment',mechanic:'role_lead',title:'Встреча у часов',text:'По очереди скажите одну точную фразу от лица героя о том, что изменилось в этой сцене. Второй отвечает своей репликой; любой может остановиться без объяснений.'}):JSON.stringify({safe:true})}});
 assert.equal(generated.permission,'words');
 assert.equal(calls.length,2);
 assert.ok(calls.every(x=>x.skipDatabaseContext===true));
@@ -84,6 +84,7 @@ const pool={async query(sql,args=[]){
   if(sql.startsWith('INSERT INTO night_actions_choices')){choices.set(args[1]+':'+args[2],{stage:args[1],actor:args[2],permission:args[3],finished:false});return {rows:[]};}
   if(sql.startsWith('UPDATE night_actions_choices SET finished=false')){for(const x of choices.values())if(x.stage===args[1])x.finished=false;return {rows:[]};}
   if(sql.startsWith('UPDATE night_actions_choices SET finished=true')){choices.get(args[1]+':'+args[2]).finished=true;return {rows:[]};}
+  if(sql.startsWith('SELECT stage,permission,card FROM night_actions_cards'))return {rows:[]};
   if(sql.startsWith('SELECT permission,card FROM night_actions_cards'))return {rows:savedCard?[savedCard]:[]};
   if(sql.startsWith('DELETE FROM night_actions_cards')){savedCard=null;return {rows:[]};}
   if(sql.startsWith('INSERT INTO night_actions_cards')){savedCard={permission:args[2],card:JSON.parse(args[3])};return {rows:[savedCard]};}

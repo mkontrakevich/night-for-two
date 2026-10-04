@@ -30,9 +30,9 @@ export function actionCard(stage,permission,context={}){
 
 const safeText=(value,max=420)=>String(value||'').replace(/https?:\/\/\S+|[\w.+-]+@[\w.-]+\.[a-z]{2,}|\+?\d[\d ()-]{8,}\d/gi,'').replace(/\s+/g,' ').trim().slice(0,max);
 export function storyActionSnapshot(flow={},sourceId=null){
-  if(flow?.final!==true||!flow?.scene?.title)return null;
+  if(!flow?.scene?.title)return null;
   const history=Array.isArray(flow.history)?flow.history:[];
-  const candidates=[history[0],history[Math.floor(history.length/2)],flow.scene];
+  const available=[...history,flow.scene].filter(x=>x?.title);const candidates=[available[0],available[Math.floor((available.length-1)/2)],available[available.length-1]];
   const anchors=candidates.map((entry,i)=>({
     id:ACTION_SCENES[i].id,
     chapter:safeText(entry?.title,80)||ACTION_SCENES[i].chapter,

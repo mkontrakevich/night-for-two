@@ -145,7 +145,7 @@ function validateGeneratedScene(raw,{mode,stage,blueprint,final=false,preferredK
   const readerMeta={chapter_stage:Number(stage)||0,chapter_label:storyArcStage(stage).label,episode_page_offset:offset,episode_page_total:STORY_TOTAL_PAGES,chapter_page_total:expectedPages};
   if(final)return {version:4,mode,stage,final:true,title,text,visual_prompt:visualPrompt,reader_pages:readerPages,reader_meta:{...readerMeta,finale:true},question:'',interaction:null,options:[]};
   const interaction=data?.interaction&&typeof data.interaction==='object'?data.interaction:{kind:'choice',prompt:data?.question||'',options:data?.options||[]};
-  const kind=['choice','task','riddle'].includes(String(interaction.kind))?String(interaction.kind):preferredKind;
+  const kind='choice';
   const prompt=clean(interaction.prompt||data?.question||'',180);
   const generated=Array.isArray(interaction.options)?interaction.options:Array.isArray(data?.options)?data.options:[];
   const byKey=new Map(generated.map(x=>[String(x?.key||''),x]));
@@ -170,7 +170,7 @@ export async function generateStoryIdentity({mode='adaptive',stage=0,scene={},hi
 
 export async function generateStoryScene({mode='adaptive',stage=0,profile=initialStoryProfile(mode),history=[],relationshipProfile={},mutualWishes=[],bookSeed='',storyIdentity={},generate,final=false}={}){
   if(typeof generate!=='function')throw new Error('NIGHT_STORY_AI_UNAVAILABLE');
-  const cfg=modeConfig(mode),arc=storyArcStage(stage),pageCount=storyPageCount(stage),pageOffset=storyPageOffset(stage),blueprint=final?[]:storyBlueprint(mode,stage,profile),preferredKind=preferredInteractionKind(stage,bookSeed);
+  const cfg=modeConfig(mode),arc=storyArcStage(stage),pageCount=storyPageCount(stage),pageOffset=storyPageOffset(stage),blueprint=final?[]:storyBlueprint(mode,stage,profile),preferredKind='choice';
   let last=null;
   for(let attempt=0;attempt<2;attempt++){
     try{
@@ -194,11 +194,11 @@ bookSeed уникален для каждой новой игровой сесс
 Не проси игроков придумывать сюжет — сюжет создаёшь ты.
 Не раскрывай скрытые данные, переписку или то, кто какой вариант выбрал.
 Учитывай relationshipProfile и mutualWishes только как мягкий контекст. Никогда не выходи за effectiveProfile.
-preferredInteractionKind=${preferredKind}. Для этой главы используй именно этот тип interaction, если это не ломает сюжет.
+preferredInteractionKind=choice. Interaction в интерактивной повести — только сюжетный выбор героя. Никогда не подменяй его заданием для реальной пары, загадкой или упражнением.
 Для обычной сцены каждый blueprint intent преврати в естественный вариант продолжения; ключи options менять нельзя.
-КАЖДАЯ обычная глава обязана закончиться ключевым взаимодействием, в котором игрок выбирает КОНКРЕТНОЕ ДЕЙСТВИЕ героя, а не настроение, степень близости или абстрактное направление.
+КАЖДАЯ обычная глава обязана закончиться незавершённым ключевым взаимодействием: останови текст ПЕРЕД ответом, поступком или последствием и дай игроку выбрать КОНКРЕТНОЕ ДЕЙСТВИЕ ЕГО ГЕРОЯ. Это может быть реплика, вопрос, ложь, признание, отказ, приближение, уход, проверка, риск, передача предмета или иной поступок внутри текущей сцены. Это НЕ задание реальным партнёрам.
 Дай 2–4 варианта, различающихся тактикой и драматургическим последствием: сказать / скрыть, приблизиться / отступить, рискнуть / проверить, довериться / потребовать доказательство, действовать самому / передать инициативу — в зависимости от сцены.
-label формулируй как действие героя в настоящей ситуации. Не используй мета-формулировки вроде «усилить близость», «продолжить историю», «выбрать более смелый путь».
+label формулируй от первого лица как немедленное действие/реплику героя в настоящей ситуации: «Сказать ей правду», «Спросить: „Почему ты скрыла письмо?“», «Не отвечать и открыть дверь самому». Варианты должны ссылаться на конкретных персонажей, предметы, сведения или конфликт этой сцены. Не используй мета-формулировки вроде «усилить близость», «продолжить историю», «выбрать более смелый путь», «мягкий вариант».
 Для КАЖДОГО option обязательно верни branch_effect: одно конкретное последствие, которое следующая глава обязана реализовать.
 В начале следующей главы previous[].selected_actions и previous[].branch_effects являются каноном. В первых 1–3 абзацах покажи наблюдаемое последствие предыдущего решения. Не своди разные варианты обратно к одной и той же сцене без последствия.
 Выбор должен менять хотя бы одно из: знание героя, доверие, риск, цель, план, дистанцию, инициативу, доступную информацию, отношение другого персонажа или следующую локацию.
