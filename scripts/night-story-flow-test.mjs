@@ -63,6 +63,30 @@ assert.equal(scene.reader_meta.chapter_page_total,8);
 assert.equal(scene.reader_pages.filter(p=>p.media?.prompt).length,2,'Prologue must illustrate only two key story beats instead of every page');
 assert(scene.reader_pages.some(p=>!p.media),'Transition pages must remain text-only');
 
+let identityRepairCalls=0;
+const repairFake=async req=>{
+  const body=JSON.parse(req.messages[1].content||'{}');
+  if(req.requestName==='night_story_identity'){
+    identityRepairCalls++;
+    return JSON.stringify({world:{setting:'Городской отель после закрытия',time:'Ночь',premise:'Двое взрослых героев вынуждены закончить незавершённое дело до рассвета.',hook:'Ключ от закрытого номера связывает их решения.'},heroes:{A:{name:'Алекс',role:'Архитектор проекта реконструкции',goal:'Понять, почему его вернули в отель',inner_conflict:'Он боится снова довериться неверному человеку',relation:'Считает второго героя единственным свидетелем старой ошибки',entry:'Вы входите в пустой холл и сразу замечаете знакомый ключ на стойке.'},B:{name:'Мира',role:'Управляющая закрывающегося отеля',goal:'Закончить дело до рассвета',inner_conflict:'Она скрывает часть правды, чтобы не потерять контроль',relation:'Знает, что Алекс может разрушить её план или спасти его',entry:'Вы ждали Алекса у стойки и уже решили, с чего начнёте разговор.'}}});
+  }
+  const pageCount=Number(body.pageCount)||8;
+  const pages=Array.from({length:pageCount},(_,i)=>({id:'r'+(i+1),title:i===0?'Пролог':'',text:Array.from({length:150},()=>('сцена'+(i+1))).join(' '),media:(i===0||i===pageCount-1)?{kind:'image',prompt:'same adult fictional couple, cinematic hotel interior, vertical frame'}:null}));
+  return JSON.stringify({
+    title:'Ночной ключ',
+    text:'Двое героев встречаются в закрытом отеле, и первый выбор должен определить их дальнейший союз.',
+    visual_prompt:'adult fictional couple in a closed hotel lobby, cinematic vertical frame',
+    story_identity:{world:{setting:'Городской отель после закрытия'},heroes:{A:{name:'Алекс'},B:{name:'Мира'}}},
+    reader_pages:pages,
+    interaction:{kind:'choice',prompt:'Что сделать первым?',options:body.blueprint.map(x=>({key:x.key,label:'Выбрать действие '+x.key,branch_effect:'Действие '+x.key+' меняет следующий эпизод'}))}
+  });
+};
+const repairedScene=await generateStoryScene({mode:'bold',stage:0,profile:initialStoryProfile('bold'),history:[],relationshipProfile:{},mutualWishes:[],generate:repairFake});
+assert.equal(identityRepairCalls,1,'Incomplete prologue identity must trigger one dedicated identity repair call');
+assert.equal(repairedScene.story_identity.heroes.A.name,'Алекс');
+assert.equal(repairedScene.story_identity.heroes.B.name,'Мира');
+assert.equal(repairedScene.story_identity.world.setting,'Городской отель после закрытия');
+
 const finale=await generateStoryScene({mode:'bold',stage:9,profile:merged,history:[scene],relationshipProfile:{},mutualWishes:[],generate:fake,final:true});
 assert.equal(finale.final,true);
 assert.equal(finale.options.length,0);
