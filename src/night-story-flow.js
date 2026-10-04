@@ -156,6 +156,17 @@ function validateGeneratedScene(raw,{mode,stage,blueprint,final=false,preferredK
   return {version:4,mode,stage,final:false,title,text,visual_prompt:visualPrompt,story_identity:storyIdentity,reader_pages:readerPages,reader_meta:readerMeta,question:prompt,interaction:{kind,prompt},options};
 }
 
+export async function generateStoryIdentity({mode='adaptive',stage=0,scene={},history=[],relationshipProfile={},mutualWishes=[],bookSeed='',generate}={}){
+  if(typeof generate!=='function')throw new Error('NIGHT_STORY_AI_UNAVAILABLE');
+  const raw=await generate({contour:'wife',requestName:'night_story_identity',skipDatabaseContext:false,temperature:.55,maxTokens:1400,messages:[
+    {role:'system',content:'Создай постоянную Story Identity для уже существующей интерактивной истории двух совершеннолетних вымышленных героев. Не переписывай сюжет и не добавляй события, которых нет в контексте. Верни только JSON {world:{setting,time,premise,hook},heroes:{A:{name,role,goal,inner_conflict,relation,entry},B:{name,role,goal,inner_conflict,relation,entry}}}. Имена и роли должны естественно следовать из существующей истории. entry — 1–2 предложения от второго лица для мгновенного входа игрока в роль. Не копируй и не раскрывай приватную переписку или реальные персональные данные.'},
+    {role:'user',content:JSON.stringify({mode,stage,bookSeed,scene:{title:scene?.title||'',text:scene?.text||'',reader_pages:(scene?.reader_pages||[]).slice(0,2).map(p=>({title:p.title||'',text:String(p.text||'').slice(0,1600)}))},previous:(history||[]).slice(-6).map(x=>({title:x.title,text:x.text,reader_tail:x.reader_tail||'',selected_actions:x.selected_actions||[],branch_effects:x.branch_effects||[]})),relationshipProfile,mutualWishes:(mutualWishes||[]).slice(0,8)})}
+  ]});
+  const identity=normalizeStoryIdentity(parse(raw));
+  if(!storyIdentityValid(identity))throw new Error('NIGHT_STORY_IDENTITY_INVALID');
+  return identity;
+}
+
 export async function generateStoryScene({mode='adaptive',stage=0,profile=initialStoryProfile(mode),history=[],relationshipProfile={},mutualWishes=[],bookSeed='',storyIdentity={},generate,final=false}={}){
   if(typeof generate!=='function')throw new Error('NIGHT_STORY_AI_UNAVAILABLE');
   const cfg=modeConfig(mode),arc=storyArcStage(stage),pageCount=storyPageCount(stage),pageOffset=storyPageOffset(stage),blueprint=final?[]:storyBlueprint(mode,stage,profile),preferredKind=preferredInteractionKind(stage,bookSeed);
