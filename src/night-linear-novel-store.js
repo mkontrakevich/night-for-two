@@ -70,6 +70,7 @@ export function createNightLinearNovelStore({pool}={}){
     return rows[0];
   }
   async function get(id){await init();const {rows}=await pool.query('SELECT * FROM night_linear_novels WHERE id=$1',[Number(id)]);return rows[0]||null;}
+  async function remove(id){await init();const novelId=Math.max(0,Number(id)||0);if(!novelId)throw new Error('NIGHT_LINEAR_NOVEL_ID_REQUIRED');const {rows}=await pool.query('DELETE FROM night_linear_novels WHERE id=$1 RETURNING id,title',[novelId]);return rows[0]||null;}
   async function latest(){
     await init();
     const {rows}=await pool.query(`SELECT * FROM night_linear_novels ORDER BY created_at DESC,id DESC LIMIT 1`);
@@ -180,5 +181,5 @@ export function createNightLinearNovelStore({pool}={}){
     const stageProgress=stage==='planning'?0:stage==='text'?Math.floor(Math.min(100,(Number(novel.generated_pages)||0)/Math.max(1,Number(novel.total_pages)||100)*100)):stage==='illustrations'?Math.floor(Math.min(100,stats.ready/Math.max(1,stats.planned)*100)):complete?100:0;
     return {id:novel.id,title:novel.title,status:novel.status,stage,stage_label:stageLabel,stage_progress:stageProgress,progress,total_pages:novel.total_pages,generated_pages:novel.generated_pages,generated_images:stats.ready,planned_images:stats.planned,failed_images:stats.failed,current_image_page:stats.next_page,updated_at:novel.updated_at,error:novel.error,text_complete:textComplete,readable:textComplete,illustrations_complete:illustrationsComplete,complete};
   }
-  return {init,create,updateNovel,get,latest,latestComplete,latestReadable,list,upsertPage,markImage,page,interaction,saveInteraction,imageStats,readerState,status};
+  return {init,create,updateNovel,get,remove,latest,latestComplete,latestReadable,list,upsertPage,markImage,page,interaction,saveInteraction,imageStats,readerState,status};
 }
