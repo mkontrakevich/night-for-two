@@ -41,13 +41,14 @@ const fake=async req=>{
     text:'Комната остаётся той же, но расстояние между героями становится меньше. Следующий выбор определит, как именно продолжится эта линия.',
     visual_prompt:'anonymous adult couple, warm dark room, cinematic vertical close crop',
     reader_pages:pages,
-    interaction:{kind:'choice',prompt:'Как продолжить?',options:body.blueprint.map(x=>({key:x.key,label:'Продолжить: '+x.key}))}
+    interaction:{kind:'choice',prompt:'Как продолжить?',options:body.blueprint.map(x=>({key:x.key,label:'Сделать действие: '+x.key,branch_effect:'Выбранное действие '+x.key+' заметно меняет следующий ход сцены'}))}
   });
 };
 const scene=await generateStoryScene({mode:'bold',stage:0,profile:initialStoryProfile('bold'),history:[],relationshipProfile:{},mutualWishes:[],generate:fake});
 assert.equal(scene.final,false);
 assert.equal(scene.options.length,3);
 assert.equal(scene.options[0].key,prologue[0].key);
+assert(scene.options.every(x=>x.branch_effect),'Every player choice must carry a causal branch effect');
 assert.equal(scene.reader_pages.length,8);
 assert.equal(scene.reader_meta.episode_page_offset,0);
 assert.equal(scene.reader_meta.episode_page_total,100);
