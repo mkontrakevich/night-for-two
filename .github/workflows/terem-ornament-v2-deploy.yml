@@ -88,7 +88,9 @@ jobs:
           python - <<'PY'
           import json
           d=json.load(open("/tmp/visualize-response.json"))
-          assert d.get("ok") is True, d
+          if not d.get("ok"):
+              print("VISUALIZE_ERROR="+json.dumps(d,ensure_ascii=False))
+              raise SystemExit(1)
           assert str(d.get("image_data_url","")).startswith("data:image/"), d
           assert d.get("model")=="openai/gpt-image-2.5-sunburst", d
           print("TEREM_OPENROUTER_IMAGE_SMOKE_OK")
