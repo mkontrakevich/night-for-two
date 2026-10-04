@@ -64,7 +64,7 @@ assert(html.includes('ВАША ИНТЕРАКТИВНАЯ ИСТОРИЯ')&&html
 assert(html.includes('function renderStoryImmersion()')&&html.includes('В ЭТОЙ ИСТОРИИ ВЫ')&&html.includes('ВАША ЦЕЛЬ')&&html.includes('ВНУТРЕННЕЕ ПРОТИВОРЕЧИЕ')&&html.includes('ВТОРОЙ ГЕРОЙ')&&html.includes("primary(stage>0?'Вернуться в сцену':'Войти в историю','enterStory')"),'Continue must enter the persistent player role before opening the story reader');
 assert(!html.includes("bind('#openActions',renderActions)"),'Standalone Actions button must not be exposed on the first screen');
 assert(!html.includes('id="joinCode"')&&!html.includes('placeholder="КОД · 6 ЗНАКОВ"'),'Room-code login must not be exposed to the fixed pair');
-assert(html.includes('data-interaction-done')&&html.includes('data-interaction-fiction')&&html.includes('/night/api/novel-interaction'),'Novel reader must show the concrete generated action directly, with done or keep-in-fiction choices');
+assert(html.includes('data-challenge-done')&&html.includes('data-challenge-alt')&&html.includes('data-challenge-refresh')&&html.includes('data-challenge-skip')&&html.includes('/night/api/novel-interaction'),'Novel reader must expose a scene-based couple challenge with complete, softer, replace and skip actions');
 assert(app.includes("engine.join({userId,name:clampName(auth.user),code:inviteCode||''})"),'Invited fixed pair user must auto-connect without entering a code');
 assert(html.includes('readerSentinel')&&html.includes('IntersectionObserver'),'Novel reader must use vertical lazy infinite scroll instead of horizontal page navigation');
 assert(html.includes('Тестировать с ИИ-партнёром'));
@@ -74,4 +74,6 @@ assert(visualAI.includes('no visible genitals')&&visualAI.includes('no explicit 
 
 assert(html.includes('html[data-screen="novel_library"],body[data-screen="novel_library"]')&&html.includes('overflow-y:auto!important')&&html.includes('body[data-screen="novel_library"] .screen'),'Novel library must opt out of compact iOS scroll lock');
 assert(html.includes('sceneGenerationStatus')&&html.includes('Собираем контекст и решения')&&html.includes('Проверяем и сохраняем выборы')&&html.includes('generation_phase'),'Story loading must expose named backend generation stages instead of an unexplained spinner');
+assert(html.includes('/night/api/novel-delete')&&html.includes('Удалить историю'),'Library must allow deleting unwanted stories');
+assert(html.includes('hydrateLinearNovelImage')&&html.includes('readerInlineMedia'),'Reader must insert generated illustrations into lazy-loaded pages');
 console.log('NIGHT_MINIAPP_STANDALONE_OK');
