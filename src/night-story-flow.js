@@ -143,9 +143,9 @@ function validateGeneratedScene(raw,{mode,stage,blueprint,final=false,preferredK
   const byKey=new Map(generated.map(x=>[String(x?.key||''),x]));
   const options=blueprint.map(x=>{
     const generatedOption=byKey.get(x.key)||{};
-    return {key:x.key,label:clean(generatedOption.label,140),intent:x.intent,meta:x.meta,director_meta:sanitizeDirectorMeta(generatedOption)};
+    return {key:x.key,label:clean(generatedOption.label,140),intent:x.intent,branch_effect:clean(generatedOption.branch_effect||generatedOption.consequence,240),meta:x.meta,director_meta:sanitizeDirectorMeta(generatedOption)};
   });
-  if(!prompt||options.some(x=>!x.label))throw new Error('NIGHT_STORY_OPTIONS_INVALID');
+  if(!prompt||options.some(x=>!x.label||!x.branch_effect))throw new Error('NIGHT_STORY_OPTIONS_INVALID');
   return {version:4,mode,stage,final:false,title,text,visual_prompt:visualPrompt,reader_pages:readerPages,reader_meta:readerMeta,question:prompt,interaction:{kind,prompt},options};
 }
 
@@ -175,6 +175,12 @@ bookSeed уникален для каждой новой игровой сесс
 Учитывай relationshipProfile и mutualWishes только как мягкий контекст. Никогда не выходи за effectiveProfile.
 preferredInteractionKind=${preferredKind}. Для этой главы используй именно этот тип interaction, если это не ломает сюжет.
 Для обычной сцены каждый blueprint intent преврати в естественный вариант продолжения; ключи options менять нельзя.
+КАЖДАЯ обычная глава обязана закончиться ключевым взаимодействием, в котором игрок выбирает КОНКРЕТНОЕ ДЕЙСТВИЕ героя, а не настроение, степень близости или абстрактное направление.
+Дай 2–4 варианта, различающихся тактикой и драматургическим последствием: сказать / скрыть, приблизиться / отступить, рискнуть / проверить, довериться / потребовать доказательство, действовать самому / передать инициативу — в зависимости от сцены.
+label формулируй как действие героя в настоящей ситуации. Не используй мета-формулировки вроде «усилить близость», «продолжить историю», «выбрать более смелый путь».
+Для КАЖДОГО option обязательно верни branch_effect: одно конкретное последствие, которое следующая глава обязана реализовать.
+В начале следующей главы previous[].selected_actions и previous[].branch_effects являются каноном. В первых 1–3 абзацах покажи наблюдаемое последствие предыдущего решения. Не своди разные варианты обратно к одной и той же сцене без последствия.
+Выбор должен менять хотя бы одно из: знание героя, доверие, риск, цель, план, дистанцию, инициативу, доступную информацию, отношение другого персонажа или следующую локацию.
 visual_prompt — краткое описание вертикального кинематографичного кадра без лиц, текста, явной наготы и сексуального акта.
 Если один из двух героев выбирает мягче, общий путь остаётся мягче.
 Верни только JSON.`},
@@ -182,7 +188,7 @@ visual_prompt — краткое описание вертикального к�
             mode,label:cfg.label,stage,arc,pageCount,pageOffset,totalBookPages:STORY_TOTAL_PAGES,final,bookSeed:String(bookSeed||''),effectiveProfile:profile,
             relationshipProfile,
             mutualWishes:(mutualWishes||[]).slice(0,12),
-            previous:(history||[]).slice(-8).map(x=>({stage:x.stage,title:x.title,text:x.text,reader_tail:x.reader_tail||'',merged_choice:x.merged_choice,interaction_kind:x.interaction_kind||'',director_signal:x.director_signal||{}})),
+            previous:(history||[]).slice(-8).map(x=>({stage:x.stage,title:x.title,text:x.text,reader_tail:x.reader_tail||'',merged_choice:x.merged_choice,selected_actions:x.selected_actions||[],branch_effects:x.branch_effects||[],interaction_kind:x.interaction_kind||'',director_signal:x.director_signal||{}})),
             preferredInteractionKind:preferredKind,blueprint:blueprint.map(x=>({key:x.key,intent:x.intent}))
           })}
         ]

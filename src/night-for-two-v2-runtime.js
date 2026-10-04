@@ -263,7 +263,7 @@ export function createNightV2Runtime({pool=null}={}){
         const mode=String(s.evening_mode||'adaptive'),stage=Number(current.stage)||0,profile=current.profile||initialStoryProfile(mode),history=Array.isArray(current.history)?current.history:[],bookSeed=String(current.book_seed||crypto.randomBytes(18).toString('hex')),final=Boolean(current.final);
         const context=await storyContext();
         const scene=await generateStoryScene({mode,stage,profile,history,relationshipProfile:context.relationshipProfile,mutualWishes:context.mutualWishes,bookSeed,generate:request=>completeAIText(request),final});
-        const next={version:1,book_seed:bookSeed,stage,profile,history,scene,final:Boolean(scene.final),generating:false,arc:storyArcStage(stage)};
+        const next={version:1,book_seed:bookSeed,book_title:String(current.book_title||scene.title||'История'),stage,profile,history,scene,final:Boolean(scene.final),generating:false,arc:storyArcStage(stage)};
         await db.query(`UPDATE night_v2_sessions SET story_flow=$2::jsonb,updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(next)]);
         await db.query(`UPDATE night_v2_players SET story_choice='',story_submitted=false,reader_page=0,reader_scene_key=$2,updated_at=now() WHERE session_id=$1`,[sessionId,`stage:${stage}:${scene.title}`]);
         const ps=await players(sessionId),synthetic=ps.find(p=>isSyntheticUser(p.telegram_user_id));
@@ -326,7 +326,7 @@ export function createNightV2Runtime({pool=null}={}){
         if(!optA||!optB)throw new Error('NIGHT_STORY_CHOICE_INVALID');
         const mode=String(s.evening_mode||'adaptive'),baseProfile=flow.profile||initialStoryProfile(mode);
         const profileA=applyStoryOption(baseProfile,optA,mode),profileB=applyStoryOption(baseProfile,optB,mode),merged=mergeStoryProfiles(profileA,profileB,mode);
-        const readerTail=Array.isArray(scene.reader_pages)&&scene.reader_pages.length?String(scene.reader_pages[scene.reader_pages.length-1]?.text||'').slice(-1200):'';const history=[...(Array.isArray(flow.history)?flow.history:[]),{stage:Number(flow.stage)||0,title:scene.title,text:scene.text,reader_tail:readerTail,merged_choice:[optA.key,optB.key],interaction_kind:String(scene.interaction?.kind||'choice'),director_signal:mergeDirectorSignals(optA,optB),profile:merged}].slice(-10);
+        const readerTail=Array.isArray(scene.reader_pages)&&scene.reader_pages.length?String(scene.reader_pages[scene.reader_pages.length-1]?.text||'').slice(-1200):'';const history=[...(Array.isArray(flow.history)?flow.history:[]),{stage:Number(flow.stage)||0,title:scene.title,text:scene.text,reader_tail:readerTail,merged_choice:[optA.key,optB.key],selected_actions:[{role:'A',key:optA.key,label:String(optA.label||optA.intent||optA.key)},{role:'B',key:optB.key,label:String(optB.label||optB.intent||optB.key)}],branch_effects:[String(optA.branch_effect||''),String(optB.branch_effect||'')].filter(Boolean),interaction_kind:String(scene.interaction?.kind||'choice'),director_signal:mergeDirectorSignals(optA,optB),profile:merged}].slice(-10);
         const nextStage=(Number(flow.stage)||0)+1,final=nextStage>STORY_MAX_CHOICE_STAGE;
         const generating={...flow,history,profile:merged,stage:nextStage,final,generating:true,scene:null,arc:storyArcStage(nextStage)};
         await db.query(`UPDATE night_v2_sessions SET story_flow=$2::jsonb,updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(generating)]);

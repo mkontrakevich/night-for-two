@@ -759,6 +759,72 @@ Rules:
 - if a sanitized relationship profile is supplied, use only its aggregate observations about conversational rhythm, recurring themes, humor, closeness and distance;
 - never quote source private messages and never expose hidden relationship analysis in reader-facing prose.
 
+## 17C. Prose complexity contract
+
+Narrative complexity must come from **causality, subtext, conflicting motives, selective detail and structural rhythm**, not from adjective density.
+
+Rules:
+- prefer precise nouns and active verbs over strings of adjectives and adverbs;
+- do not stack decorative epithets; normally one discriminating sensory detail is stronger than several interchangeable modifiers;
+- every paragraph should do at least one job: change the situation, expose or conceal a motive, create or release tension, plant/pay off information, or alter the reader's interpretation of an earlier fact;
+- let characters want more than one thing at once; behavior may contradict speech, and decisions must have consequences;
+- use subtext: characters need not name the emotion the scene already demonstrates;
+- vary sentence and paragraph length according to dramatic pressure rather than maintaining a uniformly lyrical cadence;
+- allow concrete objects, gestures, places and phrases to recur with changed meaning; prefer such callbacks to fresh ornamental imagery;
+- metaphors must add a new inference or point of view. Remove metaphors that merely restate mood;
+- avoid poetic fog: repeated descriptions of silence, darkness, warmth, breath, gaze, pulse, air, skin, time slowing, or unnamed tension unless the detail changes the scene;
+- avoid explaining the same emotional state twice in adjacent sentences;
+- exposition should be distributed through conflict, choice, observation and consequence rather than delivered as summary;
+- preserve ambiguity where it creates dramatic value, but keep physical action and causal sequence clear;
+- a scene should end in a changed state: new knowledge, new risk, new intimacy, new distance, a decision, a reversal, or an unresolved question with concrete stakes.
+
+Editing pass:
+1. remove redundant epithets and generic intensifiers;
+2. replace abstract emotion labels with behavior where possible;
+3. check that each paragraph advances at least one narrative function;
+4. check cause → reaction → consequence across the scene;
+5. keep only images and metaphors that could not be moved unchanged into another story.
+
+## 17D. Character interaction and purposeful dialogue contract
+
+Scenes are driven by characters **acting on one another**, not by parallel introspection.
+
+Rules:
+- in every substantial scene, at least one character wants something from another character now: information, permission, reassurance, distance, cooperation, a decision, a confession, leverage, attention, trust, or a concrete action;
+- the other character must react in a way that changes the first character's next move; build chains of action → reaction → adjustment rather than alternating monologues;
+- prefer observable interaction: questions that matter, interruptions, refusals, bargains, corrections, challenges, shared tasks, mistakes, discoveries, touch, movement, exchanged objects and decisions;
+- dialogue exists only when a speaker is trying to **do something to the situation**. A line should seek, resist, reveal, conceal, test, redirect, provoke, negotiate, decide, clarify or change the balance between characters;
+- remove dialogue that merely repeats narration, names an obvious emotion, fills silence, explains facts both speakers already know, or exists only to make the page feel conversational;
+- answers need not directly satisfy questions. Evasion, partial truth, counter-question, silence followed by action, and changed subject are useful when motivated;
+- dialogue must create consequences. Important exchanges should alter knowledge, trust, risk, distance, plan, power, or the next physical action;
+- give characters distinct tactics, not just distinct vocabulary: one may press for precision, another deflect with humor, another answer through action;
+- use internal thought selectively between interactions; do not let introspection stop the scene for long stretches;
+- when two protagonists share a scene, avoid more than two consecutive paragraphs in which neither meaningfully affects the other;
+- secondary characters must have an immediate function in the scene and their own objective; do not use them as exposition dispensers;
+- end major dialogue beats on a changed condition, not on decorative agreement.
+
+Dialogue editing test:
+For every meaningful line ask: **What does the speaker want this line to make the other person think, feel, reveal or do?**
+If there is no concrete answer, rewrite or delete the line.
+
+## 17E. Consequential player-choice contract
+
+At every key character interaction, stop before the consequence and give the player a meaningful choice of the hero's next action.
+
+Rules:
+- offer 2–4 concrete actions the hero can take now; choices are actions, not moods, intensity labels or meta commands;
+- each option must represent a distinct tactic and include a distinct causal consequence for the story state;
+- never prewrite narrative beyond a consequential choice point;
+- once selected, the action becomes canon and must constrain all subsequent prose;
+- the next scene must demonstrate a visible consequence of the selected action within its opening 1–3 paragraphs;
+- choices must be capable of changing knowledge, trust, risk, objective, plan, distance, initiative, available information, another character's response, or location;
+- do not immediately reconverge branches into identical prose. Reconvergence is allowed only after the prior consequences have materially played out;
+- later scenes should recall earlier choices through changed behavior, available options, dialogue, objects, promises, suspicions or relationships;
+- no false choices: if two options would produce the same meaningful outcome, rewrite them;
+- choice labels must make sense in-world as the hero's action without exposing internal game mechanics.
+
+For two-player stories, preserve both players' selected hero actions. Resolve incompatible choices through believable character interaction while respecting the mutually allowed boundary; do not erase either choice from causal history.
+
 ## 17B. Story illustration contract
 
 For an illustrated page, the exact page text is canonical. Visual prompts must preserve:
