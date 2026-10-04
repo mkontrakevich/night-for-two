@@ -807,6 +807,24 @@ Dialogue editing test:
 For every meaningful line ask: **What does the speaker want this line to make the other person think, feel, reveal or do?**
 If there is no concrete answer, rewrite or delete the line.
 
+## 17E. Consequential player-choice contract
+
+At every key character interaction, stop before the consequence and give the player a meaningful choice of the hero's next action.
+
+Rules:
+- offer 2–4 concrete actions the hero can take now; choices are actions, not moods, intensity labels or meta commands;
+- each option must represent a distinct tactic and include a distinct causal consequence for the story state;
+- never prewrite narrative beyond a consequential choice point;
+- once selected, the action becomes canon and must constrain all subsequent prose;
+- the next scene must demonstrate a visible consequence of the selected action within its opening 1–3 paragraphs;
+- choices must be capable of changing knowledge, trust, risk, objective, plan, distance, initiative, available information, another character's response, or location;
+- do not immediately reconverge branches into identical prose. Reconvergence is allowed only after the prior consequences have materially played out;
+- later scenes should recall earlier choices through changed behavior, available options, dialogue, objects, promises, suspicions or relationships;
+- no false choices: if two options would produce the same meaningful outcome, rewrite them;
+- choice labels must make sense in-world as the hero's action without exposing internal game mechanics.
+
+For two-player stories, preserve both players' selected hero actions. Resolve incompatible choices through believable character interaction while respecting the mutually allowed boundary; do not erase either choice from causal history.
+
 ## 17B. Story illustration contract
 
 For an illustrated page, the exact page text is canonical. Visual prompts must preserve:
