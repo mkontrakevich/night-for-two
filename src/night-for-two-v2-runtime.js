@@ -244,6 +244,7 @@ export function createNightV2Runtime({pool=null}={}){
   const storyJobs=new Map();
 
   function storyFlowOf(s){return safeJson(s?.story_flow,{});}
+  function storyVisualIdentityReady(flow={}){const i=flow?.story_identity||{},w=i.world||{},a=i.heroes?.A||{},b=i.heroes?.B||{};return Boolean(w.location_bible&&w.visual_style&&a.appearance&&a.wardrobe&&Number(a.age)>=18&&b.appearance&&b.wardrobe&&Number(b.age)>=18);}
   async function storyContext(){
     const [relationshipProfile,director,mutual]=await Promise.all([
       relationshipBridge.context().catch(()=>({})),
@@ -295,7 +296,7 @@ export function createNightV2Runtime({pool=null}={}){
   function kickPrepareStory(sessionId,opts={}){void prepareStoryScene(sessionId,opts).catch(()=>{});}
   async function prepareStoryIdentity(sessionId){
     const key='identity:'+String(sessionId);if(storyJobs.has(key))return storyJobs.get(key);
-    const job=(async()=>{try{const s=await session(sessionId);if(!s)return null;const flow=storyFlowOf(s);if(flow.story_identity&&Object.keys(flow.story_identity).length)return flow.story_identity;const scene=flow.scene||{};if(!scene.title)return null;const context=await storyContext();const identity=await generateStoryIdentity({mode:String(s.evening_mode||'adaptive'),stage:Number(flow.stage)||0,scene,history:Array.isArray(flow.history)?flow.history:[],relationshipProfile:context.relationshipProfile,mutualWishes:context.mutualWishes,bookSeed:String(flow.book_seed||''),generate:request=>completeAIText(request)});await db.query(`UPDATE night_v2_sessions SET story_flow=jsonb_set(COALESCE(story_flow,'{}'::jsonb),'{story_identity}',$2::jsonb,true),updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(identity)]);console.log('NIGHT_STORY_IDENTITY_READY',JSON.stringify({session_id:sessionId,backfill:true}));return identity;}catch(error){console.error('NIGHT_STORY_IDENTITY_FAILED',JSON.stringify({session_id:sessionId,exception:String(error?.message||error).slice(0,220)}));return null;}finally{storyJobs.delete(key);}})();storyJobs.set(key,job);return job;
+    const job=(async()=>{try{const s=await session(sessionId);if(!s)return null;const flow=storyFlowOf(s);if(storyVisualIdentityReady(flow))return flow.story_identity;const scene=flow.scene||{};if(!scene.title)return null;const context=await storyContext();const identity=await generateStoryIdentity({mode:String(s.evening_mode||'adaptive'),stage:Number(flow.stage)||0,scene,history:Array.isArray(flow.history)?flow.history:[],relationshipProfile:context.relationshipProfile,mutualWishes:context.mutualWishes,bookSeed:String(flow.book_seed||''),generate:request=>completeAIText(request)});await db.query(`UPDATE night_v2_sessions SET story_flow=jsonb_set(COALESCE(story_flow,'{}'::jsonb),'{story_identity}',$2::jsonb,true),updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(identity)]);console.log('NIGHT_STORY_IDENTITY_READY',JSON.stringify({session_id:sessionId,backfill:true}));return identity;}catch(error){console.error('NIGHT_STORY_IDENTITY_FAILED',JSON.stringify({session_id:sessionId,exception:String(error?.message||error).slice(0,220)}));return null;}finally{storyJobs.delete(key);}})();storyJobs.set(key,job);return job;
   }
   function kickPrepareStoryIdentity(sessionId){void prepareStoryIdentity(sessionId).catch(()=>{});}
   async function primeSyntheticStoryChoice(sessionId){
@@ -382,6 +383,19 @@ export function createNightV2Runtime({pool=null}={}){
     }
     return view(userId);
   }
+  async function updateStoryCharacter({userId,character={}}){
+    const m=await membership(userId);if(!m)throw new Error('NIGHT_V2_SESSION_REQUIRED');
+    const s=await session(m.session_id);if(!s||s.status!=='story')throw new Error('NIGHT_STORY_NOT_ACTIVE');
+    const ps=await players(s.id),me=ps.find(p=>String(p.telegram_user_id)===String(userId));if(!me)throw new Error('NIGHT_V2_PLAYER_NOT_FOUND');
+    const flow=storyFlowOf(s),identity=flow.story_identity||{},heroes={...(identity.heroes||{})},current={...(heroes[me.role]||{})};
+    const txt=(v,n)=>String(v||'').replace(/\s+/g,' ').trim().slice(0,n),age=Math.max(18,Math.min(80,Number(character.age)||Number(current.age)||30));
+    const next={...current,name:txt(character.name||current.name,60),age,role:txt(character.role||current.role,120),appearance:txt(character.appearance||current.appearance,420),wardrobe:txt(character.wardrobe||current.wardrobe,260),goal:txt(character.goal||current.goal,220),inner_conflict:txt(character.inner_conflict||current.inner_conflict,260),relation:txt(character.relation||current.relation,240),entry:txt(character.entry||current.entry,360)};
+    if(!next.name||!next.role||!next.appearance||!next.wardrobe)throw new Error('NIGHT_STORY_CHARACTER_INVALID');
+    heroes[me.role]=next;const updated={...flow,story_identity:{...identity,heroes},character_setup:{...(flow.character_setup||{}),[me.role]:true}};
+    await db.query('UPDATE night_v2_sessions SET story_flow=$2::jsonb,updated_at=now() WHERE id=$1',[s.id,JSON.stringify(updated)]);
+    console.log('NIGHT_STORY_CHARACTER_UPDATED',JSON.stringify({session_id:s.id,role:me.role,age}));return view(userId);
+  }
+
   async function saveReaderProgress({userId,page=0,sceneKey=''}){
     const m=await membership(userId);if(!m)throw new Error('NIGHT_V2_SESSION_REQUIRED');
     const s=await session(m.session_id);if(!s||s.status!=='story')throw new Error('NIGHT_STORY_NOT_ACTIVE');
@@ -538,7 +552,7 @@ export function createNightV2Runtime({pool=null}={}){
   }
 
   async function view(userId){await init();const m=await membership(userId);if(!m)return {mode:'home',version:4,catalog:nightCatalog(),wish_match:(await mutualWishes()).length>0,my_wishes:await privateWishes(userId)};let s=await session(m.session_id);if(['matching','selector'].includes(s.status)){await reconcileSelections(s.id);s=await session(s.id);}const ps=await players(s.id),me=ps.find(p=>String(p.telegram_user_id)===String(userId));if(!me)throw new Error('NIGHT_V2_PLAYER_NOT_FOUND');const connection=ps.length===2&&s.connection_verified_at?connectionFingerprint({nonce:s.connection_nonce,roomCode:s.room_code,ownerId:ps.find(p=>p.role==='A')?.telegram_user_id||OWNER_ID,partnerId:ps.find(p=>p.role==='B')?.telegram_user_id||PARTNER_ID}):null,flow=storyFlowOf(s),scene=flow.scene||null;const base={version:4,session_id:s.id,room_code:s.room_code,role:me.role,partner_connected:ps.length===2,ui_theme:String(s.ui_theme||'domination'),evening_mode:String(s.evening_mode||'adaptive'),connection_verified:Boolean(s.connection_verified_at)&&ps.length===2,connection_fingerprint:connection,test_mode:ps.some(p=>isSyntheticUser(p.telegram_user_id)),wish_match:ps.some(p=>isSyntheticUser(p.telegram_user_id))?false:(await mutualWishes()).length>0,my_wishes:await privateWishes(userId),story_flow:flow,story_scene:scene,story_stage:Number(flow.stage)||0,story_arc:flow.arc||storyArcStage(Number(flow.stage)||0),story_reader_key:scene?.title?`stage:${Number(flow.stage)||0}:${String(scene.title||'')}`:'',story_reader_progress:(scene?.title&&String(me.reader_scene_key||'')===`stage:${Number(flow.stage)||0}:${String(scene.title||'')}`)?Math.max(0,Number(me.reader_page)||0):0};if(s.status==='waiting')return {...base,mode:'waiting_partner'};if(s.connection_verified_at&&!me.connection_acknowledged&&s.status!=='story')return {...base,mode:'connection_verified'};if(s.status==='story'){
-      if(scene?.title&&(!flow.story_identity||!Object.keys(flow.story_identity).length))kickPrepareStoryIdentity(s.id);
+      if(scene?.title&&!storyVisualIdentityReady(flow))kickPrepareStoryIdentity(s.id);
       if(!scene?.title){kickPrepareStory(s.id);return {...base,mode:'story_loading'};}
       if(flow.generating)return {...base,mode:'story_loading'};
       if(scene.final)return me.story_submitted?{...base,mode:'story_waiting_final'}:{...base,mode:'story_final'};
@@ -553,5 +567,5 @@ export function createNightV2Runtime({pool=null}={}){
     return {...base,mode:'home'};}
 
   async function close(){if(ownsPool)await db.end();}
-  return {db,init,create,join,acknowledgeConnection,view,submitStoryChoice,saveReaderProgress,finishStory,prepareStoryScene,advanceStory,primeSyntheticStoryChoice,submitSelection,submitStoryAnswers,reconcileStory,retrySelection,selectCompromise,start,markDone,changeTask,rateRound,finish,rateOverall,saveDay,dismissDay,leave,attachTestPartner,saveWish,privateWishes,mutualWishes,membership,players,session,ensureStoryInterview,relationshipContext:()=>relationshipBridge.context(),close};
+  return {db,init,create,join,acknowledgeConnection,view,submitStoryChoice,updateStoryCharacter,saveReaderProgress,finishStory,prepareStoryScene,advanceStory,primeSyntheticStoryChoice,submitSelection,submitStoryAnswers,reconcileStory,retrySelection,selectCompromise,start,markDone,changeTask,rateRound,finish,rateOverall,saveDay,dismissDay,leave,attachTestPartner,saveWish,privateWishes,mutualWishes,membership,players,session,ensureStoryInterview,relationshipContext:()=>relationshipBridge.context(),close};
 }
