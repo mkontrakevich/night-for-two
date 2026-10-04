@@ -136,7 +136,8 @@ function storyIdentityValid(identity={}){const w=identity.world||{},a=identity.h
 
 function validateGeneratedScene(raw,{mode,stage,blueprint,final=false,preferredKind='choice'}){
   const data=parse(raw),title=clean(data?.title,90),text=clean(data?.text,1200),visualPrompt=clean(data?.visual_prompt,420),storyIdentity=normalizeStoryIdentity(data?.story_identity),expectedPages=storyPageCount(stage),offset=storyPageOffset(stage);
-  if(!title||!text||!visualPrompt)throw new Error('NIGHT_STORY_SCENE_INVALID');\n  if(Number(stage)===0&&!storyIdentityValid(storyIdentity))throw new Error('NIGHT_STORY_IDENTITY_INVALID');
+  if(!title||!text||!visualPrompt)throw new Error('NIGHT_STORY_SCENE_INVALID');
+  if(Number(stage)===0&&!storyIdentityValid(storyIdentity))throw new Error('NIGHT_STORY_IDENTITY_INVALID');
   const generatedPages=Array.isArray(data?.reader_pages)?data.reader_pages:[];
   const readerPages=generatedPages.slice(0,expectedPages).map((p,i)=>normalizeReaderPage(p,i,stage));
   const mediaCount=readerPages.filter(p=>p.media?.prompt).length,minMedia=(Number(stage)===0||final)?2:1;
