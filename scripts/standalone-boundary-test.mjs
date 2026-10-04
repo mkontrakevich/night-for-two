@@ -83,7 +83,7 @@ assert(compose.includes('name: ${NIGHT_CONTEXT_NETWORK:-night_for_two_context}')
 assert(compose.includes('      - night_context'),'Night app must join the dedicated sanitized-context network');
 const postgresBlock=compose.split('\n\n  app:')[0];
 assert(!postgresBlock.includes('night_context'),'Night Postgres must remain isolated from the bot context network');
-assert(originDeploy.includes('NIGHT_PORT: "5683"'),'Origin deployment must keep the isolated host port at 5683');
+assert(originDeploy.includes('Block unsafe direct production deployment')&&originDeploy.includes('marins-reminder-bot')&&!originDeploy.includes('docker compose -p night-for-two up'),'Direct Night production deployment must be blocked and routed to the canonical bridge');
 assert(telegramPublish.includes('chat_id = $ChatId')&&!telegramPublish.includes('Publish-DefaultMenu'),'Night menu publication must affect only the two pair chats');
 
 console.log('STANDALONE_BOUNDARY_OK raw_messages=false relationship_analysis_external=true anonymized=true production_origin_port=5683 private_context_network=true');
