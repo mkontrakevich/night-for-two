@@ -32,9 +32,10 @@ const order=[
   'IDENTITY LOCK',
   'CONTINUITY LOCK'
 ];
+const integration=identity.slice(identity.indexOf('The SD prompt order remains mandatory:'));
 let last=-1;
 for(const marker of order){
-  const idx=identity.indexOf(marker);
+  const idx=integration.indexOf(marker);
   assert(idx>last,`Prompt order broken at ${marker}`);
   last=idx;
 }
