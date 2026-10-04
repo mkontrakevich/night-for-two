@@ -84,6 +84,7 @@ const pool={async query(sql,args=[]){
   if(sql.startsWith('INSERT INTO night_actions_choices')){choices.set(args[1]+':'+args[2],{stage:args[1],actor:args[2],permission:args[3],finished:false});return {rows:[]};}
   if(sql.startsWith('UPDATE night_actions_choices SET finished=false')){for(const x of choices.values())if(x.stage===args[1])x.finished=false;return {rows:[]};}
   if(sql.startsWith('UPDATE night_actions_choices SET finished=true')){choices.get(args[1]+':'+args[2]).finished=true;return {rows:[]};}
+  if(sql.startsWith('SELECT stage,permission,card FROM night_actions_cards'))return {rows:[]};
   if(sql.startsWith('SELECT permission,card FROM night_actions_cards'))return {rows:savedCard?[savedCard]:[]};
   if(sql.startsWith('DELETE FROM night_actions_cards')){savedCard=null;return {rows:[]};}
   if(sql.startsWith('INSERT INTO night_actions_cards')){savedCard={permission:args[2],card:JSON.parse(args[3])};return {rows:[savedCard]};}
