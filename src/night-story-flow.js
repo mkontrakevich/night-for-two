@@ -139,9 +139,37 @@ function validateGeneratedScene(raw,{mode,stage,blueprint,final=false,preferredK
   if(!title||!text||!visualPrompt)throw new Error('NIGHT_STORY_SCENE_INVALID');
   if(Number(stage)===0&&!storyIdentityValid(storyIdentity))throw new Error('NIGHT_STORY_IDENTITY_INVALID');
   const generatedPages=Array.isArray(data?.reader_pages)?data.reader_pages:[];
-  const readerPages=generatedPages.slice(0,expectedPages).map((p,i)=>normalizeReaderPage(p,i,stage));
-  const mediaCount=readerPages.filter(p=>p.media?.prompt).length,minMedia=(Number(stage)===0||final)?2:1;
-  if(readerPages.length!==expectedPages||readerPages.some(p=>p.text.length<450)||mediaCount<minMedia||mediaCount>2)throw new Error(final?'NIGHT_STORY_FINALE_PAGES_INVALID':'NIGHT_STORY_READER_PAGES_INVALID');
+  let readerPages=generatedPages.slice(0,expectedPages).map((p,i)=>normalizeReaderPage(p,i,stage));
+  const minMedia=(Number(stage)===0||final)?2:1;
+
+  // Media density is presentation metadata, not a reason to discard otherwise valid prose.
+  // Keep at most two model-selected beats; when a required beat is missing, derive a
+  // page-specific prompt from the canonical page text plus the scene visual direction.
+  let mediaIndexes=readerPages.map((p,i)=>p.media?.prompt?i:-1).filter(i=>i>=0);
+  if(mediaIndexes.length>2){
+    const keep=new Set([mediaIndexes[0],mediaIndexes[mediaIndexes.length-1]]);
+    readerPages=readerPages.map((p,i)=>keep.has(i)?p:{...p,media:null});
+    mediaIndexes=[...keep].sort((a,b)=>a-b);
+  }
+  const shortBefore=readerPages.map((p,i)=>p.text.length<450?i+1:0).filter(Boolean);
+  if(readerPages.length===expectedPages&&!shortBefore.length&&mediaIndexes.length<minMedia){
+    const candidates=[0,readerPages.length-1,Math.floor((readerPages.length-1)/2)].filter((v,i,a)=>v>=0&&a.indexOf(v)===i);
+    for(const index of candidates){
+      if(mediaIndexes.length>=minMedia)break;
+      if(readerPages[index]?.media?.prompt)continue;
+      const excerpt=clean(readerPages[index]?.text,320);
+      const prompt=clean(`${visualPrompt}. Story beat from this exact page: ${excerpt}`,500);
+      readerPages[index]={...readerPages[index],media:{kind:'image',prompt,status:'planned'}};
+      mediaIndexes.push(index);
+    }
+  }
+
+  const shortPages=readerPages.map((p,i)=>p.text.length<450?i+1:0).filter(Boolean);
+  const mediaCount=readerPages.filter(p=>p.media?.prompt).length;
+  if(readerPages.length!==expectedPages||shortPages.length||mediaCount<minMedia||mediaCount>2){
+    const code=final?'NIGHT_STORY_FINALE_PAGES_INVALID':'NIGHT_STORY_READER_PAGES_INVALID';
+    throw new Error(`${code}:count=${readerPages.length}:expected=${expectedPages}:short=${shortPages.join(',')||'none'}:media=${mediaCount}:min=${minMedia}:max=2`);
+  }
   const readerMeta={chapter_stage:Number(stage)||0,chapter_label:storyArcStage(stage).label,episode_page_offset:offset,episode_page_total:STORY_TOTAL_PAGES,chapter_page_total:expectedPages};
   if(final)return {version:4,mode,stage,final:true,title,text,visual_prompt:visualPrompt,reader_pages:readerPages,reader_meta:{...readerMeta,finale:true},question:'',interaction:null,options:[]};
   const interaction=data?.interaction&&typeof data.interaction==='object'?data.interaction:{kind:'choice',prompt:data?.question||'',options:data?.options||[]};
@@ -172,14 +200,14 @@ export async function generateStoryScene({mode='adaptive',stage=0,profile=initia
   if(typeof generate!=='function')throw new Error('NIGHT_STORY_AI_UNAVAILABLE');
   const cfg=modeConfig(mode),arc=storyArcStage(stage),pageCount=storyPageCount(stage),pageOffset=storyPageOffset(stage),blueprint=final?[]:storyBlueprint(mode,stage,profile),preferredKind='choice';
   let last=null;
-  for(let attempt=0;attempt<2;attempt++){
+  for(let attempt=0;attempt<3;attempt++){
     try{
       const raw=await generate({
         contour:'wife',
         requestName:final?'night_story_finale':'night_story_scene',
         skipDatabaseContext:false,
-        temperature:.86,
-        maxTokens:6500,
+        temperature:attempt===0?.86:attempt===1?.58:.42,
+        maxTokens:7600,
         messages:[
           {role:'system',content:`${STORY_DIRECTOR_SYSTEM}
 
@@ -204,13 +232,20 @@ label формулируй от первого лица как немедлен�
 Выбор должен менять хотя бы одно из: знание героя, доверие, риск, цель, план, дистанцию, инициативу, доступную информацию, отношение другого персонажа или следующую локацию.
 visual_prompt — краткое описание вертикального кинематографичного кадра без лиц, текста, явной наготы и сексуального акта.
 Если один из двух героев выбирает мягче, общий путь остаётся мягче.
+Если validationRepair не null, это точная причина, по которой предыдущий JSON был отклонён валидатором. Исправь именно эти структурные нарушения: верни ровно pageCount reader_pages, каждая страница должна содержать полноценный литературный текст, а media — только на требуемом количестве ключевых страниц. Не сокращай историю ради исправления структуры.
 Верни только JSON.`},
           {role:'user',content:JSON.stringify({
             mode,label:cfg.label,stage,arc,pageCount,pageOffset,totalBookPages:STORY_TOTAL_PAGES,final,bookSeed:String(bookSeed||''),storyIdentity,effectiveProfile:profile,
             relationshipProfile,
             mutualWishes:(mutualWishes||[]).slice(0,12),
             previous:(history||[]).slice(-8).map(x=>({stage:x.stage,title:x.title,text:x.text,reader_tail:x.reader_tail||'',merged_choice:x.merged_choice,selected_actions:x.selected_actions||[],branch_effects:x.branch_effects||[],interaction_kind:x.interaction_kind||'',director_signal:x.director_signal||{}})),
-            preferredInteractionKind:preferredKind,blueprint:blueprint.map(x=>({key:x.key,intent:x.intent}))
+            preferredInteractionKind:preferredKind,blueprint:blueprint.map(x=>({key:x.key,intent:x.intent})),
+            validationRepair:attempt>0?{
+              previousError:String(last?.message||last||'').slice(0,500),
+              exactReaderPageCount:pageCount,
+              minimumPageCharacters:450,
+              requiredMediaCount:(Number(stage)===0||final)?2:'1-2'
+            }:null
           })}
         ]
       });
