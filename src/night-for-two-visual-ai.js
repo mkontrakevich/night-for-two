@@ -36,15 +36,18 @@ function cacheDir(){return process.env.NIGHT_VISUAL_CACHE_DIR||path.join(process
 function metaFile(dir,id){return path.join(dir,`${id}.json`);}
 async function readMeta(dir,id){try{return JSON.parse(await fs.readFile(metaFile(dir,id),'utf8'));}catch{return null;}}
 async function writeMeta(dir,id,data){const target=metaFile(dir,id),temp=`${target}.${process.pid}.tmp`;await fs.writeFile(temp,JSON.stringify(data,null,2));await fs.rename(temp,target);}
-function promptFor({theme='domination',mode='home',variant='',pageText=''}) {
+function promptFor({theme='domination',mode='home',variant='',pageText='',visualCanon={}}) {
   const themeText=THEMES[theme]||THEMES.domination,modeText=MODES[mode]||MODES.home,narrative=String(variant||'').trim(),sceneFacts=String(pageText||'').replace(/\s+/g,' ').trim().slice(0,5000);
   const storyMode=mode==='story_scene'||mode==='story_final'||narrative.startsWith('BOOK_PAGE:');
+  const canon=visualCanon&&typeof visualCanon==='object'?visualCanon:{},world=canon.world||{},heroes=canon.heroes||{};
+  const canonText=storyMode?`VISUAL CANON — HARD LOCK FOR THIS STORY:\nWORLD/LOCATION: ${world.setting||''}; ${world.location_bible||''}\nPHOTOGRAPHIC STYLE: ${world.visual_style||''}\nHERO A: ${heroes.A?.name||''}, age ${heroes.A?.age||''}, ${heroes.A?.appearance||''}, wardrobe: ${heroes.A?.wardrobe||''}\nHERO B: ${heroes.B?.name||''}, age ${heroes.B?.age||''}, ${heroes.B?.appearance||''}, wardrobe: ${heroes.B?.wardrobe||''}\nNever redesign faces, hair, body type, age, wardrobe continuity, architecture, material palette or photographic style unless the written story explicitly changes wardrobe or location.`:'';
   return [
     'Create one photorealistic vertical 9:16 cinematic editorial image for a premium serialized romance inside a private couples mobile reader.',
     storyMode
       ? 'Illustrate the exact narrative beat supplied below. The image must feel like the next shot of the same film, not a generic romance stock image. Narrative facts override generic theme language.'
       : 'Create a contextual atmosphere image for the current app screen.',
-    'Recurring visual language: two clearly adult partners, elegant contemporary styling, realistic anatomy, tactile fabrics, cinematic depth, natural body language and emotionally readable distance.',
+    'Recurring visual language: two clearly adult partners, realistic anatomy, tactile materials, cinematic depth, natural body language and emotionally readable distance.',
+    canonText,
     'Continuity rule: preserve the same broad couple archetype, lighting language, wardrobe palette and location details already implied by the narrative whenever the prompt indicates continuity.',
     'Adult sensuality only: when the page explicitly supports an undressed state, show a clearly nude adult body in a full-body artistic editorial composition rather than merely suggesting nudity; preserve clothing otherwise. Sensitive anatomy must remain concealed by pose, hands, fabric, framing, reflection or shadow. no visible genitals, no nipples, no explicit sexual act, no pornographic framing, no fetishized close-up, no text, no logo, no watermark.',
     'Faces may be shown only as non-identifiable fictional adults; never imitate or identify a real person.',
@@ -56,7 +59,8 @@ function promptFor({theme='domination',mode='home',variant='',pageText=''}) {
       : `Variation direction: ${narrative||'fresh composition, do not repeat common prior framing'}.`,
     'Composition: leave readable negative space for overlaid Russian prose; avoid placing important faces or hands beneath the lower text zone.',
     'Camera: premium editorial photography, physically plausible perspective, controlled highlights, rich detailed shadows, cinematic shallow depth of field.',
-    'Output: one coherent photographic frame, luxurious, emotionally immersive, tasteful and non-explicit.'
+    'The supplied pencil storyboard, when present, is ONLY a geometry/camera/blocking guide. Convert it completely into a finished PHOTOGRAPH. Do not preserve pencil strokes, monochrome drawing, paper texture, line art, illustration, concept-art or sketch aesthetics.',
+    'Output: one finished coherent photorealistic photographic frame — not a drawing, not a storyboard, not an illustration — luxurious, emotionally immersive, tasteful and non-explicit.'
   ].join('\n');
 }
 async function imageRequest({prompt,inputReferences=[]}) {
@@ -151,7 +155,7 @@ async function visualQARequest({buffer,pageText='',mediaPrompt=''}) {
 }
 
 export function createNightVisualAI(){
-  async function ensure({key,theme='domination',mode='home',variant='',pageText='',force=false}) {
+  async function ensure({key,theme='domination',mode='home',variant='',pageText='',visualCanon={},force=false}) {
     const nudeCue=/\b(explicit\s+nude|full\s+nude|nude|undressed|bare skin|обнажен|обнажён|полностью обнажен|полностью обнажён|полностью обнажена|без одежды|раздет|раздета|нагое тело)\b/i.test(String(pageText||'')+' '+String(variant||''));
     if(nudeCue&&theme==='boudoir')theme='artistic_nude';
     const id=safeKey(key),dir=cacheDir(),file=path.join(dir,`${id}.jpg`);
@@ -171,11 +175,11 @@ export function createNightVisualAI(){
       const inputReferences=storyboard?.buffer?.length?[{type:'image_url',image_url:{url:referenceDataUrl(storyboard.buffer)}}]:[];
       let result;
       try{
-        result=await imageRequest({prompt:promptFor({theme,mode,variant:`${variant} · visual-id ${visualId}`,pageText}),inputReferences});
+        result=await imageRequest({prompt:promptFor({theme,mode,variant:`${variant} · visual-id ${visualId}`,pageText,visualCanon}),inputReferences});
       }catch(error){
         if(!inputReferences.length)throw error;
         console.warn('NIGHT_VISUAL_REFERENCE_FALLBACK',String(error?.message||error).slice(0,220));
-        result=await imageRequest({prompt:promptFor({theme,mode,variant:`${variant} · visual-id ${visualId}`,pageText})});
+        result=await imageRequest({prompt:promptFor({theme,mode,variant:`${variant} · visual-id ${visualId}`,pageText,visualCanon})});
       }
       if(!result?.buffer)return {buffer:null,cached:false,key:id,disabled:true};
       const temp=`${file}.${process.pid}.tmp`;await fs.writeFile(temp,result.buffer);await fs.rename(temp,file);
@@ -185,7 +189,9 @@ export function createNightVisualAI(){
         theme,
         mode,
         storyboard:Boolean(storyboard?.buffer?.length),
-        prompt_hash:crypto.createHash('sha256').update(promptFor({theme,mode,variant:`${variant} · visual-id ${visualId}`,pageText})).digest('hex'),
+        prompt_hash:crypto.createHash('sha256').update(promptFor({theme,mode,variant:`${variant} · visual-id ${visualId}`,pageText,visualCanon})).digest('hex'),
+        visual_canon_hash:crypto.createHash('sha256').update(JSON.stringify(visualCanon||{})).digest('hex'),
+        render_stage:'photographic_final',
         source_text_hash:crypto.createHash('sha256').update(String(pageText||'')).digest('hex'),
         created_at:new Date().toISOString()
       };
