@@ -13,19 +13,89 @@ permissions:
 jobs:
   inspect:
     runs-on: [self-hosted, windows, x64, marins-production]
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - name: Inspect live novel generation
         shell: powershell
         run: |
           $ErrorActionPreference = 'Continue'
           Write-Host '=== CONTAINERS ==='
-          docker ps --filter "name=night-for-two" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          docker ps --filter "name=night-for-two" --format "table {{.Names}}	{{.Status}}	{{.Ports}}"
           Write-Host '=== STATUS SCRIPT ==='
           docker exec night-for-two-app-1 node scripts/night-linear-novel-status.mjs
           Write-Host "status exit=$LASTEXITCODE"
           Write-Host '=== PROCESSES ==='
           docker top night-for-two-app-1
           Write-Host '=== RECENT GENERATOR LOGS ==='
-          docker logs night-for-two-app-1 --since 20m 2>&1 | Select-String -Pattern 'NIGHT_LINEAR_|NIGHT_RELATIONSHIP_CONTEXT_READY|ai_gateway|NOVEL|generation|OPENROUTER|failed|error' | Select-Object -Last 160 | ForEach-Object { $_.Line }
-# runtime-inspect-trigger: 2026-10-04T23:30+03 acceptance
+          docker logs night-for-two-app-1 --since 20m 2>&1 | Select-String -Pattern 'NIGHT_LINEAR_|NIGHT_RELATIONSHIP_CONTEXT_READY|NIGHT_STORY_|ai_gateway|NOVEL|generation|OPENROUTER|failed|error' | Select-Object -Last 160 | ForEach-Object { $_.Line }
+
+      - name: Read-only Interactive Novel state gate
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = @'
+          const pg=require('pg');
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:1});
+          (async()=>{
+            const owner=String(process.env.PRIMARY_OWNER_ID||'');
+            if(!owner)throw new Error('OWNER_ID_MISSING');
+            const active=await pool.query(
+              "SELECT s.id,s.status,s.connection_verified_at,s.story_flow,p.role FROM night_v2_players p JOIN night_v2_sessions s ON s.id=p.session_id WHERE p.telegram_user_id=$1 AND p.active=true AND s.status<>'ended' ORDER BY s.id DESC LIMIT 1",
+              [owner]
+            );
+            if(!active.rowCount){
+              console.log('NIGHT_INTERACTIVE_GATE '+JSON.stringify({active_session:false}));
+            }else{
+              const row=active.rows[0],flow=row.story_flow||{},scene=flow.scene||{},identity=flow.story_identity||{};
+              const players=await pool.query("SELECT role,telegram_user_id,story_submitted,reader_page FROM night_v2_players WHERE session_id=$1 AND active=true ORDER BY role",[row.id]);
+              console.log('NIGHT_INTERACTIVE_GATE '+JSON.stringify({
+                active_session:true,
+                session_id:String(row.id),
+                status:row.status,
+                role:row.role,
+                partner_connected:players.rowCount===2,
+                test_mode:players.rows.some(x=>String(x.telegram_user_id).startsWith('-')),
+                connection_verified:Boolean(row.connection_verified_at),
+                story_stage:Number(flow.stage)||0,
+                generating:Boolean(flow.generating),
+                generation_phase:String(flow.generation_phase||''),
+                scene_ready:Boolean(scene.title),
+                scene_final:Boolean(scene.final),
+                options:Array.isArray(scene.options)?scene.options.length:0,
+                reader_pages:Array.isArray(scene.reader_pages)?scene.reader_pages.length:0,
+                identity_world:Boolean(identity?.world?.setting),
+                identity_a:Boolean(identity?.heroes?.A?.name),
+                identity_b:Boolean(identity?.heroes?.B?.name),
+                owner_story_submitted:Boolean(players.rows.find(x=>x.role==='A')?.story_submitted),
+                owner_reader_page:Number(players.rows.find(x=>x.role==='A')?.reader_page)||0
+              }));
+            }
+
+            const latest=await pool.query("SELECT id,title,status,generated_pages,total_pages,generated_images,error FROM night_linear_novels ORDER BY id DESC LIMIT 1");
+            const novel=latest.rows[0]||null;
+            if(!novel){
+              console.log('NIGHT_VISUAL_GATE '+JSON.stringify({novel:null,not_ready:[]}));
+            }else{
+              const q=await pool.query(
+                "SELECT page_no,image_status,visual_key,length(media_prompt) AS prompt_length FROM night_linear_novel_pages WHERE novel_id=$1 AND media_prompt<>'' AND image_status<>'ready' ORDER BY page_no",
+                [novel.id]
+              );
+              console.log('NIGHT_VISUAL_GATE '+JSON.stringify({
+                novel_id:String(novel.id),
+                novel_status:novel.status,
+                generated_pages:Number(novel.generated_pages)||0,
+                total_pages:Number(novel.total_pages)||0,
+                generated_images:Number(novel.generated_images)||0,
+                error:String(novel.error||''),
+                not_ready:q.rows.map(x=>({
+                  page_no:Number(x.page_no),
+                  image_status:x.image_status,
+                  visual_key:x.visual_key,
+                  prompt_length:Number(x.prompt_length)||0
+                }))
+              }));
+            }
+          })().catch(e=>{console.error('NIGHT_READ_ONLY_GATE_FAILED '+e.message);process.exitCode=1}).finally(()=>pool.end());
+          '@
+          docker exec night-for-two-app-1 node -e $script
+          if ($LASTEXITCODE -ne 0) { throw "NIGHT_READ_ONLY_GATE_FAILED:$LASTEXITCODE" }
