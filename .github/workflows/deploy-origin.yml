@@ -1,102 +1,19 @@
-name: Deploy Standalone Origin
+name: Deploy Standalone Origin — Bridge Only
 
 on:
-  # Production is deployed by the marins-reminder-bot bridge, which owns the
-  # persistent DB credential and private relationship-context token.
-  # Keep workflow_dispatch for emergency/manual use and a committed trigger
-  # file for auditable ChatGPT-driven production releases from canonical main.
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "ops/deploy-origin.trigger"
 
-concurrency:
-  group: night-for-two-origin-production
-  cancel-in-progress: false
+permissions:
+  contents: read
 
 jobs:
-  preflight:
+  canonical-bridge-required:
     runs-on: ubuntu-latest
     steps:
-      - name: Require standalone origin configuration
+      - name: Block unsafe direct production deployment
         shell: bash
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://night:night@postgres:5432/night_for_two' }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          PRIMARY_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
-          PARTNER_TELEGRAM_ID: ${{ secrets.PARTNER_TELEGRAM_ID }}
         run: |
-          missing=()
-          [[ -n "$DATABASE_URL" ]] || missing+=(DATABASE_URL)
-          [[ -n "$TELEGRAM_BOT_TOKEN" ]] || missing+=(TELEGRAM_BOT_TOKEN)
-          [[ -n "$OPENROUTER_API_KEY" ]] || missing+=(OPENROUTER_API_KEY)
-          [[ -n "$PRIMARY_OWNER_ID" ]] || missing+=(PRIMARY_OWNER_ID)
-          [[ -n "$PARTNER_TELEGRAM_ID" ]] || missing+=(PARTNER_TELEGRAM_ID)
-          if (( ${#missing[@]} )); then
-            printf '::error::Missing standalone origin secrets: %s\n' "${missing[*]}"
-            exit 1
-          fi
-
-  deploy:
-    needs: preflight
-    runs-on: [self-hosted, windows, x64, marins-production]
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy isolated standalone runtime
-        shell: powershell
-        env:
-          NIGHT_PORT: "5683"
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://night:night@postgres:5432/night_for_two' }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          RELATIONSHIP_CONTEXT_URL: ${{ secrets.RELATIONSHIP_CONTEXT_URL }}
-          RELATIONSHIP_CONTEXT_TOKEN: ${{ secrets.RELATIONSHIP_CONTEXT_TOKEN }}
-          PRIMARY_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
-          PARTNER_TELEGRAM_ID: ${{ secrets.PARTNER_TELEGRAM_ID }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw "DOCKER_NOT_AVAILABLE" }
-          if (-not (Test-Path ".env")) { New-Item -ItemType File -Path ".env" -Force | Out-Null }
-          $required = @("DATABASE_URL","TELEGRAM_BOT_TOKEN","OPENROUTER_API_KEY","PRIMARY_OWNER_ID","PARTNER_TELEGRAM_ID")
-          $missing = @($required | Where-Object { [string]::IsNullOrWhiteSpace((Get-Item "Env:$_" -ErrorAction SilentlyContinue).Value) })
-          if ($missing.Count -gt 0) {
-            Write-Host "::notice::Standalone origin is not configured yet. Missing secrets: $($missing -join ', ')"
-            throw "NIGHT_ORIGIN_SECRETS_MISSING"
-          }
-
-          function Wait-NightHealth([string]$Uri,[string]$FailureCode) {
-            for ($attempt = 1; $attempt -le 30; $attempt++) {
-              try {
-                $result = Invoke-RestMethod -Uri $Uri -TimeoutSec 5
-                if ($result.ok -eq $true) {
-                  Write-Host "NIGHT_HEALTH_READY uri=$Uri attempt=$attempt"
-                  return $result
-                }
-              } catch {
-                Write-Host "NIGHT_HEALTH_WAIT uri=$Uri attempt=$attempt"
-              }
-              Start-Sleep -Seconds 2
-            }
-            throw $FailureCode
-          }
-
-          docker compose -p night-for-two up -d --build --remove-orphans
-          if ($LASTEXITCODE -ne 0) { throw "NIGHT_ORIGIN_DEPLOY_FAILED:$LASTEXITCODE" }
-          $health = Wait-NightHealth "http://127.0.0.1:5683/night/health" "NIGHT_ORIGIN_HEALTH_NOT_OK"
-          $actionsHealth = Wait-NightHealth "http://127.0.0.1:5683/actions/health" "NIGHT_ACTIONS_HEALTH_NOT_OK"
-          Write-Host "NIGHT_ORIGIN_READY port=5683 actions=true"
-          $novelStatus = docker exec night-for-two-app-1 node scripts/night-linear-novel-status.mjs
-          $novelStatus | Out-Host
-          if ($LASTEXITCODE -ne 0) { throw "NIGHT_NOVEL_STATUS_PROBE_FAILED:$LASTEXITCODE" }
-
-      - name: Publish Telegram pair menu
-        shell: powershell
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          PRIMARY_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
-          PARTNER_TELEGRAM_ID: ${{ secrets.PARTNER_TELEGRAM_ID }}
-        run: |
-          ./tools/publish-pages.ps1 -Mode Publish -PublicUrl "https://night42.kontrakevich.workers.dev"
+          echo "::error::Direct Night42 production deployment from night-for-two is disabled."
+          echo "::error::Use mkontrakevich/marins-reminder-bot/.github/workflows/night-for-two-production-bridge.yml."
+          echo "::error::The canonical bridge owns the persistent PostgreSQL credential, Relationship Context token, private network, and production health gates."
+          exit 1
