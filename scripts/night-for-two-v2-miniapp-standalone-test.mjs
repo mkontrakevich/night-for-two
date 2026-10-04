@@ -57,10 +57,11 @@ const html=renderNightV3Html();
 const clientScript=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
 assert(clientScript,'standalone page must include its client script');
 new Script(clientScript,{filename:'night-v3-inline.js'});
-for(const endpoint of ['/api/visual','/api/connection-ack','/api/selection','/api/done','/api/rate','/api/overall','/api/story-choice','/api/story-finish'])assert(app.includes(endpoint),`missing server endpoint ${endpoint}`);
-for(const action of ['connection-ack','selection','done','rate','overall','story-choice','story-finish'])assert(html.includes(`api('${action}'`),`missing client action ${action}`);
+for(const endpoint of ['/api/visual','/api/connection-ack','/api/selection','/api/done','/api/rate','/api/overall','/api/story-choice','/api/story-character','/api/story-finish'])assert(app.includes(endpoint),`missing server endpoint ${endpoint}`);
+for(const action of ['connection-ack','selection','done','rate','overall','story-choice','story-character','story-finish'])assert(html.includes(`api('${action}'`),`missing client action ${action}`);
 assert(html.includes('readerBook')&&html.includes('renderEpisodeReader'));
 assert(html.includes('ВАША ИНТЕРАКТИВНАЯ ИСТОРИЯ')&&html.includes("primary('Вернуться в историю','continueSession')")&&html.includes("secondary('Мои истории','dashboardLibrary')"),'Pair-only launch screen must expose immersive Continue and My stories without room-code login');
+assert(html.includes('function renderCharacterSetup')&&html.includes('CHARACTER IDENTITY · HARD LOCK')&&html.includes('Зафиксированная внешность')&&html.includes('LOCATION LOCK')&&html.includes('STYLE LOCK'),'Story entry must expose editable Character Identity and locked visual canon');
 assert(html.includes('function renderStoryImmersion()')&&html.includes('В ЭТОЙ ИСТОРИИ ВЫ')&&html.includes('ВАША ЦЕЛЬ')&&html.includes('ВНУТРЕННЕЕ ПРОТИВОРЕЧИЕ')&&html.includes('ВТОРОЙ ГЕРОЙ')&&html.includes("primary(stage>0?'Вернуться в сцену':'Войти в историю','enterStory')"),'Continue must enter the persistent player role before opening the story reader');
 assert(!html.includes("bind('#openActions',renderActions)"),'Standalone Actions button must not be exposed on the first screen');
 assert(!html.includes('id="joinCode"')&&!html.includes('placeholder="КОД · 6 ЗНАКОВ"'),'Room-code login must not be exposed to the fixed pair');
@@ -77,3 +78,5 @@ assert(html.includes('sceneGenerationStatus')&&html.includes('Собираем �
 assert(html.includes('/night/api/novel-delete')&&html.includes('Удалить историю'),'Library must allow deleting unwanted stories');
 assert(html.includes('hydrateLinearNovelImage')&&html.includes('readerInlineMedia'),'Reader must insert generated illustrations into lazy-loaded pages');
 console.log('NIGHT_MINIAPP_STANDALONE_OK');
+
+assert(visualAI.includes('PHOTOGRAPHIC FINAL')&&visualAI.includes('Do not preserve pencil strokes')&&visualAI.includes('visual_canon_hash'),'Storyboard must be composition-only and final output must be a locked photographic render');
