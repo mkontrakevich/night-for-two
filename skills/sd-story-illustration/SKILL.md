@@ -2,6 +2,20 @@
 
 Purpose: turn prose into a visually coherent illustrated edition using a Stable Diffusion backend.
 
+
+## Character identity dependency
+
+When the story uses characters based on the real player pair, the canonical appearance source is `skills/real-couple-character-identity/SKILL.md`.
+
+The illustration system must receive PLAYER_A / PLAYER_B identity locks from that skill and must not independently reinvent facial geometry, hair, body proportions, relative height or pair identity assignment.
+
+For real-pair-derived characters:
+- keep real-player appearance separate from fictional role;
+- keep real names and direct identifiers out of visual prompts by default;
+- preserve immutable IDENTITY LOCK across all scenes;
+- inherit scene-specific wardrobe/prop/hair state through CONTINUITY LOCK;
+- reject identity swaps, face drift, body-scale drift and relative-height drift during QA.
+
 ## Operating contract
 
 1. Read the whole story before selecting images.
