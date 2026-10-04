@@ -34,7 +34,7 @@ async function narrativeSkillExcerpt(){
   try{
     const url=new URL('../skills/couple-space/intimate-narrative/SKILL.md',import.meta.url);
     const raw=await fs.readFile(url,'utf8');
-    const sections=['## 3. Storyteller behavior','## 6. Professional visual language','## 9. Image master prompt template','## 15. Provider refusal behavior','## 16. Quality control','## 17A. Dialogue contract','## 17B. Story illustration contract'];
+    const sections=['## 3. Storyteller behavior','## 6. Professional visual language','## 9. Image master prompt template','## 15. Provider refusal behavior','## 16. Quality control','## 17A. Dialogue contract','## 17B. Story illustration contract','## 17C. Prose complexity contract'];
     const chunks=[];
     for(const title of sections){
       const start=raw.indexOf(title);if(start<0)continue;
@@ -229,6 +229,13 @@ ${narrativeSkill?`\nКАНОНИЧЕСКИЙ NARRATIVE SKILL:\n${narrativeSkill}
 — не используй диалог как пересказ экспозиции;
 — особенности общения пары бери только из RELATIONSHIP_PROFILE: ритм, темы, юмор, способы сближения/дистанцирования, предпочтения и повторяющиеся динамики;
 — не цитируй исходные личные сообщения и не сообщай читателю, что проводился анализ Telegram; превращай агрегированные наблюдения в художественную манеру общения персонажей.
+
+ЛИТЕРАТУРНАЯ СЛОЖНОСТЬ — ОБЯЗАТЕЛЬНО:
+— усложняй текст через причинность, подтекст, конфликт мотивов, последствия решений и переосмысление ранее посеянных деталей;
+— не компенсируй простоту сюжета эпитетами: избегай цепочек прилагательных, декоративных наречий и нескольких метафор подряд;
+— каждый абзац должен менять ситуацию, мотив, напряжение, знание читателя или смысл ранее показанной детали;
+— не называй эмоцию, если она уже понятна из поступка, реплики, паузы или выбора;
+— финал каждой сцены должен оставлять изменившееся состояние, а не просто красивое настроение.
 
 Ты пишешь ОДНУ заранее спроектированную историю. Не начинай новый сюжет в каждой главе. Сохраняй имена, внешность, пространство, предметы, мотивы, тайны, причинно-следственные связи, одежду и последствия предыдущих событий. Все plant/payoff и финальный контракт из NOVEL_PLAN обязательны.
 
