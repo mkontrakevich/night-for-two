@@ -759,6 +759,32 @@ Rules:
 - if a sanitized relationship profile is supplied, use only its aggregate observations about conversational rhythm, recurring themes, humor, closeness and distance;
 - never quote source private messages and never expose hidden relationship analysis in reader-facing prose.
 
+## 17C. Prose complexity contract
+
+Narrative complexity must come from **causality, subtext, conflicting motives, selective detail and structural rhythm**, not from adjective density.
+
+Rules:
+- prefer precise nouns and active verbs over strings of adjectives and adverbs;
+- do not stack decorative epithets; normally one discriminating sensory detail is stronger than several interchangeable modifiers;
+- every paragraph should do at least one job: change the situation, expose or conceal a motive, create or release tension, plant/pay off information, or alter the reader's interpretation of an earlier fact;
+- let characters want more than one thing at once; behavior may contradict speech, and decisions must have consequences;
+- use subtext: characters need not name the emotion the scene already demonstrates;
+- vary sentence and paragraph length according to dramatic pressure rather than maintaining a uniformly lyrical cadence;
+- allow concrete objects, gestures, places and phrases to recur with changed meaning; prefer such callbacks to fresh ornamental imagery;
+- metaphors must add a new inference or point of view. Remove metaphors that merely restate mood;
+- avoid poetic fog: repeated descriptions of silence, darkness, warmth, breath, gaze, pulse, air, skin, time slowing, or unnamed tension unless the detail changes the scene;
+- avoid explaining the same emotional state twice in adjacent sentences;
+- exposition should be distributed through conflict, choice, observation and consequence rather than delivered as summary;
+- preserve ambiguity where it creates dramatic value, but keep physical action and causal sequence clear;
+- a scene should end in a changed state: new knowledge, new risk, new intimacy, new distance, a decision, a reversal, or an unresolved question with concrete stakes.
+
+Editing pass:
+1. remove redundant epithets and generic intensifiers;
+2. replace abstract emotion labels with behavior where possible;
+3. check that each paragraph advances at least one narrative function;
+4. check cause → reaction → consequence across the scene;
+5. keep only images and metaphors that could not be moved unchanged into another story.
+
 ## 17B. Story illustration contract
 
 For an illustrated page, the exact page text is canonical. Visual prompts must preserve:
