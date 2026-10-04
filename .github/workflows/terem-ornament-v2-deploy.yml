@@ -58,3 +58,41 @@ jobs:
           curl --fail --silent --show-error "$URL/health" -o /tmp/health.json
           python -c "import json;d=json.load(open('/tmp/health.json'));assert d['ok'] is True and d['openrouter_available'] is True and d['model']=='openai/gpt-image-2.5-sunburst'"
           echo "TEREM_ORNAMENT_V2_VISUALIZER_OK"
+
+      - name: OpenRouter image smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, json, struct, zlib
+          def chunk(t,d):
+              import binascii
+              return struct.pack(">I",len(d))+t+d+struct.pack(">I",binascii.crc32(t+d)&0xffffffff)
+          w=h=256
+          rows=[]
+          for y in range(h):
+              row=bytearray([0])
+              for x in range(w):
+                  line = abs(y-(0.35*x+60))<3 or abs(y-(-0.28*x+190))<3
+                  row.extend((185,145,70,255) if line else (21,16,12,255))
+              rows.append(bytes(row))
+          png=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",w,h,8,6,0,0,0))+chunk(b"IDAT",zlib.compress(b"".join(rows),9))+chunk(b"IEND",b"")
+          ref="data:image/png;base64,"+base64.b64encode(png).decode()
+          payload={
+            "reference_data_url":ref,
+            "prompt":"Preserve the reference geometry. Render it as a restrained historical ornamental study with painted foliage and selective gilding. No text."
+          }
+          open("/tmp/visualize-request.json","w").write(json.dumps(payload))
+          PY
+          curl --fail --silent --show-error --max-time 180             -H "Content-Type: application/json"             -X POST "$URL/api/visualize"             --data-binary @/tmp/visualize-request.json             -o /tmp/visualize-response.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/visualize-response.json"))
+          assert d.get("ok") is True, d
+          assert str(d.get("image_data_url","")).startswith("data:image/"), d
+          assert d.get("model")=="openai/gpt-image-2.5-sunburst", d
+          print("TEREM_OPENROUTER_IMAGE_SMOKE_OK")
+          print("MODEL="+str(d.get("model")))
+          print("COST="+str(d.get("cost")))
+          print("ELAPSED_MS="+str(d.get("elapsed_ms")))
+          PY
