@@ -52,6 +52,8 @@ assert(app.includes("readerState(body.page||1,body.novelId||0)"),'Reader must op
 assert(app.includes("api/novel-page")||app.includes("/api/novel-page"),'Mini App must expose the completed linear novel');
 assert(app.includes("api/novel-visual")||app.includes("/api/novel-visual"),'Mini App must serve the matching page illustration');
 assert(app.includes("query.get('reader')==='novel'"),'The full novel must have a direct reader URL mode');
-assert(app.includes("Прочитано '+progress+'%")&&app.includes("ПРОЧИТАНО '+progress+'%"),'Reader must show continuous reading progress without page-title navigation');
+assert(app.includes('sceneProgressTrack readerProgress')&&app.includes('readerStoryTitle')&&app.includes('linearProgressLabel'),'Reader must use the unified sticky story-title progress component');
+assert(app.includes("body[data-reader=\"true\"] .topbar{display:none!important}"),'Reader must hide the redundant application header');
+assert(!app.includes('<div class="readerNav"><div class="readerCount">'),'Linear reader must not duplicate reading progress at the bottom');
 
 console.log('NIGHT_LINEAR_NOVEL_CONTRACT_OK pages=100 sparse_visuals=true persisted=true openrouter=true miniapp_reader=true');
