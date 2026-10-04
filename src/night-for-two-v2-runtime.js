@@ -263,7 +263,7 @@ export function createNightV2Runtime({pool=null}={}){
         const mode=String(s.evening_mode||'adaptive'),stage=Number(current.stage)||0,profile=current.profile||initialStoryProfile(mode),history=Array.isArray(current.history)?current.history:[],bookSeed=String(current.book_seed||crypto.randomBytes(18).toString('hex')),final=Boolean(current.final);
         const context=await storyContext();
         const scene=await generateStoryScene({mode,stage,profile,history,relationshipProfile:context.relationshipProfile,mutualWishes:context.mutualWishes,bookSeed,generate:request=>completeAIText(request),final});
-        const next={version:1,book_seed:bookSeed,stage,profile,history,scene,final:Boolean(scene.final),generating:false,arc:storyArcStage(stage)};
+        const next={version:1,book_seed:bookSeed,book_title:String(current.book_title||scene.title||'История'),stage,profile,history,scene,final:Boolean(scene.final),generating:false,arc:storyArcStage(stage)};
         await db.query(`UPDATE night_v2_sessions SET story_flow=$2::jsonb,updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(next)]);
         await db.query(`UPDATE night_v2_players SET story_choice='',story_submitted=false,reader_page=0,reader_scene_key=$2,updated_at=now() WHERE session_id=$1`,[sessionId,`stage:${stage}:${scene.title}`]);
         const ps=await players(sessionId),synthetic=ps.find(p=>isSyntheticUser(p.telegram_user_id));
