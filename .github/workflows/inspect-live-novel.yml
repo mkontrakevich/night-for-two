@@ -97,5 +97,5 @@ jobs:
             }
           })().catch(e=>{console.error('NIGHT_READ_ONLY_GATE_FAILED '+e.message);process.exitCode=1}).finally(()=>pool.end());
           '@
-          docker exec night-for-two-app-1 node -e $script
+          $script | docker exec -i night-for-two-app-1 node
           if ($LASTEXITCODE -ne 0) { throw "NIGHT_READ_ONLY_GATE_FAILED:$LASTEXITCODE" }
