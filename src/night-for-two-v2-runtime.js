@@ -10,7 +10,7 @@ import {simulateNightPartner} from './night-ai-test-partner.js';
 import {compatibleSpace,normalizeChoice,generatePersonalIdea,rankNovelty,LEVELS as PERSONAL_LEVELS,VARIETY_MATRIX} from './night-core.js';
 import {completeAIText} from './ai/provider-router.js';
 import {generateStoryInterview,normalizeStoryAnswers,simulateStoryAnswers,storyModeCategories,storyModePermissions} from './night-story-interview.js';
-import {generateStoryScene,simulateStoryChoice,initialStoryProfile,optionFor,applyStoryOption,mergeStoryProfiles,mergeDirectorSignals,storyProfileToSelection,storyArcStage,STORY_MAX_CHOICE_STAGE} from './night-story-flow.js';
+import {generateStoryScene,generateStoryIdentity,simulateStoryChoice,initialStoryProfile,optionFor,applyStoryOption,mergeStoryProfiles,mergeDirectorSignals,storyProfileToSelection,storyArcStage,STORY_MAX_CHOICE_STAGE} from './night-story-flow.js';
 
 const {Pool}=pg;
 const SCOPE='couple_default';
@@ -262,8 +262,8 @@ export function createNightV2Runtime({pool=null}={}){
         if(!force&&current?.scene?.title)return current;
         const mode=String(s.evening_mode||'adaptive'),stage=Number(current.stage)||0,profile=current.profile||initialStoryProfile(mode),history=Array.isArray(current.history)?current.history:[],bookSeed=String(current.book_seed||crypto.randomBytes(18).toString('hex')),final=Boolean(current.final);
         const context=await storyContext();
-        const scene=await generateStoryScene({mode,stage,profile,history,relationshipProfile:context.relationshipProfile,mutualWishes:context.mutualWishes,bookSeed,generate:request=>completeAIText(request),final});
-        const next={version:1,book_seed:bookSeed,book_title:String(current.book_title||scene.title||'История'),stage,profile,history,scene,final:Boolean(scene.final),generating:false,arc:storyArcStage(stage)};
+        const scene=await generateStoryScene({mode,stage,profile,history,relationshipProfile:context.relationshipProfile,mutualWishes:context.mutualWishes,bookSeed,storyIdentity:current.story_identity||{},generate:request=>completeAIText(request),final});
+        const next={version:1,book_seed:bookSeed,book_title:String(current.book_title||scene.title||'История'),story_identity:current.story_identity&&Object.keys(current.story_identity).length?current.story_identity:(scene.story_identity||{}),stage,profile,history,scene,final:Boolean(scene.final),generating:false,arc:storyArcStage(stage)};
         await db.query(`UPDATE night_v2_sessions SET story_flow=$2::jsonb,updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(next)]);
         await db.query(`UPDATE night_v2_players SET story_choice='',story_submitted=false,reader_page=0,reader_scene_key=$2,updated_at=now() WHERE session_id=$1`,[sessionId,`stage:${stage}:${scene.title}`]);
         const ps=await players(sessionId),synthetic=ps.find(p=>isSyntheticUser(p.telegram_user_id));
@@ -287,6 +287,11 @@ export function createNightV2Runtime({pool=null}={}){
     return job;
   }
   function kickPrepareStory(sessionId,opts={}){void prepareStoryScene(sessionId,opts).catch(()=>{});}
+  async function prepareStoryIdentity(sessionId){
+    const key='identity:'+String(sessionId);if(storyJobs.has(key))return storyJobs.get(key);
+    const job=(async()=>{try{const s=await session(sessionId);if(!s)return null;const flow=storyFlowOf(s);if(flow.story_identity&&Object.keys(flow.story_identity).length)return flow.story_identity;const scene=flow.scene||{};if(!scene.title)return null;const context=await storyContext();const identity=await generateStoryIdentity({mode:String(s.evening_mode||'adaptive'),stage:Number(flow.stage)||0,scene,history:Array.isArray(flow.history)?flow.history:[],relationshipProfile:context.relationshipProfile,mutualWishes:context.mutualWishes,bookSeed:String(flow.book_seed||''),generate:request=>completeAIText(request)});await db.query(`UPDATE night_v2_sessions SET story_flow=jsonb_set(COALESCE(story_flow,'{}'::jsonb),'{story_identity}',$2::jsonb,true),updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(identity)]);console.log('NIGHT_STORY_IDENTITY_READY',JSON.stringify({session_id:sessionId,backfill:true}));return identity;}catch(error){console.error('NIGHT_STORY_IDENTITY_FAILED',JSON.stringify({session_id:sessionId,exception:String(error?.message||error).slice(0,220)}));return null;}finally{storyJobs.delete(key);}})();storyJobs.set(key,job);return job;
+  }
+  function kickPrepareStoryIdentity(sessionId){void prepareStoryIdentity(sessionId).catch(()=>{});}
   async function primeSyntheticStoryChoice(sessionId){
     const key='synthetic:'+String(sessionId);
     if(storyJobs.has(key))return storyJobs.get(key);
@@ -331,7 +336,7 @@ export function createNightV2Runtime({pool=null}={}){
         const generating={...flow,history,profile:merged,stage:nextStage,final,generating:true,scene:null,arc:storyArcStage(nextStage)};
         await db.query(`UPDATE night_v2_sessions SET story_flow=$2::jsonb,updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(generating)]);
         const context=await storyContext();
-        const nextScene=await generateStoryScene({mode,stage:nextStage,profile:merged,history,relationshipProfile:context.relationshipProfile,mutualWishes:context.mutualWishes,bookSeed:String(flow.book_seed||''),generate:request=>completeAIText(request),final});
+        const nextScene=await generateStoryScene({mode,stage:nextStage,profile:merged,history,relationshipProfile:context.relationshipProfile,mutualWishes:context.mutualWishes,bookSeed:String(flow.book_seed||''),storyIdentity:flow.story_identity||{},generate:request=>completeAIText(request),final});
         const next={...generating,scene:nextScene,final:Boolean(nextScene.final),generating:false};
         await db.query(`UPDATE night_v2_sessions SET story_flow=$2::jsonb,selected_pack_key='personal',permissions=$3::jsonb,negotiated_level=$4,updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(next),JSON.stringify(merged.permissions||[]),String(merged.level||'familiar')]);
         await db.query(`UPDATE night_v2_players SET story_choice='',story_submitted=false,reader_page=0,reader_scene_key=$2,updated_at=now() WHERE session_id=$1`,[sessionId,`stage:${nextStage}:${nextScene.title}`]);
@@ -525,6 +530,7 @@ export function createNightV2Runtime({pool=null}={}){
   }
 
   async function view(userId){await init();const m=await membership(userId);if(!m)return {mode:'home',version:4,catalog:nightCatalog(),wish_match:(await mutualWishes()).length>0,my_wishes:await privateWishes(userId)};let s=await session(m.session_id);if(['matching','selector'].includes(s.status)){await reconcileSelections(s.id);s=await session(s.id);}const ps=await players(s.id),me=ps.find(p=>String(p.telegram_user_id)===String(userId));if(!me)throw new Error('NIGHT_V2_PLAYER_NOT_FOUND');const connection=ps.length===2&&s.connection_verified_at?connectionFingerprint({nonce:s.connection_nonce,roomCode:s.room_code,ownerId:ps.find(p=>p.role==='A')?.telegram_user_id||OWNER_ID,partnerId:ps.find(p=>p.role==='B')?.telegram_user_id||PARTNER_ID}):null,flow=storyFlowOf(s),scene=flow.scene||null;const base={version:4,session_id:s.id,room_code:s.room_code,role:me.role,partner_connected:ps.length===2,ui_theme:String(s.ui_theme||'domination'),evening_mode:String(s.evening_mode||'adaptive'),connection_verified:Boolean(s.connection_verified_at)&&ps.length===2,connection_fingerprint:connection,test_mode:ps.some(p=>isSyntheticUser(p.telegram_user_id)),wish_match:ps.some(p=>isSyntheticUser(p.telegram_user_id))?false:(await mutualWishes()).length>0,my_wishes:await privateWishes(userId),story_flow:flow,story_scene:scene,story_stage:Number(flow.stage)||0,story_arc:flow.arc||storyArcStage(Number(flow.stage)||0),story_reader_key:scene?.title?`stage:${Number(flow.stage)||0}:${String(scene.title||'')}`:'',story_reader_progress:(scene?.title&&String(me.reader_scene_key||'')===`stage:${Number(flow.stage)||0}:${String(scene.title||'')}`)?Math.max(0,Number(me.reader_page)||0):0};if(s.status==='waiting')return {...base,mode:'waiting_partner'};if(s.connection_verified_at&&!me.connection_acknowledged&&s.status!=='story')return {...base,mode:'connection_verified'};if(s.status==='story'){
+      if(scene?.title&&(!flow.story_identity||!Object.keys(flow.story_identity).length))kickPrepareStoryIdentity(s.id);
       if(!scene?.title){kickPrepareStory(s.id);return {...base,mode:'story_loading'};}
       if(flow.generating)return {...base,mode:'story_loading'};
       if(scene.final)return me.story_submitted?{...base,mode:'story_waiting_final'}:{...base,mode:'story_final'};
