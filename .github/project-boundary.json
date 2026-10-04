@@ -1,0 +1,68 @@
+{
+  "project_id": "interactive-novel-2-night42",
+  "repository": "mkontrakevich/night-for-two",
+  "allowed_top_level": [
+    ".env.example",
+    ".github",
+    ".gitignore",
+    "Dockerfile",
+    "README.md",
+    "cloudflare",
+    "docker-compose.yml",
+    "docs",
+    "illustration_pipeline",
+    "ops",
+    "package.json",
+    "scripts",
+    "skills",
+    "src",
+    "tools"
+  ],
+  "allowed_workflows": [
+    "ci.yml",
+    "cloudflare-deploy.yml",
+    "deploy-origin.yml",
+    "diagnose-night-gateway-path.yml",
+    "generate-full-novel.yml",
+    "inspect-live-novel.yml",
+    "inspect-night-cloudflared-errors.yml",
+    "inspect-night-gateway.yml",
+    "inspect-night-live-20260929.yml",
+    "inspect-night-quic-routes.yml",
+    "inspect-night-tunnel-networks.yml",
+    "inspect-night-udp-block-rule.yml",
+    "night-cloudflare-inspect-20260929.yml",
+    "night-product-deploy.yml",
+    "pages.yml",
+    "persist-night-restart-policy.yml",
+    "probe-native-night-quic-recovery.yml",
+    "probe-night-http2-quick-tunnel.yml",
+    "probe-night-quic-us.yml",
+    "probe-night-tunnel-origin-routes.yml",
+    "publish-test-url.yml",
+    "recover-night-cloudflare-tunnel.yml",
+    "recover-night-containers.yml",
+    "recover-night-gateway.yml",
+    "recover-night-latest.yml",
+    "restore-night-reader-incident.yml",
+    "restore-night-telegram-menu.yml",
+    "verify-night-tunnel-identity.yml"
+  ],
+  "required_workflows": ["ci.yml"],
+  "forbidden_path_regex": [
+    "(?i)(^|/)(terem(?:[-_][^/]*)?|visual[-_]?dna(?:[-_][^/]*)?|marins[-_]?fasad(?:[-_][^/]*)?|4k[-_]?upscaler(?:[-_][^/]*)?|csum[-_]?nn(?:[-_][^/]*)?)(/|$)"
+  ],
+  "forbidden_content_regex": [
+    "(?i)terem[-_ ]?(visual[-_ ]?dna|pattern|ornament)",
+    "(?i)visual-dna-collector",
+    "(?i)terem-visual-dna",
+    "(?i)marinsfasad",
+    "(?i)4k[_ -]?upscaler",
+    "(?i)csum-nn-site"
+  ],
+  "scan_exclusions": [
+    ".github/project-boundary.json",
+    "scripts/check_repository_boundary.py"
+  ],
+  "max_scan_bytes": 1000000
+}
