@@ -55,5 +55,10 @@ assert(app.includes("query.get('reader')==='novel'"),'The full novel must have a
 assert(app.includes('sceneProgressTrack readerProgress')&&app.includes('readerStoryTitle')&&app.includes('linearProgressLabel'),'Reader must use the unified sticky story-title progress component');
 assert(app.includes("body[data-reader=\"true\"] .topbar{display:none!important}"),'Reader must hide the redundant application header');
 assert(!app.includes('<div class="readerNav"><div class="readerCount">'),'Linear reader must not duplicate reading progress at the bottom');
+assert(store.includes("async function remove(id)")&&store.includes("DELETE FROM night_linear_novels WHERE id=$1 RETURNING id,title"),'Saved novels must support cascade deletion');
+assert(app.includes("/api/novel-delete")&&app.includes("data-delete-novel"),'Library must expose explicit story deletion');
+assert(app.includes("hydrateLinearNovelImage")&&app.includes("readerInlineMedia"),'Lazy-loaded novel pages must render their planned illustrations inline');
+assert(app.includes("getBoundingClientRect()")&&app.includes("progressObserver"),'Reading progress must be driven by actually visible pages on iOS');
+assert(app.includes("chapterChanged?'<div class=\"readerKicker\"")&&!app.includes("q.page_title&&!/^(?:страница"),'Infinite reader must show chapter headings only at chapter boundaries, not technical page titles');
 
 console.log('NIGHT_LINEAR_NOVEL_CONTRACT_OK pages=100 sparse_visuals=true persisted=true openrouter=true miniapp_reader=true');
