@@ -64,7 +64,7 @@ assert(html.includes('ВАША ИНТЕРАКТИВНАЯ ИСТОРИЯ')&&html
 assert(html.includes('function renderStoryImmersion()')&&html.includes('В ЭТОЙ ИСТОРИИ ВЫ')&&html.includes('ВАША ЦЕЛЬ')&&html.includes('ВНУТРЕННЕЕ ПРОТИВОРЕЧИЕ')&&html.includes('ВТОРОЙ ГЕРОЙ')&&html.includes("primary(stage>0?'Вернуться в сцену':'Войти в историю','enterStory')"),'Continue must enter the persistent player role before opening the story reader');
 assert(!html.includes("bind('#openActions',renderActions)"),'Standalone Actions button must not be exposed on the first screen');
 assert(!html.includes('id="joinCode"')&&!html.includes('placeholder="КОД · 6 ЗНАКОВ"'),'Room-code login must not be exposed to the fixed pair');
-assert(html.includes('data-challenge-done')&&html.includes('data-challenge-alt')&&html.includes('data-challenge-refresh')&&html.includes('data-challenge-skip')&&html.includes('/night/api/novel-interaction'),'Novel reader must expose a scene-based couple challenge with complete, softer, replace and skip actions');
+assert(!html.includes("void loadNovelInteraction(n.id,no,gate)")&&html.includes('РЕШЕНИЕ ВАШЕГО ГЕРОЯ')&&html.includes('Couple Adventure')&&html.includes('openStoryActions'),'Legacy linear novels must not fake interactivity; Story Flow owns character decisions and Couple Adventure stays a separate action route');
 assert(app.includes("engine.join({userId,name:clampName(auth.user),code:inviteCode||''})"),'Invited fixed pair user must auto-connect without entering a code');
 assert(html.includes('readerSentinel')&&html.includes('IntersectionObserver'),'Novel reader must use vertical lazy infinite scroll instead of horizontal page navigation');
 assert(html.includes('Тестировать с ИИ-партнёром'));
