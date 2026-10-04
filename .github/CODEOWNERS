@@ -1,0 +1,7 @@
+# Night42 repository ownership
+* @mkontrakevich
+
+# Critical repository-boundary controls
+/.github/project-boundary.json @mkontrakevich
+/.github/workflows/ @mkontrakevich
+/scripts/check_repository_boundary.py @mkontrakevich

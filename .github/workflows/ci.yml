@@ -15,6 +15,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Enforce Night42 repository boundary
+        run: python3 scripts/check_repository_boundary.py
       - uses: actions/setup-node@v4
         with:
           node-version: 22
