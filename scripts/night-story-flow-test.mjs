@@ -40,12 +40,17 @@ const fake=async req=>{
     title:'Первая глава',
     text:'Комната остаётся той же, но расстояние между героями становится меньше. Следующий выбор определит, как именно продолжится эта линия.',
     visual_prompt:'anonymous adult couple, warm dark room, cinematic vertical close crop',
+    story_identity:{world:{setting:'Старый отель у моря',time:'Поздний вечер',premise:'Двое взрослых героев оказываются связаны одной тайной номера.',hook:'Один выбор уже изменил дистанцию между ними.'},heroes:{A:{name:'Марк',role:'Архитектор, вернувшийся в закрытый отель',goal:'Понять, зачем его позвали',inner_conflict:'Он хочет довериться, но привык всё проверять',relation:'Не уверен, союзник ли второй герой',entry:'Вы возвращаетесь туда, куда обещали больше не приезжать.'},B:{name:'Ева',role:'Куратор последнего вечера отеля',goal:'Добиться от Марка решения до полуночи',inner_conflict:'Ей нужно сказать правду, не потеряв контроль',relation:'Она знает о Марке больше, чем показывает',entry:'Вы ждали его, но теперь должны решить, сколько правды открыть сразу.'}}},
     reader_pages:pages,
     interaction:{kind:'choice',prompt:'Как продолжить?',options:body.blueprint.map(x=>({key:x.key,label:'Сделать действие: '+x.key,branch_effect:'Выбранное действие '+x.key+' заметно меняет следующий ход сцены'}))}
   });
 };
 const scene=await generateStoryScene({mode:'bold',stage:0,profile:initialStoryProfile('bold'),history:[],relationshipProfile:{},mutualWishes:[],generate:fake});
 assert.equal(scene.final,false);
+assert.equal(scene.story_identity.heroes.A.name,'Марк');
+assert.equal(scene.story_identity.heroes.B.name,'Ева');
+assert.equal(scene.story_identity.world.setting,'Старый отель у моря');
+
 assert.equal(scene.options.length,3);
 assert.equal(scene.options[0].key,prologue[0].key);
 assert(scene.options.every(x=>x.branch_effect),'Every player choice must carry a causal branch effect');
