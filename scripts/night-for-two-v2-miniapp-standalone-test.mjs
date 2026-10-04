@@ -72,4 +72,6 @@ assert(storyFlow.includes('НЕ иллюстрируй каждую страни
 assert(visualAI.includes('OPENROUTER_API_KEY'));
 assert(visualAI.includes('no visible genitals')&&visualAI.includes('no explicit sexual act'));
 
+assert(html.includes('html[data-screen="novel_library"],body[data-screen="novel_library"]')&&html.includes('overflow-y:auto!important')&&html.includes('body[data-screen="novel_library"] .screen'),'Novel library must opt out of compact iOS scroll lock');
+assert(html.includes('sceneGenerationStatus')&&html.includes('Собираем контекст и решения')&&html.includes('Проверяем и сохраняем выборы')&&html.includes('generation_phase'),'Story loading must expose named backend generation stages instead of an unexplained spinner');
 console.log('NIGHT_MINIAPP_STANDALONE_OK');

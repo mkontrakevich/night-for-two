@@ -252,6 +252,9 @@ export function createNightV2Runtime({pool=null}={}){
     ]);
     return {relationshipProfile:{...relationshipProfile,director},mutualWishes:mutual};
   }
+  async function setStoryGenerationPhase(sessionId,phase,detail){
+    await db.query(`UPDATE night_v2_sessions SET story_flow=jsonb_set(jsonb_set(COALESCE(story_flow,'{}'::jsonb),'{generation_phase}',$2::jsonb,true),'{generation_detail}',$3::jsonb,true),updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(String(phase||'')),JSON.stringify(String(detail||''))]);
+  }
   async function prepareStoryScene(sessionId,{force=false}={}){
     const key='prepare:'+String(sessionId);
     if(storyJobs.has(key))return storyJobs.get(key);
@@ -261,9 +264,12 @@ export function createNightV2Runtime({pool=null}={}){
         const current=storyFlowOf(s);
         if(!force&&current?.scene?.title)return current;
         const mode=String(s.evening_mode||'adaptive'),stage=Number(current.stage)||0,profile=current.profile||initialStoryProfile(mode),history=Array.isArray(current.history)?current.history:[],bookSeed=String(current.book_seed||crypto.randomBytes(18).toString('hex')),final=Boolean(current.final);
+        await setStoryGenerationPhase(sessionId,'context','Собираем контекст пары и предыдущие решения');
         const context=await storyContext();
+        await setStoryGenerationPhase(sessionId,'generation',stage>0?'ИИ пишет продолжение с последствиями ваших решений':'ИИ создаёт мир, роли героев и первую сцену');
         const scene=await generateStoryScene({mode,stage,profile,history,relationshipProfile:context.relationshipProfile,mutualWishes:context.mutualWishes,bookSeed,storyIdentity:current.story_identity||{},generate:request=>completeAIText(request),final});
-        const next={version:1,book_seed:bookSeed,book_title:String(current.book_title||scene.title||'История'),story_identity:current.story_identity&&Object.keys(current.story_identity).length?current.story_identity:(scene.story_identity||{}),stage,profile,history,scene,final:Boolean(scene.final),generating:false,arc:storyArcStage(stage)};
+        await setStoryGenerationPhase(sessionId,'saving','Проверяем сцену и сохраняем варианты действий');
+        const next={version:1,book_seed:bookSeed,book_title:String(current.book_title||scene.title||'История'),story_identity:current.story_identity&&Object.keys(current.story_identity).length?current.story_identity:(scene.story_identity||{}),stage,profile,history,scene,final:Boolean(scene.final),generating:false,generation_phase:'ready',generation_detail:'Сцена готова',arc:storyArcStage(stage)};
         await db.query(`UPDATE night_v2_sessions SET story_flow=$2::jsonb,updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(next)]);
         await db.query(`UPDATE night_v2_players SET story_choice='',story_submitted=false,reader_page=0,reader_scene_key=$2,updated_at=now() WHERE session_id=$1`,[sessionId,`stage:${stage}:${scene.title}`]);
         const ps=await players(sessionId),synthetic=ps.find(p=>isSyntheticUser(p.telegram_user_id));
@@ -333,11 +339,13 @@ export function createNightV2Runtime({pool=null}={}){
         const profileA=applyStoryOption(baseProfile,optA,mode),profileB=applyStoryOption(baseProfile,optB,mode),merged=mergeStoryProfiles(profileA,profileB,mode);
         const readerTail=Array.isArray(scene.reader_pages)&&scene.reader_pages.length?String(scene.reader_pages[scene.reader_pages.length-1]?.text||'').slice(-1200):'';const history=[...(Array.isArray(flow.history)?flow.history:[]),{stage:Number(flow.stage)||0,title:scene.title,text:scene.text,reader_tail:readerTail,merged_choice:[optA.key,optB.key],selected_actions:[{role:'A',key:optA.key,label:String(optA.label||optA.intent||optA.key)},{role:'B',key:optB.key,label:String(optB.label||optB.intent||optB.key)}],branch_effects:[String(optA.branch_effect||''),String(optB.branch_effect||'')].filter(Boolean),interaction_kind:String(scene.interaction?.kind||'choice'),director_signal:mergeDirectorSignals(optA,optB),profile:merged}].slice(-10);
         const nextStage=(Number(flow.stage)||0)+1,final=nextStage>STORY_MAX_CHOICE_STAGE;
-        const generating={...flow,history,profile:merged,stage:nextStage,final,generating:true,scene:null,arc:storyArcStage(nextStage)};
+        const generating={...flow,history,profile:merged,stage:nextStage,final,generating:true,generation_phase:'context',generation_detail:'Собираем последствия решений обоих игроков',scene:null,arc:storyArcStage(nextStage)};
         await db.query(`UPDATE night_v2_sessions SET story_flow=$2::jsonb,updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(generating)]);
         const context=await storyContext();
+        await setStoryGenerationPhase(sessionId,'generation','ИИ пишет следующую сцену из последствий обоих выборов');
         const nextScene=await generateStoryScene({mode,stage:nextStage,profile:merged,history,relationshipProfile:context.relationshipProfile,mutualWishes:context.mutualWishes,bookSeed:String(flow.book_seed||''),storyIdentity:flow.story_identity||{},generate:request=>completeAIText(request),final});
-        const next={...generating,scene:nextScene,final:Boolean(nextScene.final),generating:false};
+        await setStoryGenerationPhase(sessionId,'saving','Проверяем причинность ветки и сохраняем варианты действий');
+        const next={...generating,scene:nextScene,final:Boolean(nextScene.final),generating:false,generation_phase:'ready',generation_detail:'Сцена готова'};
         await db.query(`UPDATE night_v2_sessions SET story_flow=$2::jsonb,selected_pack_key='personal',permissions=$3::jsonb,negotiated_level=$4,updated_at=now() WHERE id=$1`,[sessionId,JSON.stringify(next),JSON.stringify(merged.permissions||[]),String(merged.level||'familiar')]);
         await db.query(`UPDATE night_v2_players SET story_choice='',story_submitted=false,reader_page=0,reader_scene_key=$2,updated_at=now() WHERE session_id=$1`,[sessionId,`stage:${nextStage}:${nextScene.title}`]);
         const synthetic=ps.find(p=>isSyntheticUser(p.telegram_user_id));
