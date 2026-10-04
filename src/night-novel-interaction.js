@@ -1,6 +1,19 @@
+import fs from 'node:fs/promises';
 import {completeAIText} from './ai/provider-router.js';
 
 const PERMISSIONS=new Set(['words','embrace','kiss','touch','skip']);
+let interactionSkillCache='';
+async function interactionSkillExcerpt(){
+  if(interactionSkillCache)return interactionSkillCache;
+  try{
+    const raw=await fs.readFile(new URL('../skills/couple-space/intimate-narrative/SKILL.md',import.meta.url),'utf8');
+    const sections=['## 3. Storyteller behavior','## 17A. Dialogue contract','## 17C. Prose complexity contract'],chunks=[];
+    for(const title of sections){const start=raw.indexOf(title);if(start<0)continue;const next=raw.indexOf('\n## ',start+4);chunks.push(raw.slice(start,next<0?raw.length:next));}
+    interactionSkillCache=chunks.join('\n\n').slice(0,9000);
+  }catch(error){console.warn('NIGHT_INTERACTION_SKILL_LOAD_FAILED',String(error?.message||error).slice(0,160));interactionSkillCache='';}
+  return interactionSkillCache;
+}
+
 
 function parse(raw){
   if(raw&&typeof raw==='object')return raw;
@@ -18,6 +31,7 @@ function fallback(page={}){
 
 export async function createNovelInteraction({page={},novel={}}={}){
   const safeFallback=fallback(page);
+  const narrativeSkill=await interactionSkillExcerpt();
   try{
     const raw=await completeAIText({
       contour:'wife',
@@ -26,7 +40,11 @@ export async function createNovelInteraction({page={},novel={}}={}){
       temperature:.45,
       maxTokens:420,
       messages:[
-        {role:'system',content:'Ты создаёшь одну короткую интерактивную паузу между главами художественного романа для двух совершеннолетних партнёров. Верни только JSON с полями permission, title, action_text, simulation_text. permission только words, embrace, kiss, touch или skip. action_text — необязательное предложение реальным читателям, максимум 1–2 минуты, без давления, без утверждения согласия, с явной возможностью пропустить. simulation_text — короткое продолжение только про героев романа: ассистент сам выбирает, как это же действие произошло в вымышленной сцене, не утверждая, что реальные читатели что-либо сделали. Не добавляй откровенные сексуальные инструкции, наготу, предметы, рискованные действия или цитаты личной переписки.'},
+        {role:'system',content:'Ты создаёшь одну короткую интерактивную паузу между главами художественного романа для двух совершеннолетних партнёров.
+
+${narrativeSkill?`КАНОНИЧЕСКИЙ NARRATIVE SKILL:\n${narrativeSkill}\n`:``}
+
+Действие должно вытекать из конкретной главы, а не быть универсальной романтической карточкой. Используй предмет, реплику, конфликт, выбор или мотив именно этой сцены. Формулируй точно и просто: без цепочек эпитетов, декоративной чувственности и повторения настроения главы другими словами. Верни только JSON с полями permission, title, action_text, simulation_text. permission только words, embrace, kiss, touch или skip. action_text — необязательное предложение реальным читателям, максимум 1–2 минуты, без давления, без утверждения согласия, с явной возможностью пропустить. simulation_text — короткое продолжение только про героев романа: ассистент сам выбирает, как это же действие произошло в вымышленной сцене, не утверждая, что реальные читатели что-либо сделали. Не добавляй откровенные сексуальные инструкции, наготу, предметы, рискованные действия или цитаты личной переписки.'},
         {role:'user',content:JSON.stringify({novel_title:String(novel.title||'').slice(0,160),chapter:String(page.chapter_title||'').slice(0,160),page_text:String(page.body||'').slice(-1800)})}
       ]
     });
