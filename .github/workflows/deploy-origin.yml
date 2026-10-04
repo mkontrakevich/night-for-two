@@ -3,8 +3,13 @@ name: Deploy Standalone Origin
 on:
   # Production is deployed by the marins-reminder-bot bridge, which owns the
   # persistent DB credential and private relationship-context token.
-  # Keep this workflow only as an explicit emergency/manual path.
+  # Keep workflow_dispatch for emergency/manual use and a committed trigger
+  # file for auditable ChatGPT-driven production releases from canonical main.
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/deploy-origin.trigger"
 
 concurrency:
   group: night-for-two-origin-production
