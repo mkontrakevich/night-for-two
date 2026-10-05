@@ -25,7 +25,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $running = docker inspect -f '{{.State.Running}}' night-for-two-app-1
           if ($running -ne 'true') { throw "NIGHT_APP_NOT_RUNNING" }
-          Invoke-RestMethod -Uri 'http://127.0.0.1:5681/night/health' -TimeoutSec 10 | ConvertTo-Json -Compress | Write-Host
+          Invoke-RestMethod -Uri 'http://127.0.0.1:5683/night/health' -TimeoutSec 10 | ConvertTo-Json -Compress | Write-Host
 
       - name: Execute SD-guided page 65 repair
         shell: powershell
