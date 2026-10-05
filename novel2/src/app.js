@@ -4,10 +4,10 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {config,assertProductionConfig} from './config.js';
 import {authenticate} from './auth.js';
-import {initDb,latestBook,createBook,appendTurn,recentTurns,advanceBook,identities,saveIdentity,db} from './db.js';
+import {initDb,latestBook,createBook,appendTurn,recentTurns,advanceBook,identities,saveIdentity,approveIdentity,db} from './db.js';
 import {createStoryBible,continueStory} from './prose-engine.js';
-import {buildLock} from './identity-engine.js';
-import {generateVisual} from './visual-engine.js';
+import {analyzeIdentity,buildLock} from './identity-engine.js';
+import {generateVisual,generateCalibration} from './visual-engine.js';
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const htmlPath=path.resolve(__dirname,'../public/index.html');
@@ -19,7 +19,7 @@ function send(res,status,payload,type='application/json; charset=utf-8'){
 }
 async function bodyJson(req){
   const chunks=[];let total=0;
-  for await(const chunk of req){total+=chunk.length;if(total>2_500_000)throw new Error('BODY_TOO_LARGE');chunks.push(chunk);}
+  for await(const chunk of req){total+=chunk.length;if(total>18_000_000)throw new Error('BODY_TOO_LARGE');chunks.push(chunk);}
   if(!chunks.length)return{};
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
@@ -82,6 +82,16 @@ async function main(){
         return send(res,200,{ok:true,state:publicState(book,auth,ids)});
       }
 
+      if(url.pathname==='/novel2/api/identity/analyze'){
+        const role=auth.role;
+        const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,6):[];
+        if(refs.length<2)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
+        const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts:input.user_facts||{}});
+        const saved=await saveIdentity(role,{profile:analyzed.profile,identityLock:analyzed.identityLock,referenceImages:refs,approved:false});
+        const calibration=await generateCalibration({identity:saved,role});
+        return send(res,200,{ok:true,identity:{role,approved:false,version:saved.version,profile:saved.profile},calibration:'data:image/jpeg;base64,'+calibration.base64});
+      }
+
       if(url.pathname==='/novel2/api/identity/register'){
         const role=auth.role;
         const profile=input.profile&&typeof input.profile==='object'?input.profile:{};
@@ -91,6 +101,19 @@ async function main(){
         await saveIdentity(role,{profile,identityLock,referenceImages:refs,approved:Boolean(input.approved)});
         ids=await identities();
         return send(res,200,{ok:true,identity:{role,approved:Boolean(ids[role]?.approved),version:ids[role]?.version||1}});
+      }
+
+      if(url.pathname==='/novel2/api/identity/approve'){
+        const saved=await approveIdentity(auth.role);
+        return send(res,200,{ok:true,identity:{role:auth.role,approved:true,version:saved.version}});
+      }
+
+      if(url.pathname==='/novel2/api/identity/calibrate'){
+        ids=await identities();
+        const identity=ids[auth.role];
+        if(!identity)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_NOT_FOUND'});
+        const calibration=await generateCalibration({identity,role:auth.role});
+        return send(res,200,{ok:true,calibration:'data:image/jpeg;base64,'+calibration.base64});
       }
 
       if(url.pathname==='/novel2/api/visual'){
