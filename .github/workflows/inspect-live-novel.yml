@@ -3,9 +3,9 @@ name: Inspect live novel generation
 on:
   workflow_dispatch:
   push:
-    branches: [main, ops/repair-linear-page-65-sd-skill]
+    branches: [main, "ops/repair-linear-page-65-sd-skill"]
     paths:
-      - ".github/workflows/inspect-live-novel.yml"
+      - ".github/workflows/inspect-live-novel.yml"\n      - "scripts/repair-page65-ops.mjs"
 
 permissions:
   contents: read
@@ -29,230 +29,25 @@ jobs:
           Write-Host '=== RECENT GENERATOR LOGS ==='
           docker logs night-for-two-app-1 --since 20m 2>&1 | Select-String -Pattern 'NIGHT_LINEAR_|NIGHT_RELATIONSHIP_CONTEXT_READY|NIGHT_STORY_|ai_gateway|NOVEL|generation|OPENROUTER|failed|error' | Select-Object -Last 160 | ForEach-Object { $_.Line }
 
-      - name: Repair linear novel page 65 with SD + Character Identity skills
+      - name: Checkout one-shot repair script
+        if: ${{ github.ref == 'refs/heads/ops/repair-linear-page-65-sd-skill' }}
+        uses: actions/checkout@v4
+
+      - name: Repair page 65 via canonical visual skills
         if: ${{ github.ref == 'refs/heads/ops/repair-linear-page-65-sd-skill' }}
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
+          $repair = Get-Content -Raw "scripts/repair-page65-ops.mjs"
 
-          $prepare = @'
-          import fs from 'node:fs/promises';
-          import pg from 'pg';
-          import {completeAIText} from './src/ai/provider-router.js';
-
-          const {Pool}=pg;
-          const pool=new Pool({connectionString:process.env.DATABASE_URL,max:1});
-          const NOVEL_ID=5,PAGE_NO=65;
-          const clean=(v='',n=6000)=>String(v||'').replace(/\r/g,'').trim().slice(0,n);
-
-          async function usage(){
-            try{
-              const key=String(process.env.OPENROUTER_API_KEY||'');
-              if(!key)return null;
-              const r=await fetch('https://openrouter.ai/api/v1/key',{headers:{authorization:'Bearer '+key}});
-              if(!r.ok)return null;
-              const j=await r.json(),d=j?.data||j||{};
-              const n=v=>Number.isFinite(Number(v))?Number(v):null;
-              return {usage:n(d.usage),daily:n(d.usage_daily),monthly:n(d.usage_monthly)};
-            }catch{return null;}
-          }
-
-          try{
-            const before=await usage();
-            const {rows:nrows}=await pool.query(
-              "SELECT id,title,status,generated_pages,total_pages,generated_images,plan,error FROM night_linear_novels WHERE id=$1",
-              [NOVEL_ID]
-            );
-            const novel=nrows[0];
-            if(!novel)throw new Error('PAGE65_NOVEL_MISSING');
-            if(Number(novel.generated_pages)!==100||Number(novel.total_pages)!==100)throw new Error('PAGE65_TEXT_NOT_COMPLETE');
-            if(String(novel.status)!=='complete')throw new Error('PAGE65_NOVEL_STATUS_GUARD:'+String(novel.status));
-
-            const {rows:bad}=await pool.query(
-              "SELECT page_no,image_status FROM night_linear_novel_pages WHERE novel_id=$1 AND BTRIM(media_prompt)<>'' AND image_status<>'ready' ORDER BY page_no",
-              [NOVEL_ID]
-            );
-            if(bad.length!==1||Number(bad[0].page_no)!==PAGE_NO||String(bad[0].image_status)!=='failed'){
-              throw new Error('PAGE65_SINGLE_FAILURE_GUARD:'+JSON.stringify(bad));
-            }
-
-            const {rows:prows}=await pool.query(
-              "SELECT page_no,chapter_no,chapter_title,page_title,body,media_prompt,visual_key,image_status FROM night_linear_novel_pages WHERE novel_id=$1 AND page_no BETWEEN $2 AND $3 ORDER BY page_no",
-              [NOVEL_ID,PAGE_NO-1,PAGE_NO+1]
-            );
-            const page=prows.find(x=>Number(x.page_no)===PAGE_NO);
-            if(!page)throw new Error('PAGE65_PAGE_MISSING');
-
-            const [sdSkill,characterSkill]=await Promise.all([
-              fs.readFile('./skills/sd-story-illustration/SKILL.md','utf8'),
-              fs.readFile('./skills/real-couple-character-identity/SKILL.md','utf8')
-            ]);
-            const plan=novel.plan||{};
-
-            const raw=await completeAIText({
-              contour:'wife',
-              requestName:'night_linear_page65_visual_prompt_repair',
-              skipDatabaseContext:true,
-              temperature:.32,
-              maxTokens:1800,
-              messages:[
-                {role:'system',content:`You are the visual prompt director for a cinematic illustrated novel. Rebuild ONE production image prompt from the exact page prose and the two canonical visual skills supplied by the application.
-
-Follow this block order exactly:
-SHOT TYPE
-→ STORY / ACTION
-→ BODY LANGUAGE / SUBJECT SCALE
-→ EMOTION / ATMOSPHERE
-→ WARDROBE / PROPS / TEXTURES
-→ ENVIRONMENT
-→ LIGHT / TIME
-→ CAMERA / LENS
-→ COLOR / FILM CHARACTER
-→ IDENTITY LOCK
-→ CONTINUITY LOCK
-
-Rules:
-- The page prose is canonical. Do not invent a different action, room, prop, garment, character position, time or emotional beat.
-- Use fictional character identity information from NOVEL_PLAN only. Do not infer or include sensitive real-player traits or direct identifiers.
-- Preserve character A/B separation, relative scale, wardrobe/prop ownership and prior-page continuity.
-- Create a premium vertical 9:16 editorial/cinematic still.
-- Keep sensuality non-explicit: no visible genitals, no visible nipples, no sexual act, no pornographic framing.
-- No text, logo or watermark in the image.
-- Output JSON only: {"media_prompt":"..."}.
-
-SD STORY ILLUSTRATION SKILL:
-${clean(sdSkill,9000)}
-
-CHARACTER IDENTITY SKILL:
-${clean(characterSkill,9000)}`},
-                {role:'user',content:JSON.stringify({
-                  NOVEL_TITLE:novel.title,
-                  NOVEL_PLAN:{
-                    protagonists:plan.protagonists||[],
-                    world_bible:plan.world_bible||{},
-                    style_bible:plan.style_bible||{},
-                    master_plot:plan.master_plot||{}
-                  },
-                  PREVIOUS_PAGE:prows.find(x=>Number(x.page_no)===PAGE_NO-1)||null,
-                  TARGET_PAGE:{
-                    page_no:page.page_no,
-                    chapter_no:page.chapter_no,
-                    chapter_title:page.chapter_title,
-                    page_title:page.page_title,
-                    body:page.body,
-                    previous_media_prompt:page.media_prompt
-                  },
-                  NEXT_PAGE:prows.find(x=>Number(x.page_no)===PAGE_NO+1)||null
-                })}
-              ]
-            });
-
-            const text=String(raw||'').trim().replace(/^```(?:json)?\s*|\s*```$/g,'');
-            let parsed;
-            try{parsed=JSON.parse(text)}catch{
-              const a=text.indexOf('{'),b=text.lastIndexOf('}');
-              if(a<0||b<=a)throw new Error('PAGE65_PROMPT_JSON_INVALID');
-              parsed=JSON.parse(text.slice(a,b+1));
-            }
-            const prompt=clean(parsed?.media_prompt,5000);
-            if(prompt.length<700)throw new Error('PAGE65_PROMPT_TOO_SHORT:'+prompt.length);
-            const order=['SHOT','STORY','BODY','EMOTION','WARDROBE','ENVIRONMENT','LIGHT','CAMERA','COLOR','IDENTITY','CONTINUITY'];
-            const upper=prompt.toUpperCase();
-            let last=-1;
-            for(const marker of order){
-              const idx=upper.indexOf(marker);
-              if(idx<=last)throw new Error('PAGE65_PROMPT_ORDER_INVALID:'+marker);
-              last=idx;
-            }
-
-            await pool.query("UPDATE night_linear_novel_pages SET media_prompt=$3,image_status='planned',updated_at=now() WHERE novel_id=$1 AND page_no=$2",[NOVEL_ID,PAGE_NO,prompt]);
-            await pool.query("UPDATE night_linear_novels SET status='illustrating',error='',updated_at=now() WHERE id=$1",[NOVEL_ID]);
-
-            console.log('NIGHT_PAGE65_PROMPT_REBUILT '+JSON.stringify({
-              novel_id:String(NOVEL_ID),
-              page_no:PAGE_NO,
-              prompt_length:prompt.length,
-              sd_skill:true,
-              character_identity_skill:true,
-              openrouter_usage_before:before?.usage??null
-            }));
-          }finally{
-            await pool.end().catch(()=>{});
-          }
-          '@
-
-          $prepare | docker exec -i night-for-two-app-1 node --input-type=module -
-          if ($LASTEXITCODE -ne 0) { throw "NIGHT_PAGE65_PROMPT_REBUILD_FAILED:$LASTEXITCODE" }
+          $repair | docker exec -i -e PAGE65_PHASE=prepare night-for-two-app-1 node --input-type=module -
+          if ($LASTEXITCODE -ne 0) { throw "PAGE65_PREPARE_FAILED:$LASTEXITCODE" }
 
           docker exec -e NIGHT_RESUME_NOVEL_ID=5 night-for-two-app-1 node scripts/night-generate-linear-novel.mjs
-          $generationExit=$LASTEXITCODE
+          if ($LASTEXITCODE -ne 0) { throw "PAGE65_GENERATION_FAILED:$LASTEXITCODE" }
 
-          $verify = @'
-          import fs from 'node:fs/promises';
-          import pg from 'pg';
-
-          const {Pool}=pg;
-          const pool=new Pool({connectionString:process.env.DATABASE_URL,max:1});
-
-          async function usage(){
-            try{
-              const key=String(process.env.OPENROUTER_API_KEY||'');
-              if(!key)return null;
-              const r=await fetch('https://openrouter.ai/api/v1/key',{headers:{authorization:'Bearer '+key}});
-              if(!r.ok)return null;
-              const j=await r.json(),d=j?.data||j||{};
-              const n=v=>Number.isFinite(Number(v))?Number(v):null;
-              return {usage:n(d.usage),daily:n(d.usage_daily),monthly:n(d.usage_monthly)};
-            }catch{return null;}
-          }
-
-          try{
-            const {rows:nrows}=await pool.query("SELECT id,status,generated_pages,total_pages,generated_images,error FROM night_linear_novels WHERE id=5");
-            const novel=nrows[0]||{};
-            const {rows:statsRows}=await pool.query(
-              "SELECT count(*) FILTER (WHERE BTRIM(media_prompt)<>'' AND image_status='ready')::int AS ready,count(*) FILTER (WHERE BTRIM(media_prompt)<>'')::int AS planned,count(*) FILTER (WHERE BTRIM(media_prompt)<>'' AND image_status='failed')::int AS failed FROM night_linear_novel_pages WHERE novel_id=5"
-            );
-            const stats=statsRows[0]||{};
-            const {rows:pageRows}=await pool.query("SELECT page_no,image_status,visual_key,length(media_prompt) AS prompt_length FROM night_linear_novel_pages WHERE novel_id=5 AND page_no=65");
-            const page=pageRows[0]||{};
-            const metaPath=String(process.env.NIGHT_VISUAL_CACHE_DIR||'/app/config/night-visuals')+'/linear-novel-5-page-065.json';
-            let meta=null;
-            try{meta=JSON.parse(await fs.readFile(metaPath,'utf8'));}catch{}
-            const u=await usage();
-            const ok=String(novel.status)==='complete'
-              && Number(stats.ready)===20
-              && Number(stats.planned)===20
-              && Number(stats.failed)===0
-              && String(page.image_status)==='ready'
-              && Boolean(meta?.qa?.passed);
-
-            console.log('NIGHT_PAGE65_REPAIR_RESULT '+JSON.stringify({
-              ok,
-              novel_status:String(novel.status||''),
-              page65_status:String(page.image_status||''),
-              ready:Number(stats.ready)||0,
-              planned:Number(stats.planned)||0,
-              failed:Number(stats.failed)||0,
-              prompt_length:Number(page.prompt_length)||0,
-              qa_passed:Boolean(meta?.qa?.passed),
-              qa_score:Number(meta?.qa?.score)||null,
-              qa_model:String(meta?.qa?.model||''),
-              image_model:String(meta?.model||''),
-              openrouter_usage_after:u?.usage??null,
-              openrouter_usage_daily:u?.daily??null,
-              openrouter_usage_monthly:u?.monthly??null
-            }));
-            if(!ok)process.exitCode=2;
-          }finally{
-            await pool.end().catch(()=>{});
-          }
-          '@
-
-          $verify | docker exec -i night-for-two-app-1 node --input-type=module -
-          $verifyExit=$LASTEXITCODE
-          if ($generationExit -ne 0 -or $verifyExit -ne 0) {
-            throw "NIGHT_PAGE65_REPAIR_FAILED:generation=$generationExit verify=$verifyExit"
-          }
+          $repair | docker exec -i -e PAGE65_PHASE=verify night-for-two-app-1 node --input-type=module -
+          if ($LASTEXITCODE -ne 0) { throw "PAGE65_VERIFY_FAILED:$LASTEXITCODE" }
 
       - name: Read-only Interactive Novel state gate
         shell: powershell
