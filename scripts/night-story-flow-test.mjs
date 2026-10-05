@@ -169,6 +169,45 @@ assert.equal(proseRepaired.title,'Закрытая библиотека','Reader
 assert.equal(proseRepaired.story_identity.heroes.A.name,'Лев','Reader repair must not overwrite Story Identity');
 assert(proseRepaired.options.length>=2,'Reader repair must preserve canonical branching options');
 
+
+let optionSceneCalls=0,optionRepairCalls=0;
+const optionRepairFake=async req=>{
+  if(req.requestName==='night_story_options_repair'){
+    optionRepairCalls++;
+    const body=JSON.parse(req.messages[1].content||'{}');
+    return JSON.stringify({
+      prompt:'Как поступить у запертой двери?',
+      options:body.ALLOWED_OPTIONS.map((x,i)=>({
+        key:x.key,
+        label:i===0?'Сказать Вере, что ключ найден':'Проверить замок самому и попросить Веру следить за коридором',
+        branch_effect:i===0?'Вера получает ключ и замечает на нём номер скрытого шкафа':'Лев первым открывает технический проход, а Вера замечает приближающегося охранника'
+      }))
+    });
+  }
+  optionSceneCalls++;
+  const body=JSON.parse(req.messages[1].content||'{}'),expected=Number(body.pageCount)||8;
+  const pages=Array.from({length:expected},(_,i)=>({
+    id:'option_'+(i+1),
+    title:i===0?'Дверь архива':'',
+    text:Array.from({length:150},()=>('страница'+(i+1))).join(' '),
+    media:(i===0||i===expected-1)?{kind:'image',prompt:'medium shot → two adult fictional characters at a locked archive door → focused body language → tense quiet atmosphere → coats, brass key, paper catalog → historic archive corridor → warm night practical light → 50mm lens → muted cinematic film palette → stable identity lock → preserve wardrobe and location continuity'}:null
+  }));
+  return JSON.stringify({
+    title:'Дверь архива',
+    text:'Герои находят запертую дверь и должны решить, кто возьмёт инициативу.',
+    visual_prompt:'two adult fictional characters at a locked archive door, cinematic vertical frame',
+    story_identity:{world:{setting:'Закрытый архив',time:'Ночь',premise:'Двое взрослых героев ищут письмо в закрытом архиве.',hook:'За дверью слышен шум.'},heroes:{A:{name:'Лев',role:'Реставратор',goal:'Открыть архив',inner_conflict:'Он боится ошибиться с ключом',relation:'Доверяет Вере не полностью',entry:'Вы держите ключ у старого замка.'},B:{name:'Вера',role:'Архивист',goal:'Найти письмо',inner_conflict:'Она скрывает часть каталога',relation:'Считает Льва союзником',entry:'Вы слышите шаги за спиной.'}}},
+    reader_pages:pages,
+    interaction:{kind:'choice',prompt:'Что сделать?',options:body.blueprint.map(x=>({key:x.key,label:'',branch_effect:''}))}
+  });
+};
+const optionRepaired=await generateStoryScene({mode:'bold',stage:0,profile:initialStoryProfile('bold'),history:[],relationshipProfile:{},mutualWishes:[],generate:optionRepairFake});
+assert.equal(optionSceneCalls,3,'Invalid options must exhaust normal scene retries before isolated options repair');
+assert.equal(optionRepairCalls,1,'Invalid options must trigger isolated options repair');
+assert.equal(optionRepaired.title,'Дверь архива');
+assert.equal(optionRepaired.story_identity.heroes.A.name,'Лев');
+assert(optionRepaired.options.every(x=>x.label&&x.branch_effect),'Options repair must produce concrete labels and causal branch effects');
+
 const finale=await generateStoryScene({mode:'bold',stage:9,profile:merged,history:[scene],relationshipProfile:{},mutualWishes:[],generate:fake,final:true});
 assert.equal(finale.final,true);
 assert.equal(finale.options.length,0);
