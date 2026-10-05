@@ -73,6 +73,8 @@ assert(visualAI.includes('OPENROUTER_API_KEY'));
 assert(visualAI.includes('no visible genitals')&&visualAI.includes('no explicit sexual act'));
 
 assert(html.includes('html[data-screen="novel_library"],body[data-screen="novel_library"]')&&html.includes('overflow-y:auto!important')&&html.includes('body[data-screen="novel_library"] .screen'),'Novel library must opt out of compact iOS scroll lock');
+assert(html.includes('html[data-reader="true"],body[data-reader="true"]')&&html.includes('touch-action:pan-y!important')&&html.includes('body[data-reader="true"] .readerBook{height:auto!important'),'Any reader mode, including interactive story_scene, must opt out of the compact iOS scroll lock');
+assert(html.includes("document.documentElement.dataset.reader='true'")&&html.includes("delete document.documentElement.dataset.reader"),'Reader mode must mark and clear both root scrolling elements on iOS');
 assert(html.includes('sceneGenerationStatus')&&html.includes('Собираем контекст и решения')&&html.includes('Проверяем и сохраняем выборы')&&html.includes('generation_phase'),'Story loading must expose named backend generation stages instead of an unexplained spinner');
 assert(html.includes('/night/api/novel-delete')&&html.includes('Удалить историю'),'Library must allow deleting unwanted stories');
 assert(html.includes('hydrateLinearNovelImage')&&html.includes('readerInlineMedia'),'Reader must insert generated illustrations into lazy-loaded pages');
