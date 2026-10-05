@@ -181,7 +181,8 @@ function validateGeneratedScene(raw,{mode,stage,blueprint,final=false,preferredK
     const generatedOption=byKey.get(x.key)||{};
     return {key:x.key,label:clean(generatedOption.label,140),intent:x.intent,branch_effect:clean(generatedOption.branch_effect||generatedOption.consequence,240),meta:x.meta,director_meta:sanitizeDirectorMeta(generatedOption)};
   });
-  if(!prompt||options.some(x=>!x.label||!x.branch_effect))throw new Error('NIGHT_STORY_OPTIONS_INVALID');
+  const invalidOptions=options.filter(x=>!x.label||!x.branch_effect);
+  if(!prompt||invalidOptions.length)throw new Error(`NIGHT_STORY_OPTIONS_INVALID:prompt=${Boolean(prompt)}:invalid=${invalidOptions.map(x=>x.key+':' + (!x.label?'label':'') + (!x.branch_effect?'branch_effect':'')).join(',')||'none'}`);
   return {version:4,mode,stage,final:false,title,text,visual_prompt:visualPrompt,story_identity:storyIdentity,reader_pages:readerPages,reader_meta:readerMeta,question:prompt,interaction:{kind,prompt},options};
 }
 
@@ -306,6 +307,57 @@ visual_prompt — краткое описание вертикального к�
         if(!Array.isArray(repairedData?.reader_pages))throw new Error('NIGHT_STORY_READER_REPAIR_PAYLOAD_INVALID');
         const candidate=JSON.stringify({...sourceScene,reader_pages:repairedData.reader_pages});
         repairSource=candidate;
+        lastRaw=candidate;
+        return validateGeneratedScene(candidate,{mode,stage,blueprint,final,preferredKind});
+      }catch(error){
+        last=error;
+      }
+    }
+  }
+
+  if(lastRaw&&!final&&/NIGHT_STORY_OPTIONS_INVALID/.test(String(last?.message||last||''))){
+    let optionSource=lastRaw;
+    for(let repairAttempt=1;repairAttempt<=2;repairAttempt++){
+      try{
+        const sourceScene=parse(optionSource);
+        const repaired=await generate({
+          contour:'wife',
+          requestName:'night_story_options_repair',
+          skipDatabaseContext:false,
+          temperature:repairAttempt===1?.48:.32,
+          maxTokens:1400,
+          messages:[
+            {role:'system',content:`Ты редактор развилок интерактивного романа. Исправь ТОЛЬКО вопрос выбора и options. Не переписывай сцену, Story Identity или reader_pages.
+
+Верни только JSON:
+{"prompt":"","options":[{"key":"","label":"","branch_effect":""}]}
+
+Правила:
+— верни ровно по одному option для каждого allowed key, ключи не менять;
+— label — конкретное немедленное действие или реплика героя внутри текущей сцены, не мета-описание;
+— branch_effect — конкретное наблюдаемое последствие этого действия, которое следующая глава обязана реализовать;
+— варианты должны реально различаться тактикой и последствием;
+— никаких заданий реальной паре, только действия вымышленных героев;
+— не раскрывай приватные сообщения/идентификаторы;
+— никаких Markdown и пояснений.`},
+            {role:'user',content:JSON.stringify({
+              VALIDATION_ERROR:String(last?.message||last||'').slice(0,700),
+              SCENE:{title:sourceScene.title,text:sourceScene.text,reader_tail:String(sourceScene.reader_pages?.at(-1)?.text||'').slice(-1800)},
+              ALLOWED_OPTIONS:blueprint.map(x=>({key:x.key,intent:x.intent}))
+            })}
+          ]
+        });
+        const repairedData=parse(repaired);
+        const prompt=clean(repairedData?.prompt,180);
+        const repairedOptions=Array.isArray(repairedData?.options)?repairedData.options:[];
+        if(!prompt||!repairedOptions.length)throw new Error('NIGHT_STORY_OPTIONS_REPAIR_PAYLOAD_INVALID');
+        const candidate=JSON.stringify({
+          ...sourceScene,
+          question:prompt,
+          interaction:{kind:'choice',prompt,options:repairedOptions},
+          options:repairedOptions
+        });
+        optionSource=candidate;
         lastRaw=candidate;
         return validateGeneratedScene(candidate,{mode,stage,blueprint,final,preferredKind});
       }catch(error){
