@@ -338,19 +338,27 @@ async function visualSkillContract(){
     fs.readFile(new URL('../skills/sd-story-illustration/SKILL.md',import.meta.url),'utf8'),
     fs.readFile(new URL('../skills/real-couple-character-identity/SKILL.md',import.meta.url),'utf8')
   ]);
-  const order=['SHOT TYPE','STORY / ACTION','BODY LANGUAGE / SUBJECT SCALE','EMOTION / ATMOSPHERE','WARDROBE / PROPS / TEXTURES','ENVIRONMENT','LIGHT / TIME','CAMERA / LENS','COLOR / FILM CHARACTER','IDENTITY LOCK','CONTINUITY LOCK'];
-  let last=-1;
-  for(const marker of order){
-    const idx=sdSkill.indexOf(marker)>=0?sdSkill.indexOf(marker):characterSkill.indexOf(marker);
-    if(idx<0)throw new Error('NIGHT_VISUAL_SKILL_CONTRACT_MISSING:'+marker);
-    if(marker!=='IDENTITY LOCK'&&marker!=='CONTINUITY LOCK'&&idx<last)throw new Error('NIGHT_VISUAL_SKILL_ORDER_INVALID:'+marker);
-    if(marker!=='IDENTITY LOCK'&&marker!=='CONTINUITY LOCK')last=idx;
+  const sdRequired=['SHOT TYPE','STORY/ACTION','BODY LANGUAGE / SUBJECT SCALE','EMOTION / ATMOSPHERE','WARDROBE / PROPS / TEXTURES','ENVIRONMENT','LIGHT / TIME','CAMERA / LENS','COLOR / FILM CHARACTER','IDENTITY LOCK','CONTINUITY LOCK','real-couple-character-identity'];
+  for(const marker of sdRequired){
+    if(!sdSkill.includes(marker))throw new Error('NIGHT_VISUAL_SKILL_CONTRACT_MISSING:SD:'+marker);
   }
-  if(!sdSkill.includes('real-couple-character-identity')||!characterSkill.includes('PAIR LOCK')){
-    throw new Error('NIGHT_VISUAL_CHARACTER_IDENTITY_DEPENDENCY_MISSING');
+  const characterRequired=['PAIR LOCK','IDENTITY LOCK','CONTINUITY LOCK','raw_messages=false'];
+  for(const marker of characterRequired){
+    if(!characterSkill.includes(marker))throw new Error('NIGHT_VISUAL_SKILL_CONTRACT_MISSING:CHARACTER:'+marker);
   }
   visualSkillContractCache='SD Story Illustration + Real Couple Character Identity loaded and validated';
   return visualSkillContractCache;
+}
+function assertVisualPromptOrder(prompt=''){
+  const order=['SHOT TYPE:','STORY / ACTION:','BODY LANGUAGE / SUBJECT SCALE:','EMOTION / ATMOSPHERE:','WARDROBE / PROPS / TEXTURES:','ENVIRONMENT:','LIGHT / TIME:','CAMERA / LENS:','COLOR / FILM CHARACTER:','IDENTITY LOCK:','CONTINUITY LOCK:'];
+  const upper=String(prompt||'').toUpperCase();
+  let last=-1;
+  for(const marker of order){
+    const idx=upper.indexOf(marker);
+    if(idx<0||idx<=last)throw new Error('NIGHT_VISUAL_PROMPT_ORDER_INVALID:'+marker);
+    last=idx;
+  }
+  return true;
 }
 function compactIdentity(plan={}){
   return clean(JSON.stringify({
@@ -364,7 +372,7 @@ async function buildSkillVisualPrompt({page,plan}){
   const identity=compactIdentity(plan);
   const beat=clean(page?.media_prompt,1800);
   const prose=clean(page?.body,2600);
-  return [
+  const prompt=[
     'SHOT TYPE: premium vertical 9:16 cinematic editorial still; one coherent frame; physically plausible perspective.',
     `STORY / ACTION: illustrate exactly this page beat without inventing a different action: ${beat}. Canonical prose facts: ${prose}`,
     'BODY LANGUAGE / SUBJECT SCALE: preserve the exact number of adult fictional characters, their relative scale, position, gesture and contact described by the prose; natural anatomy and hands.',
@@ -377,6 +385,8 @@ async function buildSkillVisualPrompt({page,plan}){
     `IDENTITY LOCK: preserve the same fictional protagonists across the book; never blend or swap identities, face geometry, hair, relative height or body scale. Canonical novel identity: ${identity}`,
     'CONTINUITY LOCK: continue the same wardrobe, props, location, body orientation and visual state from adjacent illustrated beats unless the current prose explicitly changes them; no extra people, text, logo or watermark; sensuality must remain non-explicit.'
   ].join('\n');
+  assertVisualPromptOrder(prompt);
+  return prompt;
 }
 
 async function ensureImage({novelId,page,plan}){
