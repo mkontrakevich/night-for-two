@@ -199,7 +199,7 @@ export async function generateStoryIdentity({mode='adaptive',stage=0,scene={},hi
 export async function generateStoryScene({mode='adaptive',stage=0,profile=initialStoryProfile(mode),history=[],relationshipProfile={},mutualWishes=[],bookSeed='',storyIdentity={},generate,final=false}={}){
   if(typeof generate!=='function')throw new Error('NIGHT_STORY_AI_UNAVAILABLE');
   const cfg=modeConfig(mode),arc=storyArcStage(stage),pageCount=storyPageCount(stage),pageOffset=storyPageOffset(stage),blueprint=final?[]:storyBlueprint(mode,stage,profile),preferredKind='choice';
-  let last=null;
+  let last=null,lastRaw=null;
   for(let attempt=0;attempt<3;attempt++){
     try{
       const raw=await generate({
@@ -249,6 +249,7 @@ visual_prompt — краткое описание вертикального к�
           })}
         ]
       });
+      let candidate=raw;
       if(Number(stage)===0){
         const parsedScene=parse(raw);
         const generatedIdentity=normalizeStoryIdentity(parsedScene?.story_identity);
@@ -256,12 +257,59 @@ visual_prompt — краткое описание вертикального к�
           parsedScene.story_identity=await generateStoryIdentity({
             mode,stage,scene:parsedScene,history,relationshipProfile,mutualWishes,bookSeed,generate
           });
-          return validateGeneratedScene(JSON.stringify(parsedScene),{mode,stage,blueprint,final,preferredKind});
+          candidate=JSON.stringify(parsedScene);
         }
       }
-      return validateGeneratedScene(raw,{mode,stage,blueprint,final,preferredKind});
+      lastRaw=candidate;
+      return validateGeneratedScene(candidate,{mode,stage,blueprint,final,preferredKind});
     }catch(error){last=error;}
   }
+
+  if(lastRaw&&/(?:NIGHT_STORY_READER_PAGES_INVALID|NIGHT_STORY_FINALE_PAGES_INVALID)/.test(String(last?.message||last||''))){
+    let repairSource=lastRaw;
+    for(let repairAttempt=1;repairAttempt<=2;repairAttempt++){
+      try{
+        const repaired=await generate({
+          contour:'wife',
+          requestName:'night_story_reader_repair',
+          skipDatabaseContext:false,
+          temperature:repairAttempt===1?.46:.32,
+          maxTokens:10000,
+          messages:[
+            {role:'system',content:`Ты литературный редактор интерактивного романа. Исправь только машинно-невалидный блок reader_pages, не меняя уже созданный сюжет, персонажей, Story Identity и смысл развилки.
+
+Верни ТОЛЬКО полный JSON сцены. Сохрани без смысловых изменений title, text, visual_prompt, story_identity, interaction и options; ключи options и branch_effect обязательны и неизменны.
+
+Требования к reader_pages:
+— ровно ${pageCount} страниц;
+— каждая страница — полноценная художественная проза 120–190 русских слов и НЕ МЕНЕЕ 650 символов;
+— страницы продолжают друг друга без повторов и конспекта;
+— не добавляй новые сюжетные факты, которых нет в исходной сцене: расширяй существующие действия, сенсорные детали, пространство, внутреннюю реакцию и причинность;
+— последняя страница естественно подводит к уже существующей interaction;
+— для ПРОЛОГА и ФИНАЛА media должно быть РОВНО на 2 страницах; для остальных глав — на 1–2 страницах;
+— media.prompt описывает именно событие соответствующей страницы и следует визуальному порядку SD Story Illustration: SHOT TYPE → STORY/ACTION → BODY LANGUAGE / SUBJECT SCALE → EMOTION / ATMOSPHERE → WARDROBE / PROPS / TEXTURES → ENVIRONMENT → LIGHT / TIME → CAMERA / LENS → COLOR / FILM CHARACTER → IDENTITY LOCK → CONTINUITY LOCK;
+— не раскрывай приватные сообщения и прямые идентификаторы игроков;
+— никаких Markdown, пояснений или текста вне JSON.`},
+            {role:'user',content:JSON.stringify({
+              VALIDATION_ERROR:String(last?.message||last||'').slice(0,700),
+              REQUIRED_PAGE_COUNT:pageCount,
+              REQUIRED_MEDIA_COUNT:(Number(stage)===0||final)?2:'1-2',
+              MIN_PAGE_CHARACTERS:650,
+              STAGE:stage,
+              FINAL:final,
+              SOURCE_SCENE:parse(repairSource)
+            })}
+          ]
+        });
+        repairSource=repaired;
+        lastRaw=repaired;
+        return validateGeneratedScene(repaired,{mode,stage,blueprint,final,preferredKind});
+      }catch(error){
+        last=error;
+      }
+    }
+  }
+
   throw last||new Error('NIGHT_STORY_GENERATION_FAILED');
 }
 
