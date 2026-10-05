@@ -87,6 +87,36 @@ assert.equal(repairedScene.story_identity.heroes.A.name,'Алекс');
 assert.equal(repairedScene.story_identity.heroes.B.name,'Мира');
 assert.equal(repairedScene.story_identity.world.setting,'Городской отель после закрытия');
 
+
+let readerRepairSceneCalls=0;
+const readerRepairFake=async req=>{
+  if(req.requestName==='night_story_identity'){
+    return JSON.stringify({world:{setting:'Ночной вокзал',time:'После полуночи',premise:'Двое взрослых героев пытаются успеть к последнему поезду и разобраться в старой тайне.',hook:'У них остался один билет и один нерешённый вопрос.'},heroes:{A:{name:'Илья',role:'Инженер-проектировщик',goal:'Понять, кто изменил маршрут',inner_conflict:'Он боится довериться догадке',relation:'Считает второго героя единственным союзником',entry:'Вы стоите у закрытой платформы и слышите приближение поезда.'},B:{name:'Анна',role:'Архивист вокзала',goal:'Передать Илье найденный документ',inner_conflict:'Она не уверена, что правда не разрушит их план',relation:'Знает больше, чем успела сказать',entry:'Вы держите документ, который может всё изменить до отправления поезда.'}}});
+  }
+  readerRepairSceneCalls++;
+  const body=JSON.parse(req.messages[1].content||'{}'),expected=Number(body.pageCount)||8;
+  assert.equal(Boolean(body.validationRepair),readerRepairSceneCalls>1,'Retry payload must explain the previous structural validation failure');
+  const count=readerRepairSceneCalls===1?expected-1:expected;
+  const pages=Array.from({length:count},(_,i)=>({
+    id:'repair_'+(i+1),
+    title:i===0?'Последний поезд':'',
+    text:Array.from({length:150},()=>('вагон'+(i+1))).join(' '),
+    media:(i===0||i===count-1)?{kind:'image',prompt:'same adult fictional couple, night railway platform, cinematic vertical frame'}:null
+  }));
+  return JSON.stringify({
+    title:'Последний поезд',
+    text:'Двое героев оказываются на ночном вокзале перед решением, которое изменит их маршрут.',
+    visual_prompt:'adult fictional couple on a night railway platform, cinematic vertical frame',
+    story_identity:{world:{setting:'Ночной вокзал',time:'После полуночи',premise:'Двое взрослых героев пытаются успеть к последнему поезду и разобраться в старой тайне.',hook:'У них остался один билет и один нерешённый вопрос.'},heroes:{A:{name:'Илья',role:'Инженер-проектировщик',goal:'Понять, кто изменил маршрут',inner_conflict:'Он боится довериться догадке',relation:'Считает второго героя единственным союзником',entry:'Вы стоите у закрытой платформы и слышите приближение поезда.'},B:{name:'Анна',role:'Архивист вокзала',goal:'Передать Илье найденный документ',inner_conflict:'Она не уверена, что правда не разрушит их план',relation:'Знает больше, чем успела сказать',entry:'Вы держите документ, который может всё изменить до отправления поезда.'}}},
+    reader_pages:pages,
+    interaction:{kind:'choice',prompt:'Что сделать до прибытия поезда?',options:body.blueprint.map(x=>({key:x.key,label:'Сделать '+x.key,branch_effect:'Решение '+x.key+' меняет следующий эпизод'}))}
+  });
+};
+const readerRepaired=await generateStoryScene({mode:'bold',stage:0,profile:initialStoryProfile('bold'),history:[],relationshipProfile:{},mutualWishes:[],generate:readerRepairFake});
+assert.equal(readerRepairSceneCalls,2,'Malformed page count must trigger a targeted structural retry instead of failing the story');
+assert.equal(readerRepaired.reader_pages.length,8);
+assert.equal(readerRepaired.reader_pages.filter(p=>p.media?.prompt).length,2);
+
 const finale=await generateStoryScene({mode:'bold',stage:9,profile:merged,history:[scene],relationshipProfile:{},mutualWishes:[],generate:fake,final:true});
 assert.equal(finale.final,true);
 assert.equal(finale.options.length,0);
