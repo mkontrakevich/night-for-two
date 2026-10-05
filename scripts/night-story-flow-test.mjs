@@ -117,6 +117,49 @@ assert.equal(readerRepairSceneCalls,2,'Malformed page count must trigger a targe
 assert.equal(readerRepaired.reader_pages.length,8);
 assert.equal(readerRepaired.reader_pages.filter(p=>p.media?.prompt).length,2);
 
+
+let shortSceneCalls=0,proseRepairCalls=0;
+const shortProseRepairFake=async req=>{
+  if(req.requestName==='night_story_identity'){
+    return JSON.stringify({world:{setting:'Закрытая библиотека',time:'Поздний вечер',premise:'Двое взрослых героев должны найти спрятанное письмо до закрытия здания.',hook:'Последний свет гаснет через несколько минут.'},heroes:{A:{name:'Лев',role:'Реставратор старых книг',goal:'Найти письмо первым',inner_conflict:'Он не уверен, можно ли доверять найденной подсказке',relation:'Считает второго героя необходимым союзником',entry:'Вы закрываете тяжёлую дверь читального зала и слышите щелчок старого замка.'},B:{name:'Вера',role:'Архивист редкого фонда',goal:'Понять, почему письмо скрывали',inner_conflict:'Она боится, что правда разрушит их договорённость',relation:'Знает, что Лев не рассказал ей всё',entry:'Вы держите каталог, в котором одна карточка явно подменена.'}}});
+  }
+  if(req.requestName==='night_story_reader_repair'){
+    proseRepairCalls++;
+    const body=JSON.parse(req.messages[1].content||'{}');
+    const source=body.SOURCE_SCENE;
+    const expected=Number(body.REQUIRED_PAGE_COUNT)||8;
+    const pages=Array.from({length:expected},(_,i)=>({
+      id:'expanded_'+(i+1),
+      title:i===0?'Закрытая библиотека':'',
+      text:Array.from({length:150},()=>('абзац'+(i+1))).join(' '),
+      media:(i===0||i===expected-1)?{kind:'image',prompt:'medium shot → two adult fictional characters searching a closed library → restrained body language → tense quiet atmosphere → period coats and paper catalog cards → historic reading hall → warm lamps at night → 50mm lens → muted cinematic film palette → stable character identity lock → preserve library and wardrobe continuity'}:null
+    }));
+    return JSON.stringify({...source,reader_pages:pages});
+  }
+  shortSceneCalls++;
+  const body=JSON.parse(req.messages[1].content||'{}'),expected=Number(body.pageCount)||8;
+  const pages=Array.from({length:expected},(_,i)=>({
+    id:'short_'+(i+1),
+    title:i===0?'Закрытая библиотека':'',
+    text:Array.from({length:25},()=>('коротко'+(i+1))).join(' '),
+    media:i===0?{kind:'image',prompt:'library scene'}:null
+  }));
+  return JSON.stringify({
+    title:'Закрытая библиотека',
+    text:'Двое героев остаются в читальном зале перед первым решением.',
+    visual_prompt:'two adult fictional characters in a historic library at night, cinematic vertical frame',
+    story_identity:{world:{setting:'Закрытая библиотека',time:'Поздний вечер',premise:'Двое взрослых героев должны найти спрятанное письмо до закрытия здания.',hook:'Последний свет гаснет через несколько минут.'},heroes:{A:{name:'Лев',role:'Реставратор старых книг',goal:'Найти письмо первым',inner_conflict:'Он не уверен, можно ли доверять найденной подсказке',relation:'Считает второго героя необходимым союзником',entry:'Вы закрываете тяжёлую дверь читального зала и слышите щелчок старого замка.'},B:{name:'Вера',role:'Архивист редкого фонда',goal:'Понять, почему письмо скрывали',inner_conflict:'Она боится, что правда разрушит их договорённость',relation:'Знает, что Лев не рассказал ей всё',entry:'Вы держите каталог, в котором одна карточка явно подменена.'}}},
+    reader_pages:pages,
+    interaction:{kind:'choice',prompt:'Что сделать первым?',options:body.blueprint.map(x=>({key:x.key,label:'Выбрать '+x.key,branch_effect:'Выбор '+x.key+' меняет следующий эпизод'}))}
+  });
+};
+const proseRepaired=await generateStoryScene({mode:'bold',stage:0,profile:initialStoryProfile('bold'),history:[],relationshipProfile:{},mutualWishes:[],generate:shortProseRepairFake});
+assert.equal(shortSceneCalls,3,'Short prose must exhaust structural scene retries before dedicated prose repair');
+assert.equal(proseRepairCalls,1,'Short reader prose must trigger the dedicated reader repair editor');
+assert.equal(proseRepaired.reader_pages.length,8);
+assert(proseRepaired.reader_pages.every(p=>p.text.length>=650),'Dedicated repair must expand every reader page to production prose length');
+assert.equal(proseRepaired.reader_pages.filter(p=>p.media?.prompt).length,2);
+
 const finale=await generateStoryScene({mode:'bold',stage:9,profile:merged,history:[scene],relationshipProfile:{},mutualWishes:[],generate:fake,final:true});
 assert.equal(finale.final,true);
 assert.equal(finale.options.length,0);
