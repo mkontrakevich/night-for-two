@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: novel2
+      POSTGRES_USER: novel2
+      POSTGRES_PASSWORD: ${NOVEL2_DB_PASSWORD:-novel2-local}
+    volumes:
+      - novel2_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U novel2 -d novel2"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://novel2:${NOVEL2_DB_PASSWORD:-novel2-local}@postgres:5432/novel2
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      PRIMARY_OWNER_ID: ${PRIMARY_OWNER_ID:-}
+      PARTNER_TELEGRAM_ID: ${PARTNER_TELEGRAM_ID:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      NOVEL2_TEXT_MODEL: ${NOVEL2_TEXT_MODEL:-openai/gpt-5.6}
+      NOVEL2_VISION_MODEL: ${NOVEL2_VISION_MODEL:-openai/gpt-5.6}
+      NOVEL2_IMAGE_MODEL: ${NOVEL2_IMAGE_MODEL:-bytedance-seed/seedream-4.5}
+      NOVEL2_PORT: 5690
+      NOVEL2_LOCAL_TEST_MODE: ${NOVEL2_LOCAL_TEST_MODE:-0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5690:5690"
+    restart: unless-stopped
+
+volumes:
+  novel2_pg:
