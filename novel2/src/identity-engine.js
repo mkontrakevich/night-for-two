@@ -1,4 +1,4 @@
-import {jsonCompletion} from './ai.js';
+import {visionJsonCompletion} from './ai.js';
 
 const IDENTITY_SYSTEM=`
 Ты создаёшь стабильный визуальный профиль совершеннолетнего человека для художественной экранизации.
@@ -9,7 +9,8 @@ const IDENTITY_SYSTEM=`
 Не определяй и не угадывай этничность, религию, здоровье, сексуальную ориентацию, политические взгляды или другие чувствительные признаки.
 Не сравнивай с знаменитостями.
 Не меняй внешность ради "красивее".
-Верни только JSON.
+Если ракурсы противоречат друг другу, выбирай признаки, подтверждённые несколькими изображениями.
+Верни только JSON по заданной схеме.
 `;
 
 function buildLock(role, profile={}) {
@@ -17,43 +18,50 @@ function buildLock(role, profile={}) {
   return [
     `CHARACTER IDENTITY LOCK — PLAYER_${role}`,
     'same approved adult fictionalized character across every scene',
-    `face: ${face.overall_shape||''}; jaw: ${face.jaw||''}; cheekbones: ${face.cheekbones||''}; brow: ${face.brow||''}; eyes: ${face.eyes_visual||''}; nose: ${face.nose_geometry||''}; mouth: ${face.mouth_geometry||''}`,
-    `hair: ${hair.color||''}; ${hair.length||''}; ${hair.texture||''}; hairline ${hair.hairline||''}; default style ${hair.default_style||''}`,
-    `body: ${body.height||''}; build ${body.build||''}; shoulders/waist ${body.shoulder_waist_ratio||''}; limbs ${body.limb_proportions||''}; posture ${body.posture||''}`,
-    'preserve face shape, nose geometry, eye spacing, jaw, hairline and body proportions',
-    'no identity swap, no face drift, no age drift, no beauty-filter face'
+    `face shape ${face.overall_shape||'stable'}; jaw ${face.jaw||'stable'}; cheekbones ${face.cheekbones||'stable'}; brow ${face.brow||'stable'}; eyes ${face.eyes_visual||'stable'}; nose geometry ${face.nose_geometry||'stable'}; mouth geometry ${face.mouth_geometry||'stable'}`,
+    `hair ${hair.color||''} ${hair.length||''} ${hair.texture||''}; hairline ${hair.hairline||'stable'}; default style ${hair.default_style||'stable'}`,
+    `body ${body.height||''}; relative height ${body.relative_height||''}; build ${body.build||'stable'}; shoulder-waist ratio ${body.shoulder_waist_ratio||'stable'}; limb proportions ${body.limb_proportions||'stable'}; posture ${body.posture||'stable'}`,
+    Array.isArray(profile.distinctive_geometry)&&profile.distinctive_geometry.length?`distinctive geometry: ${profile.distinctive_geometry.join(', ')}`:'',
+    'preserve face shape, nose geometry, eye spacing, jaw, hairline, body proportions and relative scale',
+    'do not beautify into a different person',
+    'no identity swap, no face drift, no profile drift, no age drift, no beauty-filter face'
   ].filter(Boolean).join('; ');
 }
 
 export async function analyzeIdentity({role, referenceImages=[], userFacts={}}) {
   if(!['A','B'].includes(role)) throw new Error('NOVEL2_IDENTITY_ROLE_INVALID');
-  if(!Array.isArray(referenceImages)||referenceImages.length===0) throw new Error('NOVEL2_IDENTITY_REFERENCES_REQUIRED');
+  if(!Array.isArray(referenceImages)||referenceImages.length<2) throw new Error('NOVEL2_IDENTITY_REFERENCES_REQUIRED');
 
-  const content=[
-    {type:'text',text:IDENTITY_SYSTEM+'\n'+JSON.stringify({
-      role:`PLAYER_${role}`,
-      user_facts:userFacts,
-      schema:{
-        face:{overall_shape:'',jaw:'',cheekbones:'',brow:'',eyes_visual:'',nose_geometry:'',mouth_geometry:'',distinctive_geometry:[]},
-        hair:{color:'',length:'',texture:'',hairline:'',default_style:''},
-        body:{height:'',relative_height:'',build:'',shoulder_waist_ratio:'',limb_proportions:'',posture:''},
-        appearance_notes:[],
-        do_not_drift:[]
-      }
-    })}
-  ];
-  for(const url of referenceImages.slice(0,6)) content.push({type:'image_url',image_url:{url:String(url)}});
+  const schema={
+    face:{
+      overall_shape:'',jaw:'',cheekbones:'',brow:'',eyes_visual:'',
+      nose_geometry:'',mouth_geometry:''
+    },
+    hair:{color:'',length:'',texture:'',hairline:'',default_style:''},
+    body:{
+      height:'',relative_height:'',build:'',
+      shoulder_waist_ratio:'',limb_proportions:'',posture:''
+    },
+    distinctive_geometry:[],
+    appearance_notes:[],
+    do_not_drift:[]
+  };
 
-  const data=await jsonCompletion({
-    model:process.env.NOVEL2_VISION_MODEL || undefined,
+  const profile=await visionJsonCompletion({
     system:IDENTITY_SYSTEM,
-    temperature:.15,
-    maxTokens:2200,
-    user:{note:'The actual reference images are supplied separately by the runtime. Return the requested geometry profile only.'}
-  }).catch(()=>null);
+    temperature:.08,
+    maxTokens:2400,
+    images:referenceImages,
+    text:JSON.stringify({
+      character_id:`PLAYER_${role}`,
+      user_facts:userFacts,
+      task:'Сведи все ракурсы одного человека в единый устойчивый Visual Identity Profile.',
+      output_schema:schema
+    })
+  });
 
-  if(!data) throw new Error('NOVEL2_IDENTITY_ANALYSIS_UNAVAILABLE');
-  return {profile:data,identityLock:buildLock(role,data)};
+  if(!profile?.face||!profile?.hair||!profile?.body) throw new Error('NOVEL2_IDENTITY_PROFILE_INVALID');
+  return {profile,identityLock:buildLock(role,profile)};
 }
 
 export {buildLock};
