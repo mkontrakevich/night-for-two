@@ -3,8 +3,15 @@ import {config} from './config.js';
 function stripFence(value='') {
   return String(value || '').trim().replace(/^\`\`\`(?:json)?\s*/i,'').replace(/\s*\`\`\`$/,'');
 }
-
-export async function textCompletion({system, user, temperature=.75, maxTokens=5000, model=config.textModel}) {
+function parseJson(raw='') {
+  try { return JSON.parse(stripFence(raw)); }
+  catch {
+    const a=String(raw).indexOf('{'), b=String(raw).lastIndexOf('}');
+    if(a>=0&&b>a) return JSON.parse(String(raw).slice(a,b+1));
+    throw new Error('NOVEL2_AI_JSON_INVALID');
+  }
+}
+async function chat(payload) {
   if (!config.openRouterKey) throw new Error('NOVEL2_OPENROUTER_KEY_MISSING');
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method:'POST',
@@ -14,26 +21,42 @@ export async function textCompletion({system, user, temperature=.75, maxTokens=5
       'HTTP-Referer':'https://github.com/mkontrakevich/night-for-two',
       'X-Title':'Interactive Novel 2.0'
     },
-    body:JSON.stringify({
-      model,
-      temperature,
-      max_tokens:maxTokens,
-      messages:[{role:'system',content:system},{role:'user',content:typeof user === 'string' ? user : JSON.stringify(user)}]
-    })
+    body:JSON.stringify(payload)
   });
   const json = await response.json();
   if (!response.ok) throw new Error('NOVEL2_AI_'+response.status+':'+String(json?.error?.message||'failed'));
   return String(json?.choices?.[0]?.message?.content || '');
 }
 
+export async function textCompletion({system, user, temperature=.75, maxTokens=5000, model=config.textModel}) {
+  return chat({
+    model,
+    temperature,
+    max_tokens:maxTokens,
+    messages:[
+      {role:'system',content:system},
+      {role:'user',content:typeof user === 'string' ? user : JSON.stringify(user)}
+    ]
+  });
+}
+
 export async function jsonCompletion(args) {
-  const raw = await textCompletion(args);
-  try { return JSON.parse(stripFence(raw)); }
-  catch {
-    const a=raw.indexOf('{'), b=raw.lastIndexOf('}');
-    if(a>=0&&b>a) return JSON.parse(raw.slice(a,b+1));
-    throw new Error('NOVEL2_AI_JSON_INVALID');
+  return parseJson(await textCompletion(args));
+}
+
+export async function visionJsonCompletion({system,text,images=[],temperature=.1,maxTokens=2600,model=config.visionModel}) {
+  const content=[{type:'text',text:String(text||'')}];
+  for(const image of images.slice(0,6)){
+    const url=String(image||'');
+    if(url) content.push({type:'image_url',image_url:{url}});
   }
+  const raw=await chat({
+    model,
+    temperature,
+    max_tokens:maxTokens,
+    messages:[{role:'system',content:system},{role:'user',content}]
+  });
+  return parseJson(raw);
 }
 
 export async function imageCompletion({prompt,inputReferences=[]}) {
