@@ -134,7 +134,13 @@ const shortProseRepairFake=async req=>{
       text:Array.from({length:150},()=>('абзац'+(i+1))).join(' '),
       media:(i===0||i===expected-1)?{kind:'image',prompt:'medium shot → two adult fictional characters searching a closed library → restrained body language → tense quiet atmosphere → period coats and paper catalog cards → historic reading hall → warm lamps at night → 50mm lens → muted cinematic film palette → stable character identity lock → preserve library and wardrobe continuity'}:null
     }));
-    return JSON.stringify({...source,reader_pages:pages});
+    return JSON.stringify({
+      reader_pages:pages,
+      title:'CORRUPTED TITLE MUST BE IGNORED',
+      story_identity:{world:{},heroes:{}},
+      interaction:{kind:'choice',prompt:''},
+      options:[]
+    });
   }
   shortSceneCalls++;
   const body=JSON.parse(req.messages[1].content||'{}'),expected=Number(body.pageCount)||8;
@@ -159,6 +165,9 @@ assert.equal(proseRepairCalls,1,'Short reader prose must trigger the dedicated r
 assert.equal(proseRepaired.reader_pages.length,8);
 assert(proseRepaired.reader_pages.every(p=>p.text.length>=650),'Dedicated repair must expand every reader page to production prose length');
 assert.equal(proseRepaired.reader_pages.filter(p=>p.media?.prompt).length,2);
+assert.equal(proseRepaired.title,'Закрытая библиотека','Reader repair must not overwrite canonical scene title');
+assert.equal(proseRepaired.story_identity.heroes.A.name,'Лев','Reader repair must not overwrite Story Identity');
+assert(proseRepaired.options.length>=2,'Reader repair must preserve canonical branching options');
 
 const finale=await generateStoryScene({mode:'bold',stage:9,profile:merged,history:[scene],relationshipProfile:{},mutualWishes:[],generate:fake,final:true});
 assert.equal(finale.final,true);
