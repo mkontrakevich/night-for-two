@@ -53,8 +53,11 @@ jobs:
             if ($running) { throw 'NIGHT_RECOVERY_TIMEOUT' }
           } else {
             Write-Host 'NIGHT_RECOVERY_STARTED_ATTACHED=true'
+            $previousPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
             $generatorOutput = docker exec -e NIGHT_RESUME_NOVEL_ID=$($state.id) $app node scripts/night-generate-linear-novel.mjs 2>&1
             $generatorExit = $LASTEXITCODE
+            $ErrorActionPreference = $previousPreference
             $generatorOutput | Out-Host
             if ($generatorExit -ne 0) { throw "NIGHT_RECOVERY_GENERATOR_FAILED:$generatorExit" }
           }
