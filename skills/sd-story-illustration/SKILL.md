@@ -82,3 +82,27 @@ Reject or regenerate when:
 ## Insertion
 
 The final document must keep the prose primary. Images should be inserted after the paragraph that completes the selected beat, centered, with no decorative caption unless the project explicitly requests one.
+
+
+## Novel 2 runtime identity bridge
+
+For `novel2`, this skill is not documentation-only. The runtime must enforce the following sequence before any story illustration is treated as production:
+
+```
+PLAYER REFERENCES
+→ multimodal Visual Identity Profile
+→ immutable PLAYER_A / PLAYER_B identity locks
+→ calibration sheet
+→ explicit player approval
+→ reference-backed scene generation
+→ continuity QA
+```
+
+Production rules:
+- `novel2/src/identity-engine.js` owns the multimodal identity profile and prompt-ready lock.
+- `novel2/src/visual-engine.js` must refuse scene generation until both identities are approved.
+- Approved source images must be passed as image references to the generator when the provider supports reference inputs.
+- A scene prompt must contain both immutable identity locks plus PAIR LOCK and scene continuity.
+- Generic wording such as "same broad couple archetype" is forbidden as a substitute for an identity lock.
+- Recreating a character from prose alone is forbidden once canonical references exist.
+- If a calibration image fails identity consistency, regenerate calibration or revise the profile; do not promote the failed image into story canon.
