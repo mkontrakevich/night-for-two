@@ -331,13 +331,62 @@ ${narrativeSkill?`\nКАНОНИЧЕСКИЙ NARRATIVE SKILL:\n${narrativeSkill}
   throw last||new Error(`NIGHT_LINEAR_CHAPTER_FAILED:${chapterIndex+1}`);
 }
 
-async function ensureImage({novelId,page}){
+let visualSkillContractCache='';
+async function visualSkillContract(){
+  if(visualSkillContractCache)return visualSkillContractCache;
+  const [sdSkill,characterSkill]=await Promise.all([
+    fs.readFile(new URL('../skills/sd-story-illustration/SKILL.md',import.meta.url),'utf8'),
+    fs.readFile(new URL('../skills/real-couple-character-identity/SKILL.md',import.meta.url),'utf8')
+  ]);
+  const order=['SHOT TYPE','STORY / ACTION','BODY LANGUAGE / SUBJECT SCALE','EMOTION / ATMOSPHERE','WARDROBE / PROPS / TEXTURES','ENVIRONMENT','LIGHT / TIME','CAMERA / LENS','COLOR / FILM CHARACTER','IDENTITY LOCK','CONTINUITY LOCK'];
+  let last=-1;
+  for(const marker of order){
+    const idx=sdSkill.indexOf(marker)>=0?sdSkill.indexOf(marker):characterSkill.indexOf(marker);
+    if(idx<0)throw new Error('NIGHT_VISUAL_SKILL_CONTRACT_MISSING:'+marker);
+    if(marker!=='IDENTITY LOCK'&&marker!=='CONTINUITY LOCK'&&idx<last)throw new Error('NIGHT_VISUAL_SKILL_ORDER_INVALID:'+marker);
+    if(marker!=='IDENTITY LOCK'&&marker!=='CONTINUITY LOCK')last=idx;
+  }
+  if(!sdSkill.includes('real-couple-character-identity')||!characterSkill.includes('PAIR LOCK')){
+    throw new Error('NIGHT_VISUAL_CHARACTER_IDENTITY_DEPENDENCY_MISSING');
+  }
+  visualSkillContractCache='SD Story Illustration + Real Couple Character Identity loaded and validated';
+  return visualSkillContractCache;
+}
+function compactIdentity(plan={}){
+  return clean(JSON.stringify({
+    protagonists:plan?.protagonists||[],
+    world_bible:plan?.world_bible||{},
+    style_bible:plan?.style_bible||{}
+  }),1800);
+}
+async function buildSkillVisualPrompt({page,plan}){
+  await visualSkillContract();
+  const identity=compactIdentity(plan);
+  const beat=clean(page?.media_prompt,1800);
+  const prose=clean(page?.body,2600);
+  return [
+    'SHOT TYPE: premium vertical 9:16 cinematic editorial still; one coherent frame; physically plausible perspective.',
+    `STORY / ACTION: illustrate exactly this page beat without inventing a different action: ${beat}. Canonical prose facts: ${prose}`,
+    'BODY LANGUAGE / SUBJECT SCALE: preserve the exact number of adult fictional characters, their relative scale, position, gesture and contact described by the prose; natural anatomy and hands.',
+    'EMOTION / ATMOSPHERE: derive emotion only from the page actions, pauses, distance and setting; avoid generic stock-romance posing.',
+    'WARDROBE / PROPS / TEXTURES: preserve established clothing, prop ownership and material continuity; do not swap garments or objects between characters.',
+    'ENVIRONMENT: preserve the established room/location geometry and all page-specific spatial facts; do not invent a new location.',
+    'LIGHT / TIME: preserve the page time-of-day and established practical light direction; cinematic but narratively faithful.',
+    'CAMERA / LENS: premium full-frame editorial photography, believable 50–85mm perspective unless the prose requires a wider establishing view, controlled depth of field, no distortion.',
+    'COLOR / FILM CHARACTER: restrained cinematic palette, realistic skin/material response, detailed shadows, no plastic beauty-filter finish.',
+    `IDENTITY LOCK: preserve the same fictional protagonists across the book; never blend or swap identities, face geometry, hair, relative height or body scale. Canonical novel identity: ${identity}`,
+    'CONTINUITY LOCK: continue the same wardrobe, props, location, body orientation and visual state from adjacent illustrated beats unless the current prose explicitly changes them; no extra people, text, logo or watermark; sensuality must remain non-explicit.'
+  ].join('\n');
+}
+
+async function ensureImage({novelId,page,plan}){
   const key=page.visual_key||`linear-novel-${novelId}-page-${String(page.page_no).padStart(3,'0')}`;
   const qaRequired=process.env.NIGHT_VISUAL_QA_REQUIRED!=='0';
   const qaThreshold=Math.max(0.5,Math.min(0.99,Number(process.env.NIGHT_VISUAL_QA_THRESHOLD)||0.78));
   let last=null,qaFeedback='';
   for(let attempt=1;attempt<=5;attempt++){
     try{
+      const skillPrompt=await buildSkillVisualPrompt({page,plan});
       const correction=qaFeedback
         ? `\nSTRICT VISUAL QA CORRECTION FOR RETRY ${attempt}: ${qaFeedback}\nPreserve all other scene details, but fix this mismatch exactly. Do not invert who touches whom, camera direction, body orientation, relative position, or action.`
         : '';
@@ -345,7 +394,7 @@ async function ensureImage({novelId,page}){
         key,
         theme:'boudoir',
         mode:page.page_no===STORY_TOTAL_PAGES?'story_final':'story_scene',
-        variant:`BOOK_PAGE: ${page.media_prompt}${correction}`,
+        variant:`BOOK_PAGE: ${skillPrompt}${correction}`,
         pageText:page.body,
         force:attempt>1
       });
@@ -353,7 +402,7 @@ async function ensureImage({novelId,page}){
 
       let qa={available:false,pass:!qaRequired,score:qaRequired?0:1,mismatches:[],model:''};
       try{
-        qa=await visualAI.assess({buffer:result.buffer,pageText:page.body,mediaPrompt:page.media_prompt});
+        qa=await visualAI.assess({buffer:result.buffer,pageText:page.body,mediaPrompt:skillPrompt});
       }catch(error){
         if(qaRequired)throw error;
         console.warn('NIGHT_VISUAL_QA_OPTIONAL_FAILED',JSON.stringify({page:page.page_no,error:String(error?.message||error).slice(0,220)}));
@@ -394,11 +443,16 @@ try{
     const retryablePlan=generatedPages===0&&/NIGHT_NOVEL_(?:STRUCTURE_TOO_THIN|PROTAGONISTS_INVALID|ROLE_PAIR_INVALID|PLAN_FAILED)/.test(failedError);
     const retryableGeneration=/(?:NIGHT_LINEAR_(?:CHAPTER_INVALID|PAGE_INVALID|ANONYMOUS_DIALOGUE|MEDIA_PROMPT_INVALID|ILLUSTRATION_DENSITY_INVALID|PAGE_COUNT_MISMATCH|PAGE_MISSING|IMAGE_FAILED|IMAGE_COUNT_MISMATCH|RESUME_STATUS_INVALID)|NIGHT_VISUAL_QA_REJECTED)/.test(failedError);
     const retryableFailed=String(novel.status)==='failed'&&(retryablePlan||retryableGeneration);
-    if(!['generating','illustrating'].includes(String(novel.status))&&!retryableFailed)throw new Error(`NIGHT_LINEAR_RESUME_STATUS_INVALID:${resumeId}:${novel.status}`);
-    if(retryableFailed){
+    const resumeImageStats=await store.imageStats(novel.id);
+    const pendingIllustrations=generatedPages>=totalPages&&Number(resumeImageStats.planned)>Number(resumeImageStats.ready);
+    const retryableComplete=String(novel.status)==='complete'&&pendingIllustrations;
+    if(!['generating','illustrating'].includes(String(novel.status))&&!retryableFailed&&!retryableComplete)throw new Error(`NIGHT_LINEAR_RESUME_STATUS_INVALID:${resumeId}:${novel.status}`);
+    if(retryableFailed||retryableComplete){
       const retryStatus=generatedPages>=totalPages?'illustrating':'generating';
       novel=await store.updateNovel(novel.id,{status:retryStatus,error:''});
-      console.log('NIGHT_LINEAR_NOVEL_RETRY',JSON.stringify({novel_id:novel.id,reason:retryablePlan?'recoverable_plan_failure':'recoverable_generation_failure',status:retryStatus}));
+      const reason=retryableComplete?'pending_illustrations':retryablePlan?'recoverable_plan_failure':'recoverable_generation_failure';
+      console.log('NIGHT_LINEAR_NOVEL_RETRY',JSON.stringify({novel_id:novel.id,reason,status:retryStatus}));
+      if(retryableComplete)console.log('NIGHT_LINEAR_ILLUSTRATION_RESUME',JSON.stringify({novel_id:novel.id,ready:resumeImageStats.ready,planned:resumeImageStats.planned,pending:Number(resumeImageStats.planned)-Number(resumeImageStats.ready)}));
     }
     console.log('NIGHT_LINEAR_NOVEL_RESUME',JSON.stringify({novel_id:novel.id,status:novel.status,generated_pages:Number(novel.generated_pages)||0,generated_images:Number(novel.generated_images)||0}));
   }else{
@@ -469,7 +523,7 @@ try{
     if(!String(page.media_prompt||'').trim())continue;
     if(page.image_status==='ready')continue;
     try{
-      const image=await ensureImage({novelId:novel.id,page});
+      const image=await ensureImage({novelId:novel.id,page,plan});
       await store.markImage(novel.id,pageNo,'ready');
       images++;
       await store.updateNovel(novel.id,{status:'illustrating',generated_pages:STORY_TOTAL_PAGES,generated_images:images});
