@@ -35,30 +35,28 @@ jobs:
             Write-Host "NIGHT_RECOVERY_PENDING_ILLUSTRATIONS ready=$($state.generated_images) planned=$($state.planned_images)"
           }
           $top = docker top $app
-          if ($top -match 'night-generate-linear-novel\.mjs') {
+          $alreadyRunning = $top -match 'night-generate-linear-novel\.mjs'
+          if ($alreadyRunning) {
             Write-Host 'NIGHT_RECOVERY_ALREADY_RUNNING=true'
+            $deadline = (Get-Date).AddMinutes(6)
+            do {
+              Start-Sleep -Seconds 5
+              $topNow = docker top $app
+              $running = $topNow -match 'night-generate-linear-novel\.mjs'
+              $statusNow = docker exec $app node scripts/night-linear-novel-status.mjs
+              $statusLine = @($statusNow | Where-Object { $_ -match 'NIGHT_LINEAR_NOVEL_STATUS' })[-1]
+              if ($statusLine) {
+                $current = $statusLine.Substring($statusLine.IndexOf('{')) | ConvertFrom-Json
+                Write-Host "NIGHT_RECOVERY_POLL status=$($current.status) images=$($current.generated_images)/$($current.planned_images) failed=$($current.failed_images) running=$running"
+              }
+            } while ($running -and (Get-Date) -lt $deadline)
+            if ($running) { throw 'NIGHT_RECOVERY_TIMEOUT' }
           } else {
-            docker exec -d -e NIGHT_RESUME_NOVEL_ID=$($state.id) $app node scripts/night-generate-linear-novel.mjs
-            if ($LASTEXITCODE -ne 0) { throw 'NIGHT_RECOVERY_START_FAILED' }
-            Write-Host 'NIGHT_RECOVERY_STARTED=true'
-          }
-
-          $deadline = (Get-Date).AddMinutes(6)
-          do {
-            Start-Sleep -Seconds 5
-            $topNow = docker top $app
-            $running = $topNow -match 'night-generate-linear-novel\.mjs'
-            $statusNow = docker exec $app node scripts/night-linear-novel-status.mjs
-            $statusLine = @($statusNow | Where-Object { $_ -match 'NIGHT_LINEAR_NOVEL_STATUS' })[-1]
-            if ($statusLine) {
-              $current = $statusLine.Substring($statusLine.IndexOf('{')) | ConvertFrom-Json
-              Write-Host "NIGHT_RECOVERY_POLL status=$($current.status) images=$($current.generated_images)/$($current.planned_images) failed=$($current.failed_images) running=$running"
-            }
-          } while ($running -and (Get-Date) -lt $deadline)
-
-          if ($running) {
-            docker logs $app --since 8m 2>&1 | Select-String -Pattern 'NIGHT_LINEAR_|NIGHT_VISUAL_|OPENROUTER|failed|error' | Select-Object -Last 220 | ForEach-Object { $_.Line }
-            throw 'NIGHT_RECOVERY_TIMEOUT'
+            Write-Host 'NIGHT_RECOVERY_STARTED_ATTACHED=true'
+            $generatorOutput = docker exec -e NIGHT_RESUME_NOVEL_ID=$($state.id) $app node scripts/night-generate-linear-novel.mjs 2>&1
+            $generatorExit = $LASTEXITCODE
+            $generatorOutput | Out-Host
+            if ($generatorExit -ne 0) { throw "NIGHT_RECOVERY_GENERATOR_FAILED:$generatorExit" }
           }
 
           $statusFinalRaw = docker exec $app node scripts/night-linear-novel-status.mjs
@@ -67,7 +65,9 @@ jobs:
           if (-not $finalLine) { throw 'NIGHT_RECOVERY_FINAL_STATUS_MISSING' }
           $final = $finalLine.Substring($finalLine.IndexOf('{')) | ConvertFrom-Json
 
-          docker logs $app --since 8m 2>&1 | Select-String -Pattern 'NIGHT_LINEAR_IMAGE_|NIGHT_VISUAL_QA_|NIGHT_LINEAR_NOVEL_|NIGHT_LINEAR_ILLUSTRATION_RESUME|OPENROUTER_IMAGE|OPENROUTER_VISUAL_QA|failed|error' | Select-Object -Last 260 | ForEach-Object { $_.Line }
+          if ($alreadyRunning) {
+            docker logs $app --since 8m 2>&1 | Select-String -Pattern 'NIGHT_LINEAR_IMAGE_|NIGHT_VISUAL_QA_|NIGHT_LINEAR_NOVEL_|NIGHT_LINEAR_ILLUSTRATION_RESUME|OPENROUTER_IMAGE|OPENROUTER_VISUAL_QA|failed|error' | Select-Object -Last 260 | ForEach-Object { $_.Line }
+          }
 
           if ($final.illustrations_complete -ne $true) {
             throw "NIGHT_RECOVERY_ILLUSTRATIONS_INCOMPLETE:$($final.generated_images)/$($final.planned_images)"
