@@ -1,0 +1,16 @@
+{
+  "name": "novel2-preview",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "vpc_networks": [
+    {
+      "binding": "NOVEL2_VPC",
+      "tunnel_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  "vars": {
+    "NOVEL2_ORIGIN_HOST": "placeholder.invalid",
+    "NOVEL2_ORIGIN_PORT": "5690"
+  }
+}
