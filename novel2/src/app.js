@@ -4,7 +4,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {config,assertProductionConfig} from './config.js';
 import {authenticate} from './auth.js';
-import {initDb,latestBook,createBook,appendTurn,recentTurns,advanceBook,identities,saveIdentity,approveIdentity,db} from './db.js';
+import {initDb,latestBook,createBook,appendTurn,recentTurns,advanceBook,identities,saveIdentity,approveIdentity,getVisual,previousVisual,saveVisual,db} from './db.js';
 import {createStoryBible,continueStory} from './prose-engine.js';
 import {analyzeIdentity,buildLock} from './identity-engine.js';
 import {generateVisual,generateCalibration} from './visual-engine.js';
@@ -119,8 +119,22 @@ async function main(){
       if(url.pathname==='/novel2/api/visual'){
         if(!book)return send(res,400,{ok:false,error:'NOVEL2_BOOK_REQUIRED'});
         ids=await identities();
-        const generated=await generateVisual({scene:book.current_scene||{},identities:ids});
-        return send(res,200,{ok:true,image:'data:image/jpeg;base64,'+generated.base64,model:generated.model,prompt:generated.prompt});
+        if(!ids.A?.approved||!ids.B?.approved)return send(res,409,{ok:false,error:'NOVEL2_IDENTITY_NOT_READY'});
+        const visualKey='turn-'+String(book.turn_no||0);
+        const cached=await getVisual(book.id,visualKey);
+        if(cached?.image_base64)return send(res,200,{ok:true,cached:true,image:'data:image/jpeg;base64,'+cached.image_base64,model:cached.model,prompt:cached.prompt});
+        const previous=await previousVisual(book.id,Number(book.turn_no||0));
+        const generated=await generateVisual({scene:book.current_scene||{},identities:ids,previousVisual:previous||{}});
+        await saveVisual({
+          bookId:book.id,
+          turnNo:Number(book.turn_no||0),
+          visualKey,
+          prompt:generated.prompt,
+          model:generated.model,
+          imageBase64:generated.base64,
+          meta:{continuity:String(book.current_scene?.visual_beat||'').slice(0,1200)}
+        });
+        return send(res,200,{ok:true,cached:false,image:'data:image/jpeg;base64,'+generated.base64,model:generated.model,prompt:generated.prompt});
       }
 
       return send(res,404,{ok:false,error:'NOT_FOUND'});
