@@ -1,0 +1,13 @@
+{
+  "name": "night-for-two-novel2",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/app.js",
+    "test": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "pg": "8.13.1"
+  }
+}
