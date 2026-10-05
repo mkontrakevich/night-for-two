@@ -140,6 +140,15 @@ export async function saveIdentity(role, {profile={}, identityLock='', reference
   return rows[0];
 }
 
+export async function approveIdentity(role) {
+  const {rows}=await db.query(
+    `UPDATE novel2_identity SET approved=true,updated_at=now() WHERE pair_key=$1 AND role=$2 RETURNING *`,
+    [pairKey(), role]
+  );
+  if(!rows[0]) throw new Error('NOVEL2_IDENTITY_NOT_FOUND');
+  return rows[0];
+}
+
 export async function identities() {
   const {rows} = await db.query(`SELECT role,version,profile,identity_lock,reference_images,approved FROM novel2_identity WHERE pair_key=$1 ORDER BY role`, [pairKey()]);
   return Object.fromEntries(rows.map(x=>[x.role,x]));
