@@ -1,235 +1,41 @@
-name: Inspect live novel generation
+name: Repair page 65 with SD skill
 
 on:
-  workflow_dispatch:
   push:
-    branches: [main, ops/repair-page65-sd-skill]
+    branches:
+      - ops/repair-page65-sd-skill
     paths:
       - ".github/workflows/inspect-live-novel.yml"
+      - "scripts/repair-page65-sd-temp.mjs"
 
 permissions:
   contents: read
 
 jobs:
-  inspect:
+  repair:
     runs-on: [self-hosted, windows, x64, marins-production]
     timeout-minutes: 30
     steps:
-      - name: Inspect live novel generation
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Continue'
-          Write-Host '=== CONTAINERS ==='
-          docker ps --filter "name=night-for-two" --format "table {{.Names}}	{{.Status}}	{{.Ports}}"
-          Write-Host '=== STATUS SCRIPT ==='
-          docker exec night-for-two-app-1 node scripts/night-linear-novel-status.mjs
-          Write-Host "status exit=$LASTEXITCODE"
-          Write-Host '=== PROCESSES ==='
-          docker top night-for-two-app-1
-          Write-Host '=== RECENT GENERATOR LOGS ==='
-          docker logs night-for-two-app-1 --since 20m 2>&1 | Select-String -Pattern 'NIGHT_LINEAR_|NIGHT_RELATIONSHIP_CONTEXT_READY|NIGHT_STORY_|ai_gateway|NOVEL|generation|OPENROUTER|failed|error' | Select-Object -Last 160 | ForEach-Object { $_.Line }
+      - name: Checkout temporary repair
+        uses: actions/checkout@v4
 
-      - name: Repair page 65 with SD Story Illustration skill
-        if: ${{ github.ref == 'refs/heads/ops/repair-page65-sd-skill' }}
+      - name: Verify production container
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
+          $running = docker inspect -f '{{.State.Running}}' night-for-two-app-1
+          if ($running -ne 'true') { throw "NIGHT_APP_NOT_RUNNING" }
+          Invoke-RestMethod -Uri 'http://127.0.0.1:5681/night/health' -TimeoutSec 10 | ConvertTo-Json -Compress | Write-Host
 
-          $usage = @'
-          const key=String(process.env.OPENROUTER_API_KEY||'');
-          (async()=>{
-            if(!key){console.log('OPENROUTER_USAGE '+JSON.stringify({usage:null,daily:null,monthly:null}));return;}
-            const r=await fetch('https://openrouter.ai/api/v1/key',{headers:{authorization:'Bearer '+key}});
-            const j=await r.json(); const d=j?.data||j||{};
-            console.log('OPENROUTER_USAGE '+JSON.stringify({usage:Number(d.usage),daily:Number(d.usage_daily),monthly:Number(d.usage_monthly)}));
-          })().catch(e=>{console.error(e.message);process.exit(1)});
-          '@
-          Write-Host '=== OPENROUTER BEFORE ==='
-          $usage | docker exec -i night-for-two-app-1 node
-
-          $promptRepair = @'
-          import pg from 'pg';
-          import {completeAIText} from './src/ai/provider-router.js';
-          const {Pool}=pg;
-          const pool=new Pool({connectionString:process.env.DATABASE_URL,max:1});
-          const parse=v=>JSON.parse(String(v||'').replace(/^\`\`\`(?:json)?\s*|\s*\`\`\`$/g,''));
-          try{
-            const novel=(await pool.query("SELECT id,status,generated_pages,total_pages,generated_images,error FROM night_linear_novels WHERE id=5")).rows[0];
-            const page=(await pool.query("SELECT page_no,chapter_no,chapter_title,page_title,body,media_prompt,visual_key,image_status FROM night_linear_novel_pages WHERE novel_id=5 AND page_no=65")).rows[0];
-            const prev=(await pool.query("SELECT page_no,body,media_prompt FROM night_linear_novel_pages WHERE novel_id=5 AND page_no<65 AND media_prompt<>'' AND image_status='ready' ORDER BY page_no DESC LIMIT 1")).rows[0]||null;
-            const next=(await pool.query("SELECT page_no,body,media_prompt FROM night_linear_novel_pages WHERE novel_id=5 AND page_no>65 AND media_prompt<>'' AND image_status='ready' ORDER BY page_no ASC LIMIT 1")).rows[0]||null;
-
-            if(!novel||Number(novel.generated_pages)!==100||Number(novel.total_pages)!==100)throw new Error('PAGE65_NOVEL_GUARD_FAILED');
-            if(!page||String(page.image_status)!=='failed'||!String(page.body||'').trim())throw new Error('PAGE65_PAGE_GUARD_FAILED');
-
-            const raw=await completeAIText({
-              contour:'wife',
-              requestName:'night_sd_story_prompt_repair',
-              skipDatabaseContext:true,
-              temperature:.3,
-              maxTokens:1600,
-              messages:[
-                {role:'system',content:`Ты visual prompt director. Перепиши prompt ОДНОЙ иллюстрации строго по канону SD Story Illustration Skill.
-
-Верни только JSON {"prompt":"..."}.
-
-Prompt обязан идти в этом порядке:
-SHOT TYPE
-→ STORY / ACTION
-→ BODY LANGUAGE / SUBJECT SCALE
-→ EMOTION / ATMOSPHERE
-→ WARDROBE / PROPS / TEXTURES
-→ ENVIRONMENT
-→ LIGHT / TIME
-→ CAMERA / LENS
-→ COLOR / FILM CHARACTER
-→ IDENTITY LOCK
-→ CONTINUITY LOCK.
-
-Правила:
-— изображай только событие PAGE_TEXT, не придумывай новый сюжет;
-— используй PREVIOUS_VISUAL и NEXT_VISUAL только как continuity anchors;
-— сохраняй количество и идентичность уже установленных взрослых вымышленных персонажей;
-— сохраняй одежду, предметы, архитектуру, время суток и направление действия, если текст их не меняет;
-— выбирай 35–50 mm для среды, 65–85 mm для портретной близости, 85–110 mm для детали;
-— без текста, логотипов, watermark, лишних персонажей, деформированной анатомии, fused hands, duplicate people;
-— никакой явной наготы или сексуального акта;
-— prompt должен быть конкретным, кинематографичным и пригодным для image model без дополнительных пояснений.`},
-                {role:'user',content:JSON.stringify({
-                  PAGE_NUMBER:65,
-                  CHAPTER:page.chapter_title,
-                  PAGE_TITLE:page.page_title,
-                  PAGE_TEXT:String(page.body||'').slice(0,7000),
-                  OLD_PROMPT:String(page.media_prompt||''),
-                  PREVIOUS_VISUAL:prev?{page_no:prev.page_no,prompt:prev.media_prompt,text:String(prev.body||'').slice(-1400)}:null,
-                  NEXT_VISUAL:next?{page_no:next.page_no,prompt:next.media_prompt,text:String(next.body||'').slice(0,1400)}:null
-                })}
-              ]
-            });
-            const data=parse(raw);
-            const prompt=String(data?.prompt||'').trim();
-            if(prompt.length<350)throw new Error('PAGE65_SD_PROMPT_TOO_SHORT:'+prompt.length);
-            await pool.query("UPDATE night_linear_novel_pages SET media_prompt=$3,image_status='failed' WHERE novel_id=$1 AND page_no=$2",[5,65,prompt]);
-            await pool.query("UPDATE night_linear_novels SET status='illustrating',error='',updated_at=now() WHERE id=5");
-            console.log('NIGHT_PAGE65_SD_PROMPT_READY '+JSON.stringify({
-              page_no:65,prompt_length:prompt.length,
-              previous_visual_page:prev?.page_no||null,next_visual_page:next?.page_no||null,
-              visual_key:page.visual_key
-            }));
-          }catch(e){
-            console.error('NIGHT_PAGE65_SD_PROMPT_FAILED '+String(e?.message||e));
-            process.exitCode=1;
-          }finally{
-            await pool.end().catch(()=>{});
-          }
-          '@
-          $promptRepair | docker exec -i night-for-two-app-1 node --input-type=module -
-          $promptExit=$LASTEXITCODE
-          if ($promptExit -ne 0) { throw "PAGE65_SD_PROMPT_REPAIR_FAILED:$promptExit" }
-
-          docker exec -e NIGHT_RESUME_NOVEL_ID=5 night-for-two-app-1 node scripts/night-generate-linear-novel.mjs
-          $generationExit=$LASTEXITCODE
-
-          $verify = @'
-          const pg=require('pg');
-          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:1});
-          (async()=>{
-            const n=(await pool.query("SELECT id,status,generated_pages,total_pages,generated_images,error FROM night_linear_novels WHERE id=5")).rows[0];
-            const p=(await pool.query("SELECT page_no,image_status,length(media_prompt) AS prompt_length FROM night_linear_novel_pages WHERE novel_id=5 AND page_no=65")).rows[0];
-            const stats=(await pool.query("SELECT count(*) FILTER (WHERE media_prompt<>'' AND image_status='ready')::int AS ready,count(*) FILTER (WHERE media_prompt<>'')::int AS planned,count(*) FILTER (WHERE media_prompt<>'' AND image_status='failed')::int AS failed FROM night_linear_novel_pages WHERE novel_id=5")).rows[0];
-            const ok=String(n?.status)==='complete'&&String(p?.image_status)==='ready'&&Number(stats?.ready)===20&&Number(stats?.planned)===20&&Number(stats?.failed)===0;
-            console.log('NIGHT_PAGE65_SD_REPAIR_RESULT '+JSON.stringify({
-              ok,
-              novel_status:String(n?.status||''),
-              generated_images:Number(n?.generated_images)||0,
-              page65_status:String(p?.image_status||''),
-              prompt_length:Number(p?.prompt_length)||0,
-              ready:Number(stats?.ready)||0,
-              planned:Number(stats?.planned)||0,
-              failed:Number(stats?.failed)||0,
-              error:String(n?.error||'')
-            }));
-            if(!ok)process.exitCode=2;
-          })().catch(e=>{console.error(e.message);process.exitCode=1}).finally(()=>pool.end());
-          '@
-          $verify | docker exec -i night-for-two-app-1 node
-          $verifyExit=$LASTEXITCODE
-
-          Write-Host '=== OPENROUTER AFTER ==='
-          $usage | docker exec -i night-for-two-app-1 node
-          $usageExit=$LASTEXITCODE
-
-          if ($generationExit -ne 0 -or $verifyExit -ne 0 -or $usageExit -ne 0) {
-            throw "PAGE65_SD_REPAIR_FAILED:generation=$generationExit verify=$verifyExit usage=$usageExit"
-          }
-
-      - name: Read-only Interactive Novel state gate
+      - name: Execute SD-guided page 65 repair
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $script = @'
-          const pg=require('pg');
-          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:1});
-          (async()=>{
-            const owner=String(process.env.PRIMARY_OWNER_ID||'');
-            if(!owner)throw new Error('OWNER_ID_MISSING');
-            const active=await pool.query(
-              "SELECT s.id,s.status,s.connection_verified_at,s.story_flow,p.role FROM night_v2_players p JOIN night_v2_sessions s ON s.id=p.session_id WHERE p.telegram_user_id=$1 AND p.active=true AND s.status<>'ended' ORDER BY s.id DESC LIMIT 1",
-              [owner]
-            );
-            if(!active.rowCount){
-              console.log('NIGHT_INTERACTIVE_GATE '+JSON.stringify({active_session:false}));
-            }else{
-              const row=active.rows[0],flow=row.story_flow||{},scene=flow.scene||{},identity=flow.story_identity||{};
-              const players=await pool.query("SELECT role,telegram_user_id,story_submitted,reader_page FROM night_v2_players WHERE session_id=$1 AND active=true ORDER BY role",[row.id]);
-              console.log('NIGHT_INTERACTIVE_GATE '+JSON.stringify({
-                active_session:true,
-                session_id:String(row.id),
-                status:row.status,
-                role:row.role,
-                partner_connected:players.rowCount===2,
-                test_mode:players.rows.some(x=>String(x.telegram_user_id).startsWith('-')),
-                connection_verified:Boolean(row.connection_verified_at),
-                story_stage:Number(flow.stage)||0,
-                generating:Boolean(flow.generating),
-                generation_phase:String(flow.generation_phase||''),
-                scene_ready:Boolean(scene.title),
-                scene_final:Boolean(scene.final),
-                options:Array.isArray(scene.options)?scene.options.length:0,
-                reader_pages:Array.isArray(scene.reader_pages)?scene.reader_pages.length:0,
-                identity_world:Boolean(identity?.world?.setting),
-                identity_a:Boolean(identity?.heroes?.A?.name),
-                identity_b:Boolean(identity?.heroes?.B?.name),
-                owner_story_submitted:Boolean(players.rows.find(x=>x.role==='A')?.story_submitted),
-                owner_reader_page:Number(players.rows.find(x=>x.role==='A')?.reader_page)||0
-              }));
-            }
+          docker cp scripts/repair-page65-sd-temp.mjs night-for-two-app-1:/app/scripts/repair-page65-sd-temp.mjs
+          if ($LASTEXITCODE -ne 0) { throw "PAGE65_COPY_FAILED:$LASTEXITCODE" }
 
-            const latest=await pool.query("SELECT id,title,status,generated_pages,total_pages,generated_images,error FROM night_linear_novels ORDER BY id DESC LIMIT 1");
-            const novel=latest.rows[0]||null;
-            if(!novel){
-              console.log('NIGHT_VISUAL_GATE '+JSON.stringify({novel:null,not_ready:[]}));
-            }else{
-              const q=await pool.query(
-                "SELECT page_no,image_status,visual_key,length(media_prompt) AS prompt_length FROM night_linear_novel_pages WHERE novel_id=$1 AND media_prompt<>'' AND image_status<>'ready' ORDER BY page_no",
-                [novel.id]
-              );
-              console.log('NIGHT_VISUAL_GATE '+JSON.stringify({
-                novel_id:String(novel.id),
-                novel_status:novel.status,
-                generated_pages:Number(novel.generated_pages)||0,
-                total_pages:Number(novel.total_pages)||0,
-                generated_images:Number(novel.generated_images)||0,
-                error:String(novel.error||''),
-                not_ready:q.rows.map(x=>({
-                  page_no:Number(x.page_no),
-                  image_status:x.image_status,
-                  visual_key:x.visual_key,
-                  prompt_length:Number(x.prompt_length)||0
-                }))
-              }));
-            }
-          })().catch(e=>{console.error('NIGHT_READ_ONLY_GATE_FAILED '+e.message);process.exitCode=1}).finally(()=>pool.end());
-          '@
-          $script | docker exec -i night-for-two-app-1 node
-          if ($LASTEXITCODE -ne 0) { throw "NIGHT_READ_ONLY_GATE_FAILED:$LASTEXITCODE" }
+          docker exec night-for-two-app-1 node scripts/repair-page65-sd-temp.mjs
+          $repairExit = $LASTEXITCODE
+
+          docker exec night-for-two-app-1 sh -lc 'rm -f /app/scripts/repair-page65-sd-temp.mjs'
+          if ($repairExit -ne 0) { throw "PAGE65_REPAIR_FAILED:$repairExit" }
