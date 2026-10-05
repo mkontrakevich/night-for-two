@@ -1,0 +1,43 @@
+name: Novel 2 Clean CI
+
+on:
+  push:
+    branches:
+      - rebuild/novel-2-clean
+    paths:
+      - "novel2/**"
+      - ".github/workflows/novel2-ci.yml"
+  pull_request:
+    paths:
+      - "novel2/**"
+      - ".github/workflows/novel2-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: novel2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Syntax
+        run: |
+          node --check src/app.js
+          node --check src/auth.js
+          node --check src/db.js
+          node --check src/ai.js
+          node --check src/prose-engine.js
+          node --check src/identity-engine.js
+          node --check src/visual-engine.js
+      - run: npm test
+      - name: Build container
+        run: docker build -t novel2:ci .
