@@ -88,6 +88,41 @@ assert.equal(repairedScene.story_identity.heroes.B.name,'Мира');
 assert.equal(repairedScene.story_identity.world.setting,'Городской отель после закрытия');
 
 
+
+let coreSceneCalls=0,coreRepairCalls=0;
+const coreRepairFake=async req=>{
+  if(req.requestName==='night_story_core_repair'){
+    coreRepairCalls++;
+    return JSON.stringify({
+      title:'Ключ под дождём',
+      text:'Лев и Вера остаются у запертого входа в архив. Найденный ключ заставляет их решить, кто первым рискнёт открыть дверь.',
+      visual_prompt:'two adult fictional characters at a locked archive entrance at night, cinematic vertical frame'
+    });
+  }
+  coreSceneCalls++;
+  const body=JSON.parse(req.messages[1].content||'{}'),expected=Number(body.pageCount)||10;
+  const pages=Array.from({length:expected},(_,i)=>({
+    id:'core_'+(i+1),
+    title:i===0?'Ключ под дождём':'',
+    text:Array.from({length:150},()=>('эпизод'+(i+1))).join(' '),
+    media:i===0?{kind:'image',prompt:'locked archive entrance at night'}:null
+  }));
+  return JSON.stringify({
+    title:'',
+    text:'',
+    visual_prompt:'',
+    story_identity:{world:{setting:'Старый архив',time:'Ночь',premise:'Двое взрослых героев ищут письмо.',hook:'Дверь закрыта.'},heroes:{A:{name:'Лев',role:'Реставратор',goal:'Открыть архив',inner_conflict:'Боится ошибиться',relation:'Не до конца доверяет Вере',entry:'Вы держите старый ключ.'},B:{name:'Вера',role:'Архивист',goal:'Найти письмо',inner_conflict:'Скрывает часть правды',relation:'Считает Льва союзником',entry:'Вы слышите шаги в коридоре.'}}},
+    reader_pages:pages,
+    interaction:{kind:'choice',prompt:'Кто откроет дверь?',options:body.blueprint.map(x=>({key:x.key,label:'Выбрать '+x.key,branch_effect:'Выбор '+x.key+' меняет доступ к архиву'}))}
+  });
+};
+const coreRepaired=await generateStoryScene({mode:'bold',stage:1,profile:initialStoryProfile('bold'),history:[],relationshipProfile:{},mutualWishes:[],storyIdentity:{},generate:coreRepairFake});
+assert.equal(coreSceneCalls,2,'Invalid core fields must not trigger more than two full scene generations');
+assert.equal(coreRepairCalls,1,'Invalid core fields must use one isolated core repair');
+assert.equal(coreRepaired.title,'Ключ под дождём');
+assert.equal(coreRepaired.reader_pages.length,10);
+assert(coreRepaired.options.every(x=>x.label&&x.branch_effect),'Core repair must preserve valid branching data');
+
 let readerRepairSceneCalls=0;
 const readerRepairFake=async req=>{
   if(req.requestName==='night_story_identity'){
@@ -160,7 +195,7 @@ const shortProseRepairFake=async req=>{
   });
 };
 const proseRepaired=await generateStoryScene({mode:'bold',stage:0,profile:initialStoryProfile('bold'),history:[],relationshipProfile:{},mutualWishes:[],generate:shortProseRepairFake});
-assert.equal(shortSceneCalls,3,'Short prose must exhaust structural scene retries before dedicated prose repair');
+assert.equal(shortSceneCalls,2,'Short prose must use at most two full scene attempts before dedicated prose repair');
 assert.equal(proseRepairCalls,1,'Short reader prose must trigger the dedicated reader repair editor');
 assert.equal(proseRepaired.reader_pages.length,8);
 assert(proseRepaired.reader_pages.every(p=>p.text.length>=650),'Dedicated repair must expand every reader page to production prose length');
@@ -202,7 +237,7 @@ const optionRepairFake=async req=>{
   });
 };
 const optionRepaired=await generateStoryScene({mode:'bold',stage:0,profile:initialStoryProfile('bold'),history:[],relationshipProfile:{},mutualWishes:[],generate:optionRepairFake});
-assert.equal(optionSceneCalls,3,'Invalid options must exhaust normal scene retries before isolated options repair');
+assert.equal(optionSceneCalls,2,'Invalid options must use at most two full scene attempts before isolated options repair');
 assert.equal(optionRepairCalls,1,'Invalid options must trigger isolated options repair');
 assert.equal(optionRepaired.title,'Дверь архива');
 assert.equal(optionRepaired.story_identity.heroes.A.name,'Лев');

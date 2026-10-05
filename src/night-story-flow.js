@@ -201,7 +201,7 @@ export async function generateStoryScene({mode='adaptive',stage=0,profile=initia
   if(typeof generate!=='function')throw new Error('NIGHT_STORY_AI_UNAVAILABLE');
   const cfg=modeConfig(mode),arc=storyArcStage(stage),pageCount=storyPageCount(stage),pageOffset=storyPageOffset(stage),blueprint=final?[]:storyBlueprint(mode,stage,profile),preferredKind='choice';
   let last=null,lastRaw=null;
-  for(let attempt=0;attempt<3;attempt++){
+  for(let attempt=0;attempt<2;attempt++){
     try{
       const raw=await generate({
         contour:'wife',
@@ -264,6 +264,55 @@ visual_prompt — краткое описание вертикального к�
       lastRaw=candidate;
       return validateGeneratedScene(candidate,{mode,stage,blueprint,final,preferredKind});
     }catch(error){last=error;}
+  }
+
+  if(lastRaw&&/NIGHT_STORY_SCENE_INVALID/.test(String(last?.message||last||''))){
+    try{
+      const sourceScene=parse(lastRaw);
+      const repaired=await generate({
+        contour:'wife',
+        requestName:'night_story_core_repair',
+        skipDatabaseContext:false,
+        temperature:.28,
+        maxTokens:1200,
+        messages:[
+          {role:'system',content:`Ты технический редактор интерактивного романа. Исходная сцена уже сгенерирована, но не прошла машинную проверку базовых полей. НЕ переписывай reader_pages, Story Identity, interaction, options, сюжет или выборы.
+
+Верни только JSON:
+{"title":"","text":"","visual_prompt":""}
+
+Правила:
+— title: короткое название текущей сцены;
+— text: служебное резюме этой же сцены в 2–4 предложениях, без новых событий;
+— visual_prompt: краткий вертикальный кинематографичный establishing shot той же сцены;
+— используй только факты из SOURCE_SCENE и PREVIOUS;
+— не меняй имена, место, предметы, результат предыдущего выбора;
+— никаких Markdown и пояснений.`},
+          {role:'user',content:JSON.stringify({
+            VALIDATION_ERROR:String(last?.message||last||'').slice(0,500),
+            STAGE:stage,
+            FINAL:final,
+            SOURCE_SCENE:sourceScene,
+            PREVIOUS:(history||[]).slice(-2).map(x=>({title:x.title,text:x.text,selected_actions:x.selected_actions||[],branch_effects:x.branch_effects||[]}))
+          })}
+        ]
+      });
+      const patch=parse(repaired);
+      const candidate=JSON.stringify({
+        ...sourceScene,
+        title:clean(patch?.title||sourceScene?.title,90),
+        text:clean(patch?.text||sourceScene?.text,1200),
+        visual_prompt:clean(patch?.visual_prompt||sourceScene?.visual_prompt,420)
+      });
+      lastRaw=candidate;
+      try{
+        return validateGeneratedScene(candidate,{mode,stage,blueprint,final,preferredKind});
+      }catch(error){
+        last=error;
+      }
+    }catch(error){
+      last=error;
+    }
   }
 
   if(lastRaw&&/(?:NIGHT_STORY_READER_PAGES_INVALID|NIGHT_STORY_FINALE_PAGES_INVALID)/.test(String(last?.message||last||''))){
