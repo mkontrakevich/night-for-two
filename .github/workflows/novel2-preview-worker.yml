@@ -1,0 +1,85 @@
+name: Novel 2 Preview Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/novel2-preview/**"
+      - ".github/workflows/novel2-preview-worker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: novel2-preview-worker
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: cloudflare/novel2-preview
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_TUNNEL_ID: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Render verified VPC binding from Night42
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN CLOUDFLARE_TUNNEL_ID; do
+            test -n "${!key}" || { echo "::error::MISSING_$key"; exit 1; }
+          done
+          python - <<'PY'
+          import json, os, re, urllib.request
+          from pathlib import Path
+          baseline='45bb34f4-a2cf-4fa1-9ce7-f57eedfd5f95'
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']
+          req=urllib.request.Request(
+              f'https://api.cloudflare.com/client/v4/accounts/{account}/workers/scripts/night42/versions/{baseline}',
+              headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN']})
+          with urllib.request.urlopen(req,timeout=25) as response:
+              version=json.load(response)
+          if not version.get('success'):
+              raise SystemExit('NOVEL2_BASELINE_UNAVAILABLE')
+          bindings=(version['result'].get('resources') or {}).get('bindings',[])
+          def binding(name): return next((x for x in bindings if x.get('name')==name),None)
+          vpc=binding('NIGHT_VPC')
+          host=(binding('NIGHT_ORIGIN_HOST') or {}).get('text','')
+          if not vpc or vpc.get('tunnel_id')!=os.environ['CLOUDFLARE_TUNNEL_ID']:
+              raise SystemExit('NOVEL2_TUNNEL_MISMATCH')
+          if not re.fullmatch(r'[A-Za-z0-9.-]+',host):
+              raise SystemExit('NOVEL2_ORIGIN_HOST_INVALID')
+          print('::add-mask::'+host)
+          cfg=json.loads(Path('wrangler.jsonc').read_text())
+          cfg['vars']['NOVEL2_ORIGIN_HOST']=host
+          cfg['vpc_networks'][0]['tunnel_id']=vpc['tunnel_id']
+          Path('wrangler.deploy.json').write_text(json.dumps(cfg,indent=2)+'\n')
+          PY
+      - name: Deploy preview Worker
+        run: npx --yes wrangler@4 deploy --config wrangler.deploy.json
+      - name: Verify stable preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://novel2-preview.kontrakevich.workers.dev'
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error --max-time 15 "$base/novel2/health" -o /tmp/novel2-health.json; then
+              if jq -e '.ok == true and .product == "interactive_novel_2"' /tmp/novel2-health.json >/dev/null; then
+                break
+              fi
+            fi
+            sleep 3
+          done
+          jq -e '.ok == true and .product == "interactive_novel_2"' /tmp/novel2-health.json >/dev/null
+          code=$(curl --silent --show-error --max-time 20 -o /tmp/novel2.html -w '%{http_code}' "$base/novel2/")
+          test "$code" = 200
+          echo "NOVEL2_PREVIEW_READY=$base/novel2/"

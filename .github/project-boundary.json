@@ -35,6 +35,7 @@
     "night-cloudflare-inspect-20260929.yml",
     "night-product-deploy.yml",
     "novel2-ci.yml",
+    "novel2-preview-worker.yml",
     "pages.yml",
     "persist-night-restart-policy.yml",
     "probe-native-night-quic-recovery.yml",
