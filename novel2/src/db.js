@@ -153,3 +153,32 @@ export async function identities() {
   const {rows} = await db.query(`SELECT role,version,profile,identity_lock,reference_images,approved FROM novel2_identity WHERE pair_key=$1 ORDER BY role`, [pairKey()]);
   return Object.fromEntries(rows.map(x=>[x.role,x]));
 }
+
+
+export async function getVisual(bookId, visualKey) {
+  const {rows}=await db.query(
+    `SELECT * FROM novel2_visuals WHERE book_id=$1 AND visual_key=$2 LIMIT 1`,
+    [bookId, visualKey]
+  );
+  return rows[0]||null;
+}
+
+export async function previousVisual(bookId, turnNo) {
+  const {rows}=await db.query(
+    `SELECT * FROM novel2_visuals WHERE book_id=$1 AND turn_no<$2 ORDER BY turn_no DESC,id DESC LIMIT 1`,
+    [bookId, turnNo]
+  );
+  return rows[0]||null;
+}
+
+export async function saveVisual({bookId,turnNo,visualKey,prompt,model,imageBase64,meta={}}) {
+  const {rows}=await db.query(
+    `INSERT INTO novel2_visuals(book_id,turn_no,visual_key,prompt,model,image_base64,meta)
+     VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)
+     ON CONFLICT(book_id,visual_key) DO UPDATE SET
+       prompt=EXCLUDED.prompt,model=EXCLUDED.model,image_base64=EXCLUDED.image_base64,meta=EXCLUDED.meta
+     RETURNING *`,
+    [bookId,turnNo,visualKey,prompt,model,imageBase64,JSON.stringify(meta)]
+  );
+  return rows[0];
+}
