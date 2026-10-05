@@ -43,6 +43,10 @@ assert(generator.includes('recoverable_generation_failure'),'Generator must resu
 assert(architect.includes("requestName:'night_serial_novel_architect_repair'")&&architect.includes('maxTokens:10000'),'Novel architect must repair structurally thin plans before failing');
 assert(generator.includes("OPENROUTER_API_KEY_MISSING"),'Production illustration generation must require OpenRouter');
 assert(generator.includes("BOOK_PAGE:"),'Every selected illustration must use the page narrative as its image prompt');
+assert(generator.includes("skills/sd-story-illustration/SKILL.md")&&generator.includes("skills/real-couple-character-identity/SKILL.md"),'Illustration generation must load both canonical visual skills');
+assert(generator.includes('SHOT TYPE:')&&generator.includes('IDENTITY LOCK:')&&generator.includes('CONTINUITY LOCK:'),'Illustration prompts must preserve the canonical SD block order');
+assert(generator.includes('NIGHT_LINEAR_ILLUSTRATION_RESUME'),'Completed novels with pending illustrations must resume only the missing visual work');
+
 assert(store.includes('planned_images')||store.includes('AS planned'),'Completion must compare generated images with the selected visual plan, not with all 100 pages');
 assert(store.includes('async function latestReadable()')&&store.includes('async function list({limit=20}={})'),'Saved novels must be queryable as a library and readable when text is complete');
 assert(store.includes('generated_pages>=total_pages'),'A novel with complete text must remain readable even when illustration generation is incomplete or failed');
