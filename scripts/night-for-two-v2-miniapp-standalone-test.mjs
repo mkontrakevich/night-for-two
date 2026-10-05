@@ -61,12 +61,16 @@ for(const endpoint of ['/api/visual','/api/connection-ack','/api/selection','/ap
 for(const action of ['connection-ack','selection','done','rate','overall','story-choice','story-finish'])assert(html.includes(`api('${action}'`),`missing client action ${action}`);
 assert(html.includes('readerBook')&&html.includes('renderEpisodeReader'));
 assert(html.includes('ВАША ИНТЕРАКТИВНАЯ ИСТОРИЯ')&&html.includes("primary('Вернуться в историю','continueSession')")&&html.includes("secondary('Мои истории','dashboardLibrary')"),'Pair-only launch screen must expose immersive Continue and My stories without room-code login');
-assert(html.includes('function renderStoryImmersion()')&&html.includes('В ЭТОЙ ИСТОРИИ ВЫ')&&html.includes('ВАША ЦЕЛЬ')&&html.includes('ВНУТРЕННЕЕ ПРОТИВОРЕЧИЕ')&&html.includes('ВТОРОЙ ГЕРОЙ')&&html.includes("primary(stage>0?'Вернуться в сцену':'Войти в историю','enterStory')"),'Continue must enter the persistent player role before opening the story reader');
+assert(html.includes('function renderStoryImmersion()')&&html.includes('ВЫ ИГРАЕТЕ ЗА')&&html.includes('ВАША ЦЕЛЬ')&&html.includes('ЧТО МЕШАЕТ')&&html.includes('ВТОРОЙ ГЕРОЙ')&&html.includes("primary(stage>0?'Продолжить сцену':'Войти в сцену','enterStory')"),'Continue must open the compact persistent player role brief before the story reader');
 assert(!html.includes("bind('#openActions',renderActions)"),'Standalone Actions button must not be exposed on the first screen');
 assert(!html.includes('id="joinCode"')&&!html.includes('placeholder="КОД · 6 ЗНАКОВ"'),'Room-code login must not be exposed to the fixed pair');
 assert(!html.includes("void loadNovelInteraction(n.id,no,gate)")&&html.includes('РЕШЕНИЕ ВАШЕГО ГЕРОЯ')&&html.includes('Couple Adventure')&&html.includes('openStoryActions'),'Legacy linear novels must not fake interactivity; Story Flow owns character decisions and Couple Adventure stays a separate action route');
 assert(app.includes("engine.join({userId,name:clampName(auth.user),code:inviteCode||''})"),'Invited fixed pair user must auto-connect without entering a code');
 assert(html.includes('readerSentinel')&&html.includes('IntersectionObserver'),'Novel reader must use vertical lazy infinite scroll instead of horizontal page navigation');
+assert(html.includes(".episodeStream .readerGate{position:static!important")&&html.includes("<div class=\"episodeStreamBody\">'+articles+'</div>'+gate"),'Interactive decision card must live outside the prose stream and never overlay reader text');
+assert(html.includes('async function loadAhead(count=3)')&&html.includes('void loadAhead(4)')&&html.includes('NIGHT_READER_PAGE_LOAD_FAILED')&&html.includes('readerLoadRetry'),'Completed linear novels must prefetch continuation pages and expose retry instead of silently stopping after the prologue');
+assert(storyFlow.includes("requestName:'night_story_core_repair'")&&storyFlow.includes('for(let attempt=0;attempt<2;attempt++)'),'Invalid scene core must use bounded full retries followed by isolated repair');
+
 assert(html.includes('Тестировать с ИИ-партнёром'));
 assert(storyFlow.includes('НЕ иллюстрируй каждую страницу')&&storyFlow.includes('1–2 визуально значимые страницы'));
 assert(visualAI.includes('OPENROUTER_API_KEY'));
