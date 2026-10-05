@@ -46,6 +46,7 @@ assert(generator.includes("BOOK_PAGE:"),'Every selected illustration must use th
 assert(generator.includes("skills/sd-story-illustration/SKILL.md")&&generator.includes("skills/real-couple-character-identity/SKILL.md"),'Illustration generation must load both canonical visual skills');
 assert(generator.includes('SHOT TYPE:')&&generator.includes('IDENTITY LOCK:')&&generator.includes('CONTINUITY LOCK:'),'Illustration prompts must preserve the canonical SD block order');
 assert(generator.includes('NIGHT_LINEAR_ILLUSTRATION_RESUME'),'Completed novels with pending illustrations must resume only the missing visual work');
+assert(generator.includes('assertVisualPromptOrder')&&generator.includes('NIGHT_VISUAL_PROMPT_ORDER_INVALID'),'Strict visual block order must be validated on the built production image prompt');
 
 assert(store.includes('planned_images')||store.includes('AS planned'),'Completion must compare generated images with the selected visual plan, not with all 100 pages');
 assert(store.includes('async function latestReadable()')&&store.includes('async function list({limit=20}={})'),'Saved novels must be queryable as a library and readable when text is complete');
