@@ -278,7 +278,7 @@ visual_prompt — краткое описание вертикального к�
           messages:[
             {role:'system',content:`Ты литературный редактор интерактивного романа. Исправь только машинно-невалидный блок reader_pages, не меняя уже созданный сюжет, персонажей, Story Identity и смысл развилки.
 
-Верни ТОЛЬКО полный JSON сцены. Сохрани без смысловых изменений title, text, visual_prompt, story_identity, interaction и options; ключи options и branch_effect обязательны и неизменны.
+Верни ТОЛЬКО JSON вида {"reader_pages":[...]}. Не возвращай и не редактируй title, text, visual_prompt, story_identity, interaction, options или другие поля сцены: они будут сохранены приложением из исходного канона.
 
 Требования к reader_pages:
 — ровно ${pageCount} страниц;
@@ -301,9 +301,13 @@ visual_prompt — краткое описание вертикального к�
             })}
           ]
         });
-        repairSource=repaired;
-        lastRaw=repaired;
-        return validateGeneratedScene(repaired,{mode,stage,blueprint,final,preferredKind});
+        const repairedData=parse(repaired);
+        const sourceScene=parse(repairSource);
+        if(!Array.isArray(repairedData?.reader_pages))throw new Error('NIGHT_STORY_READER_REPAIR_PAYLOAD_INVALID');
+        const candidate=JSON.stringify({...sourceScene,reader_pages:repairedData.reader_pages});
+        repairSource=candidate;
+        lastRaw=candidate;
+        return validateGeneratedScene(candidate,{mode,stage,blueprint,final,preferredKind});
       }catch(error){
         last=error;
       }
