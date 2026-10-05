@@ -38,7 +38,8 @@ export function buildVisualPrompt({scene, identities={}, previousVisual={}}) {
 
 export async function generateVisual({scene, identities, previousVisual={}}) {
   const prompt=buildVisualPrompt({scene,identities,previousVisual});
-  const references=[...refsOf(identities.A),...refsOf(identities.B)].slice(0,8);
+  const continuityRef=previousVisual?.image_base64?[{type:'image_url',image_url:{url:'data:image/jpeg;base64,'+previousVisual.image_base64}}]:[];
+  const references=[...refsOf(identities.A),...refsOf(identities.B),...continuityRef].slice(0,8);
   const result=await imageCompletion({prompt,inputReferences:references});
   return {...result,prompt};
 }
