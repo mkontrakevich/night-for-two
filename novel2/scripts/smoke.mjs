@@ -20,7 +20,9 @@ assert(visual.includes('inputReferences'));
 
 const html=fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
 assert(html.includes('Ответить от лица героя'));
-assert(html.includes('/novel2/api/reply'));
+assert(html.includes("api('reply'"));
+assert(html.includes("api('identity/analyze'"));
+assert(html.includes('Зафиксировать персонажа'));
 assert(!html.includes('Секс-купоны'));
 
 console.log('NOVEL2_SMOKE_OK free_reply=true identity_lock=true single_reader=true');
