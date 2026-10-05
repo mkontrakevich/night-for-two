@@ -27,9 +27,12 @@ jobs:
           $state = $line.Substring($line.IndexOf('{')) | ConvertFrom-Json
           Write-Host "NIGHT_RECOVERY_BEFORE id=$($state.id) status=$($state.status) pages=$($state.generated_pages)/$($state.total_pages) images=$($state.generated_images)/$($state.planned_images) readable=$($state.readable)"
           if (-not $state.id) { throw 'NIGHT_RECOVERY_NO_NOVEL' }
-          if ($state.complete -eq $true) {
-            Write-Host 'NIGHT_RECOVERY_NOT_NEEDED complete=true'
+          if ($state.complete -eq $true -and $state.illustrations_complete -eq $true) {
+            Write-Host 'NIGHT_RECOVERY_NOT_NEEDED complete=true illustrations_complete=true'
             exit 0
+          }
+          if ($state.complete -eq $true -and $state.illustrations_complete -ne $true) {
+            Write-Host "NIGHT_RECOVERY_PENDING_ILLUSTRATIONS ready=$($state.generated_images) planned=$($state.planned_images)"
           }
           $top = docker top $app
           if ($top -match 'night-generate-linear-novel\.mjs') {
