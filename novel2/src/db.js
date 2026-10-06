@@ -85,6 +85,18 @@ export async function latestBook() {
   return rows[0] || null;
 }
 
+export async function listBooks(limit=12) {
+  const {rows}=await db.query(
+    `SELECT id,title,status,chapter_no,turn_no,active_role,created_at,updated_at
+       FROM novel2_books
+      WHERE pair_key=$1
+      ORDER BY (status='active') DESC, updated_at DESC
+      LIMIT $2`,
+    [pairKey(), Math.max(1,Math.min(50,Number(limit)||12))]
+  );
+  return rows;
+}
+
 export async function createBook({title='', storyBible={}, scene={}, activeRole='A'}) {
   const {rows} = await db.query(
     `INSERT INTO novel2_books(pair_key,title,story_bible,canon,current_scene,active_role,turn_no)

@@ -59,7 +59,13 @@ assert(html.includes('реальный стиль общения пары'));
 assert(html.includes('telegram-web-app.js'));
 assert(html.includes('telegramInitData()'));
 assert(html.includes('Зафиксировать персонажа'));
-assert(html.includes('Выйти из рассказа'));
+assert(html.includes('Главное меню'));
+assert(html.includes('Новый роман'));
+assert(html.includes('Архив романов'));
+assert(html.includes("api('book/new'"));
+assert(html.includes("api('books'"));
+assert(html.includes('openMainMenu'));
+assert(html.includes('startNewBook'));
 assert(html.includes("api('book/exit'"));
 assert(html.includes('AI-персонаж отвечает автоматически'));
 assert(!html.includes('Секс-купоны'));
@@ -100,6 +106,7 @@ assert(!fs.readFileSync(new URL('../src/identity-engine.js',import.meta.url),'ut
 
 const dbSource=fs.readFileSync(new URL('../src/db.js',import.meta.url),'utf8');
 assert(dbSource.includes('archiveBook(bookId'));
+assert(dbSource.includes('listBooks(limit=12'));
 assert(dbSource.includes("status='archived'"));
 
 const app=fs.readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
@@ -108,6 +115,9 @@ assert(app.includes("'/novel2/api/character/random'"));
 assert(app.includes("control_mode:'ai'"));
 assert(app.includes('calibration_required:true'));
 assert(app.includes("'/novel2/api/book/exit'"));
+assert(app.includes("'/novel2/api/book/new'"));
+assert(app.includes("'/novel2/api/books'"));
+assert(app.includes('listBooks'));
 assert(app.includes('archiveBook'));
 assert(app.includes('generated_automatically:true'));
 assert(app.includes('next.scene.target_role=humanRole'));

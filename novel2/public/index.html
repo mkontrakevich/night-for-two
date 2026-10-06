@@ -16,6 +16,7 @@
 .builder{margin:24px 0 18px;padding:18px;border:1px solid rgba(255,255,255,.15);border-radius:22px;background:rgba(255,255,255,.055);backdrop-filter:blur(10px)}.builder h2{font:500 22px/1.15 Georgia,serif;margin:0 0 8px}.builder p{font-size:13px;line-height:1.48;color:#cfc4bc;margin:0 0 13px}.field{display:grid;gap:6px;margin:12px 0}.field label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#a99b92}.field input[type=text],.field textarea{width:100%;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.22);color:#fff;border-radius:14px;padding:12px 13px;outline:none}.field textarea{min-height:82px;resize:vertical}.field input[type=file]{width:100%;color:#ddd}.hint{font-size:11px;color:#9f9188;line-height:1.4}
 .pairState{display:flex;gap:8px;margin:10px 0 18px;flex-wrap:wrap}.pairState span{font-size:11px;padding:7px 9px;border-radius:999px;background:rgba(255,255,255,.08)}
 .readyCard{margin:22px 0;padding:18px;border:1px solid rgba(255,255,255,.15);border-radius:22px;background:rgba(255,255,255,.055)}.readyCard h3{font:500 25px/1.1 Georgia,serif;margin:0 0 5px}.readyCard .meta{font-size:12px;color:#b9aaa1;margin-bottom:9px}.readyCard p{font:400 14px/1.5 Georgia,serif;color:#d9cdc5;margin:0}
+.mainMenu{min-height:100dvh;padding:8vh 22px calc(30px + var(--safe));background:radial-gradient(circle at 72% 8%,#553031,transparent 33%),linear-gradient(160deg,#1b1614,#070707 62%);color:#fff}.mainMenu h1{font:400 clamp(42px,12vw,68px)/.94 Georgia,serif;letter-spacing:-.045em;margin:16px 0 10px}.mainMenu>p{font:400 16px/1.52 Georgia,serif;color:#d7cdc4}.menuCard{margin:18px 0;padding:18px;border:1px solid rgba(255,255,255,.14);border-radius:22px;background:rgba(255,255,255,.055)}.menuCard h2{font:500 25px/1.1 Georgia,serif;margin:0 0 6px}.menuCard .meta{font-size:11px;color:#a99b92}.menuActions{display:grid;gap:9px;margin:18px 0}.libraryTitle{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#9f9188;margin:26px 0 9px}.libraryBook{padding:12px 0;border-top:1px solid rgba(255,255,255,.12)}.libraryBook strong{display:block;font:500 15px/1.3 Georgia,serif}.libraryBook span{font-size:11px;color:#9f9188}.danger{border:1px solid rgba(255,125,125,.28);color:#f0d4d4}
 .calibration{min-height:100dvh;padding:24px 20px calc(30px + var(--safe));background:linear-gradient(160deg,#161210,#080706 70%);color:#fff}.calibration h1{font-size:42px}.calibration>p{font:400 15px/1.55 Georgia,serif;color:#cfc2ba}.calibration img{display:block;width:100%;border-radius:22px;margin:18px 0;max-height:62vh;object-fit:contain;background:#181310}.cardPreview{padding:18px;border:1px solid rgba(255,255,255,.14);border-radius:20px;background:rgba(255,255,255,.05);margin:0 0 18px}.cardPreview h2{font:500 28px/1.05 Georgia,serif;margin:0 0 5px}.cardPreview .meta{color:#a99c94;font-size:12px;margin-bottom:12px}.cardPreview p{font:400 15px/1.52 Georgia,serif;color:#ddd1c8}.cardPreview dl{margin:12px 0 0;display:grid;grid-template-columns:110px 1fr;gap:7px 10px;font-size:12px}.cardPreview dt{color:#8f8178}.cardPreview dd{margin:0;color:#e3d9d1}
 .reader{min-height:100dvh;padding-bottom:190px}.chrome{position:sticky;top:0;z-index:5;padding:16px 18px 13px;background:linear-gradient(var(--paper) 78%,rgba(241,232,216,.9));border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:14px}.bookTitle{font:600 12px/1.3 Georgia,serif}.chapter{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}.exitStory{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:7px 11px;font-size:11px;white-space:nowrap}
 .sceneImage{display:none;width:100%;aspect-ratio:9/16;object-fit:cover}.sceneImage.on{display:block}.prose{padding:34px 24px 24px;font:400 20px/1.72 Georgia,serif;white-space:pre-wrap}.turnPrompt{margin:8px 24px 0;padding:20px 0;border-top:1px solid var(--line);font:600 17px/1.45 Georgia,serif}
@@ -27,7 +28,7 @@
 <script>
 const app=document.getElementById('app');
 const tg=window.Telegram?.WebApp;try{tg?.ready();tg?.expand()}catch{}
-let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null,forceBuilder=false;
+let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null,forceBuilder=false,menuMode=false,libraryBooks=[];
 
 function telegramInitData(){
  const sdk=String(window.Telegram?.WebApp?.initData||'');
@@ -62,7 +63,38 @@ function characterCardHtml(card){
  const source=base.relationship_grounded?'Основа характера · реальный стиль общения пары':'Основа характера · художественная модель';
  return '<div class="cardPreview"><div class="kicker">CHARACTER CARD</div><h2>'+esc(p.fiction_name||'Ваш персонаж')+'</h2><div class="meta">'+esc((p.age?p.age+' · ':'')+(p.archetype||p.story_role||''))+'</div><div class="hint">'+esc(source)+'</div><p>'+esc(card?.literary_portrait||p.story_hook||'')+'</p><dl><dt>Роль</dt><dd>'+esc(p.story_role||'—')+'</dd><dt>Характер</dt><dd>'+esc(psy.temperament||'—')+'</dd><dt>Стиль общения</dt><dd>'+esc(base.communication_style||psy.speech_style||'—')+'</dd><dt>Инициатива</dt><dd>'+esc(base.initiative_pattern||'—')+'</dd><dt>Динамика</dt><dd>'+esc(rom.dynamic||'—')+'</dd><dt>Крючок</dt><dd>'+esc(p.story_hook||'—')+'</dd></dl></div>';
 }
+async function loadLibrary(){
+ try{
+   const j=await api('books');
+   libraryBooks=Array.isArray(j.books)?j.books:[];
+   if(menuMode)renderMainMenu();
+ }catch{}
+}
+function renderMainMenu(){
+ const active=state?.mode==='reader'&&state?.book;
+ const a=state?.characters?.A||{},b=state?.characters?.B||{};
+ const both=Boolean(a.ready&&b.ready);
+ const archives=libraryBooks.filter(x=>x.status==='archived').slice(0,8);
+ const archiveHtml=archives.length
+   ? archives.map(x=>'<div class="libraryBook"><strong>'+esc(x.title||'Без названия')+'</strong><span>Глава '+esc(x.chapter_no||1)+' · '+esc(x.turn_no||0)+' сцен/ходов</span></div>').join('')
+   : '<div class="hint">Архив пока пуст.</div>';
+ const activeHtml=active
+   ? '<div class="menuCard"><div class="kicker">ТЕКУЩИЙ РОМАН</div><h2>'+esc(state.book.title||'Роман')+'</h2><div class="meta">Глава '+esc(state.book.chapter_no||1)+' · ход '+esc(state.book.turn_no||0)+'</div></div>'
+   : '';
+ const tag=x=>x?.ready?esc((x.name||'готов')+(x.synthetic?' · AI':'')):'не готов';
+ app.innerHTML='<section class="mainMenu"><div class="kicker">Interactive Novel 2.0</div><h1>Главное меню</h1><p>Персонажи сохраняются между романами. Новый роман получает новую Story Bible, новый сюжет и начинает историю заново с теми же героями.</p>'+activeHtml+'<div class="pairState"><span>Герой A · '+tag(a)+'</span><span>Герой B · '+tag(b)+'</span></div><div class="menuActions">'+(active?'<button class="primary" id="continueBook">Продолжить роман</button>':'')+(both?'<button class="'+(active?'secondary':'primary')+'" id="newBook">Новый роман</button>':'<button class="secondary" disabled>Сначала создайте двух персонажей</button>')+'<button class="secondary" id="editCharacter">Изменить моего персонажа</button>'+(active?'<button class="secondary danger" id="archiveBook">Убрать текущий роман в архив</button>':'')+'</div><div class="libraryTitle">Архив романов</div>'+archiveHtml+'</section>';
+ if(document.getElementById('continueBook'))document.getElementById('continueBook').onclick=()=>{menuMode=false;render()};
+ if(document.getElementById('newBook'))document.getElementById('newBook').onclick=startNewBook;
+ if(document.getElementById('editCharacter'))document.getElementById('editCharacter').onclick=editCharacterFromMenu;
+ if(document.getElementById('archiveBook'))document.getElementById('archiveBook').onclick=exitStory;
+}
+async function openMainMenu(){
+ menuMode=true;
+ renderMainMenu();
+ await loadLibrary();
+}
 function render(){
+ if(menuMode){renderMainMenu();return}
  if(calibrationImage&&characterDraft){
    app.innerHTML='<section class="calibration"><div class="kicker">CHARACTER CONSTRUCTOR</div><h1>Персонаж собран</h1><p>Мы свели ваши фотографии в один Visual Identity, создали художественную карточку героя и калибровочный образ. Проверьте, что человек на всех ракурсах выглядит как один и тот же персонаж.</p>'+characterCardHtml(characterDraft)+'<img src="'+calibrationImage+'" alt="Калибровка персонажа"><div class="actions"><button class="primary" id="approveIdentity">Зафиксировать персонажа</button><button class="secondary" id="regenIdentity">Пересобрать калибровку</button><button class="secondary" id="rebuildCharacter">Создать персонажа заново</button></div></section>';
    document.getElementById('approveIdentity').onclick=approveIdentity;
@@ -72,13 +104,16 @@ function render(){
  }
  if(!state||state.mode==='home'){
    const role=state?.role||'A',other=role==='A'?'B':'A',mineSummary=state?.characters?.[role]||{},otherSummary=state?.characters?.[other]||{},mine=Boolean(mineSummary.ready&&!mineSummary.synthetic),both=Boolean(state?.characters?.A?.ready&&state?.characters?.B?.ready),card=state?.my_character;
+   if(both&&!forceBuilder){menuMode=true;renderMainMenu();void loadLibrary();return}
    const mySynthetic=Boolean(mineSummary.ready&&mineSummary.synthetic);
    const hasDraft=Boolean(card?.passport)&&!mine&&!mySynthetic;
    const builderHtml='<div class="builder"><h2>'+(mySynthetic?'Для вас уже есть временный AI-персонаж':'Создайте персонажа из ваших фото')+'</h2><p>'+(mySynthetic?'Можно оставить его и играть этим героем, либо заменить его своей внешностью до начала романа.':'Загрузите любые имеющиеся фотографии. Достаточно одной; несколько ракурсов повышают точность. Система сама выделит устойчивую внешность, а базовый характер и манеру общения возьмёт из накопленного профиля общения пары, если он доступен. Биография и драматургия останутся художественными. Затем создаст Visual DNA и покажет калибровку перед фиксацией.')+'</p><div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Подойдут портреты, селфи, полный рост, разные годы и одежда. Необязательно готовить специальную фотосессию.</div></div><div class="field"><label>Имя героя · необязательно</label><input id="characterName" type="text" maxlength="80" placeholder="Оставьте пустым — система придумает"></div><div class="field"><label>Пожелание к персонажу · необязательно</label><textarea id="characterNote" maxlength="1200" placeholder="Например: сдержанный, уверенный, архитектор; или просто оставьте пустым — характер будет создан автоматически."></textarea></div><button class="primary" id="buildCharacter">Создать карточку персонажа</button></div>';
    const draftHtml='<div class="builder"><h2>Карточка уже сохранена</h2><p>Анализ фотографий завершён. Осталось построить калибровочный образ и подтвердить внешность. Если генерация изображения прервётся, повторный анализ фотографий не потребуется.</p>'+characterCardHtml(card)+'<div class="actions"><button class="primary" id="continueCalibration">Продолжить калибровку</button><button class="secondary" id="showBuilder">Загрузить другие фото</button></div></div>';
-   const setup=mine
-     ? '<div class="readyCard"><div class="kicker">ВАШ ГЕРОЙ</div><h3>'+esc(card?.passport?.fiction_name||'Персонаж зафиксирован')+'</h3><div class="meta">'+esc(card?.passport?.archetype||card?.passport?.story_role||'Visual Identity сохранён')+'</div><p>'+esc(card?.passport?.story_hook||card?.literary_portrait||'Карточка персонажа и визуальная идентичность готовы к роману.')+'</p></div>'
-     : (hasDraft&&!forceBuilder?draftHtml:builderHtml);
+   const setup=forceBuilder
+     ? builderHtml
+     : mine
+       ? '<div class="readyCard"><div class="kicker">ВАШ ГЕРОЙ</div><h3>'+esc(card?.passport?.fiction_name||'Персонаж зафиксирован')+'</h3><div class="meta">'+esc(card?.passport?.archetype||card?.passport?.story_role||'Visual Identity сохранён')+'</div><p>'+esc(card?.passport?.story_hook||card?.literary_portrait||'Карточка персонажа и визуальная идентичность готовы к роману.')+'</p></div>'
+       : (hasDraft?draftHtml:builderHtml);
    const otherAi=Boolean(otherSummary.ready&&otherSummary.synthetic);
    const partnerAction=!otherSummary.ready
      ? '<button class="secondary" id="buildRandomCharacter">Второй игрок пока не подключился — создать AI-персонажа</button>'
@@ -96,10 +131,10 @@ function render(){
  }
  const s=state.scene||{},actions=(s.optional_actions||[]).map(x=>'<button class="chip" data-action="'+esc(x.key)+'">'+esc(x.label)+'</button>').join('');
  const waitingText=state.active_control_mode==='ai'?'AI-персонаж продолжает сцену…':'Ход второго героя · история продолжится после его ответа';
- app.innerHTML='<section class="reader"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><button class="exitStory" id="exitStory">Выйти из рассказа</button></div><img id="sceneImage" class="sceneImage" alt=""><article class="prose">'+esc(s.prose||'')+'</article><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(actions?'<div class="choiceRow">'+actions+'</div>':'')+'<div class="status">'+(state.can_reply?'Ваш ход · отвечайте от лица своего героя':waitingText)+'</div></section><div class="replyDock"><textarea id="reply" placeholder="'+(state.can_reply?'Ответить от лица героя…':'AI-персонаж отвечает автоматически')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить</button></div></div>';
+ app.innerHTML='<section class="reader"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><button class="exitStory" id="mainMenu">Меню</button></div><img id="sceneImage" class="sceneImage" alt=""><article class="prose">'+esc(s.prose||'')+'</article><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(actions?'<div class="choiceRow">'+actions+'</div>':'')+'<div class="status">'+(state.can_reply?'Ваш ход · отвечайте от лица своего героя':waitingText)+'</div></section><div class="replyDock"><textarea id="reply" placeholder="'+(state.can_reply?'Ответить от лица героя…':'AI-персонаж отвечает автоматически')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить</button></div></div>';
  document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>{selectedAction=x.dataset.action;document.getElementById('selected').textContent='Выбрано: '+x.textContent});
  document.getElementById('send').onclick=sendReply;
- document.getElementById('exitStory').onclick=exitStory;
+ document.getElementById('mainMenu').onclick=openMainMenu;
  void loadVisual();
 }
 async function rawDataUrl(file){
@@ -173,10 +208,29 @@ async function regenerateCalibration(){
  try{const j=await api('identity/calibrate');calibrationImage=j.calibration||'';render()}
  catch(e){alert(e.message);render()}finally{busy=false}
 }
-async function start(){
- if(busy)return;busy=true;loading('Строим Story Bible вокруг двух персонажей…');
- try{state=(await api('start')).state;render()}catch(e){alert(e.message);refresh()}finally{busy=false}
+async function startNewBook(){
+ if(busy)return;
+ const replacing=state?.mode==='reader';
+ if(replacing&&!confirm('Начать новый роман? Текущий будет сохранён в архиве, а персонажи останутся прежними.'))return;
+ busy=true;loading('Создаём новый роман…');
+ try{
+   state=(await api('book/new')).state;
+   menuMode=false;libraryBooks=[];selectedAction='';
+   render();
+ }catch(e){alert(e.message);refresh()}finally{busy=false}
 }
+async function editCharacterFromMenu(){
+ if(busy)return;
+ if(state?.mode==='reader'){
+   const ok=confirm('Чтобы изменить персонажа, текущий роман будет сохранён в архиве. Продолжить?');
+   if(!ok)return;
+   busy=true;loading('Сохраняем текущий роман…');
+   try{state=(await api('book/exit')).state}catch(e){alert(e.message);busy=false;return}
+   busy=false;
+ }
+ menuMode=false;forceBuilder=true;render();
+}
+async function start(){return startNewBook()}
 async function exitStory(){
  if(busy)return;
  const ok=confirm('Выйти из текущего рассказа? Персонажи сохранятся, а рассказ будет убран в архив.');

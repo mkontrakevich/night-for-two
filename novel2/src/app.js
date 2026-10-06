@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {config,assertProductionConfig} from './config.js';
 import {authenticate} from './auth.js';
 import {
-  initDb,latestBook,createBook,appendTurn,recentTurns,advanceBook,archiveBook,
+  initDb,latestBook,listBooks,createBook,appendTurn,recentTurns,advanceBook,archiveBook,
   identities,saveIdentity,approveIdentity,claimSyntheticControl,
   getVisual,previousVisual,saveVisual,db
 } from './db.js';
@@ -128,10 +128,39 @@ async function main(){
         ids=await identities();
       }
 
+      if(url.pathname==='/novel2/api/books'){
+        const books=await listBooks(16);
+        return send(res,200,{ok:true,books});
+      }
+
       if(url.pathname==='/novel2/api/state'){
         if(book){
           book=await driveAiTurns(book,ids);
         }
+        return send(res,200,{ok:true,state:publicState(book,auth,ids)});
+      }
+
+      if(url.pathname==='/novel2/api/book/new'){
+        ids=await identities();
+        if(!ids.A?.approved||!ids.B?.approved||!ids.A?.character_card?.passport||!ids.B?.character_card?.passport){
+          return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_CARDS_REQUIRED'});
+        }
+        if(book){
+          await archiveBook(book.id,'new_book');
+          book=null;
+        }
+        const relationship=await fetchRelationshipContext();
+        const bible=await createStoryBible({
+          characters:{A:ids.A.character_card,B:ids.B.character_card},
+          relationshipContext:relationship
+        });
+        book=await createBook({
+          title:bible.title,
+          storyBible:bible,
+          scene:bible.first_scene,
+          activeRole:bible.first_scene.target_role
+        });
+        book=await driveAiTurns(book,ids);
         return send(res,200,{ok:true,state:publicState(book,auth,ids)});
       }
 
