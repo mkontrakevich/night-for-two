@@ -4,10 +4,13 @@ function stripFence(value='') {
   return String(value || '').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
 }
 function parseJson(raw='') {
-  try { return JSON.parse(stripFence(raw)); }
+  const source=stripFence(raw);
+  try { return JSON.parse(source); }
   catch {
-    const a=String(raw).indexOf('{'), b=String(raw).lastIndexOf('}');
-    if(a>=0&&b>a) return JSON.parse(String(raw).slice(a,b+1));
+    const a=source.indexOf('{'), b=source.lastIndexOf('}');
+    if(a>=0&&b>a){
+      try{return JSON.parse(source.slice(a,b+1));}catch{}
+    }
     throw new Error('NOVEL2_AI_JSON_INVALID');
   }
 }
@@ -83,7 +86,19 @@ export async function textCompletion({system, user, temperature=.75, maxTokens=5
 }
 
 export async function jsonCompletion(args) {
-  return parseJson(await textCompletion(args));
+  const raw=await textCompletion(args);
+  try{return parseJson(raw);}
+  catch(error){
+    if(error?.message!=='NOVEL2_AI_JSON_INVALID')throw error;
+    const repaired=await textCompletion({
+      system:'Ты восстанавливаешь повреждённый JSON. Верни только один валидный JSON-объект без markdown и пояснений. Сохрани исходные данные максимально точно; исправляй только синтаксис JSON.',
+      user:{task:'Исправь синтаксис JSON.',broken_json:String(raw||'').slice(0,60000)},
+      temperature:0,
+      maxTokens:args?.maxTokens||5000,
+      model:args?.model||config.textModel
+    });
+    return parseJson(repaired);
+  }
 }
 
 export async function visionJsonCompletion({system,text,images=[],temperature=.1,maxTokens=2600,model=config.visionModel}) {
