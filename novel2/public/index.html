@@ -68,7 +68,14 @@ async function api(path,body={}){
  const raw=await r.text();let j;
  try{j=raw?JSON.parse(raw):{}}
  catch{throw new Error(r.ok?'Сервис вернул повреждённый ответ. Повторите операцию.':'Не удалось получить корректный ответ сервера.')}
- if(!r.ok||!j.ok)throw new Error(j.error||'REQUEST_FAILED');return j;
+ if(!r.ok||!j.ok){
+   const technical=String(j.error||'');
+   if(/JSON|array element|position \d+|NOVEL2_AI_JSON_INVALID|Unexpected token|Expected ['"]/i.test(technical)){
+     throw new Error('Не удалось собрать корректную структуру истории. Повторите создание — исходные данные не потеряны.');
+   }
+   throw new Error(technical||'REQUEST_FAILED');
+ }
+ return j;
 }
 function esc(v=''){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 let processTimer=null;
