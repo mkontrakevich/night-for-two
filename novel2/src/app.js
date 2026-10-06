@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {config,assertProductionConfig} from './config.js';
 import {authenticate} from './auth.js';
 import {
-  initDb,latestBook,createBook,appendTurn,recentTurns,advanceBook,
+  initDb,latestBook,createBook,appendTurn,recentTurns,advanceBook,archiveBook,
   identities,saveIdentity,approveIdentity,claimSyntheticControl,
   getVisual,previousVisual,saveVisual,db
 } from './db.js';
@@ -69,6 +69,7 @@ async function driveAiTurns(book,ids,maxTurns=4){
   let current=book;
   for(let i=0;i<maxTurns&&current&&isAiControlled(ids,current.active_role);i++){
     const role=current.active_role;
+    const humanRole=role==='A'?'B':'A';
     const history=await recentTurns(current.id,18);
     const auto=await generateAiCharacterReply({
       book:current,
@@ -80,7 +81,8 @@ async function driveAiTurns(book,ids,maxTurns=4){
     await appendTurn(current.id,replyTurn,role,'reply',auto.reply,{
       action_key:auto.actionKey,
       control_mode:'ai',
-      synthetic:true
+      synthetic:true,
+      generated_automatically:true
     });
     const next=await continueStory({
       book:current,
@@ -89,7 +91,13 @@ async function driveAiTurns(book,ids,maxTurns=4){
       playerReply:auto.reply,
       actionKey:auto.actionKey
     });
-    current=await advanceBook(current,{scene:next.scene,canon:next.canon,activeRole:next.scene.target_role});
+
+    // An AI stand-in must answer by itself and then hand control back to the
+    // human participant. The prose model may keep target_role on the same
+    // character for dramatic reasons; for a stand-in this would create an AI
+    // monologue or loop, so we normalize the interaction boundary here.
+    next.scene.target_role=humanRole;
+    current=await advanceBook(current,{scene:next.scene,canon:next.canon,activeRole:humanRole});
   }
   if(current&&isAiControlled(ids,current.active_role)) throw new Error('NOVEL2_AI_TURN_LOOP');
   return current;
@@ -125,6 +133,13 @@ async function main(){
           book=await driveAiTurns(book,ids);
         }
         return send(res,200,{ok:true,state:publicState(book,auth,ids)});
+      }
+
+      if(url.pathname==='/novel2/api/book/exit'){
+        if(!book)return send(res,200,{ok:true,state:publicState(null,auth,ids)});
+        const archived=await archiveBook(book.id,'user_exit');
+        if(!archived)return send(res,409,{ok:false,error:'NOVEL2_BOOK_EXIT_FAILED'});
+        return send(res,200,{ok:true,archived_book:{id:archived.id,title:archived.title},state:publicState(null,auth,ids)});
       }
 
       if(url.pathname==='/novel2/api/start'){
@@ -319,7 +334,10 @@ async function main(){
           prompt:generated.prompt,
           model:generated.model,
           imageBase64:generated.base64,
-          meta:{continuity:String(book.current_scene?.visual_beat||'').slice(0,1200)}
+          meta:{
+            continuity:String(book.current_scene?.visual_beat||book.current_scene?.visual_scene?.camera_moment||'').slice(0,1200),
+            visual_scene:book.current_scene?.visual_scene||{}
+          }
         });
         return send(res,200,{ok:true,cached:false,image:'data:image/jpeg;base64,'+generated.base64,model:generated.model,prompt:generated.prompt});
       }

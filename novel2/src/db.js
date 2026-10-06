@@ -126,6 +126,19 @@ export async function advanceBook(book, {scene, canon={}, activeRole}) {
   return rows[0];
 }
 
+export async function archiveBook(bookId, reason='user_exit') {
+  const {rows}=await db.query(
+    `UPDATE novel2_books
+       SET status='archived',
+           canon=jsonb_set(COALESCE(canon,'{}'::jsonb),'{exit_reason}',to_jsonb($2::text),true),
+           updated_at=now()
+     WHERE id=$1 AND pair_key=$3 AND status='active'
+     RETURNING *`,
+    [bookId, String(reason||'user_exit').slice(0,80), pairKey()]
+  );
+  return rows[0]||null;
+}
+
 export async function saveIdentity(role, {profile={}, characterCard={}, builderMeta={}, identityLock='', referenceImages=[], approved=false}) {
   const key = pairKey();
   const {rows} = await db.query(
