@@ -16,6 +16,11 @@ assert(prose.includes('player_characters'));
 assert(prose.includes('generateAiCharacterReply'));
 assert(prose.includes('visual_scene'));
 assert(prose.includes('characters_present'));
+assert(prose.includes('LONG_SCENE_MIN_CHARS=4200'));
+assert(prose.includes('5500–9500 знаков'));
+assert(prose.includes('ensureLongScene'));
+assert(prose.includes('3–5 драматургических битов'));
+assert(prose.includes('NOVEL2_SCENE_TOO_SHORT'));
 assert(prose.includes('локацию сцены'));
 assert(!prose.includes('Fifty Shades'));
 
