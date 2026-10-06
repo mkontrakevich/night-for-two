@@ -13,6 +13,7 @@ import {createStoryBible,continueStory,generateAiCharacterReply} from './prose-e
 import {analyzeIdentity,buildLock} from './identity-engine.js';
 import {buildCharacterCard,buildSyntheticCharacter} from './character-builder.js';
 import {generateVisual,generateCalibration,generateSyntheticReference} from './visual-engine.js';
+import {fetchRelationshipContext,sliceRelationshipContext} from './relationship-context.js';
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const htmlPath=path.resolve(__dirname,'../public/index.html');
@@ -37,7 +38,8 @@ function characterSummary(identity){
     archetype:String(card?.passport?.archetype||''),
     story_role:String(card?.passport?.story_role||''),
     synthetic:Boolean(meta?.synthetic),
-    control_mode:String(meta?.control_mode||'human')
+    control_mode:String(meta?.control_mode||'human'),
+    relationship_grounded:Boolean(card?.behavioral_baseline?.relationship_grounded)
   };
 }
 function isAiControlled(ids,role){
@@ -131,7 +133,8 @@ async function main(){
           return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_CARDS_REQUIRED'});
         }
         if(!book){
-          const bible=await createStoryBible({characters:{A:ids.A.character_card,B:ids.B.character_card}});
+          const relationship=await fetchRelationshipContext();
+          const bible=await createStoryBible({characters:{A:ids.A.character_card,B:ids.B.character_card},relationshipContext:relationship});
           book=await createBook({title:bible.title,storyBible:bible,scene:bible.first_scene,activeRole:bible.first_scene.target_role});
         }
         book=await driveAiTurns(book,ids);
@@ -162,7 +165,8 @@ async function main(){
           return send(res,409,{ok:false,error:'NOVEL2_OTHER_PLAYER_ALREADY_READY'});
         }
         const counterpart=ids[auth.role]?.character_card||{};
-        const synthetic=await buildSyntheticCharacter({role:targetRole,counterpartCard:counterpart});
+        const relationship=await fetchRelationshipContext();
+        const synthetic=await buildSyntheticCharacter({role:targetRole,counterpartCard:counterpart,relationshipContext:sliceRelationshipContext(relationship,targetRole)});
         const identityLock=buildLock(targetRole,synthetic.visualProfile);
         const identityDraft={
           identity_lock:identityLock,
@@ -205,11 +209,13 @@ async function main(){
         if(refs.length<1)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
         const userFacts=input.user_facts&&typeof input.user_facts==='object'?input.user_facts:{};
         const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts});
+        const relationship=await fetchRelationshipContext();
         const characterCard=await buildCharacterCard({
           role,
           visualProfile:analyzed.profile,
           userFacts,
-          referenceCount:refs.length
+          referenceCount:refs.length,
+          relationshipContext:sliceRelationshipContext(relationship,role)
         });
         const builderMeta={
           synthetic:false,
@@ -242,7 +248,8 @@ async function main(){
         const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,6):[];
         if(refs.length<1)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
         const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts:input.user_facts||{}});
-        const characterCard=await buildCharacterCard({role,visualProfile:analyzed.profile,userFacts:input.user_facts||{},referenceCount:refs.length});
+        const relationship=await fetchRelationshipContext();
+        const characterCard=await buildCharacterCard({role,visualProfile:analyzed.profile,userFacts:input.user_facts||{},referenceCount:refs.length,relationshipContext:sliceRelationshipContext(relationship,role)});
         const saved=await saveIdentity(role,{
           profile:analyzed.profile,
           characterCard,

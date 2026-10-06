@@ -38,6 +38,7 @@ jobs:
           node --check src/prose-engine.js
           node --check src/identity-engine.js
           node --check src/character-builder.js
+          node --check src/relationship-context.js
           node --check src/visual-engine.js
       - run: npm test
       - name: Build container

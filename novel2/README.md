@@ -112,3 +112,25 @@ missing role
 The synthetic appearance is generated once and persisted. All later illustrations use its canonical reference image plus Identity Lock, so the stand-in does not change face/body between scenes.
 
 If the real player later opens the Mini App, control of that role switches from AI to the authenticated human automatically. Inside an active novel the visual identity is preserved to avoid an identity swap. Before a novel starts, the player may replace the temporary synthetic character with a photo-based Character Card.
+
+
+## Relationship-grounded character baseline
+
+Character psychology is no longer generated from photos alone.
+
+Novel 2 reads the existing sanitized Couple profile through the relationship-context connector:
+
+```
+encrypted Telegram history / ongoing couple interactions
+→ Couple profile observations and dynamics
+→ sanitized relationship context
+→ role-specific behavioral baseline
+→ Character Card
+→ Story Bible
+```
+
+Only aggregated allowed categories are consumed: communication style, initiative, pace, support, planning, attention and pair interaction rhythm. Raw messages are never transferred into Novel 2.
+
+Sensitive or intimate traits must not be inferred from chat. Romance-specific properties remain fictional unless the user explicitly provides them.
+
+For a synthetic missing-player stand-in, appearance stays random and fictional, while the behavioral baseline may still use the absent partner's existing sanitized communication profile.
