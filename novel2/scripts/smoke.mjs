@@ -151,3 +151,9 @@ assert(app.includes('updateBookCastReference'));
 assert(app.includes('generated_automatically:true'));
 
 console.log('NOVEL2_SMOKE_OK story_first=true multi_cast=true ai_library=true editable_books=true scene_images=true');
+
+assert(index.includes("AI создаст персонажа пары автоматически"),'story setup must auto-create missing partner');
+assert(index.includes('value="auto:story"'),'support cast must be story-generated');
+assert(!index.includes("Можно выбрать любого готового персонажа"),'manual AI cast selection must stay removed');
+assert(app.includes('ensureSyntheticIdentity'),'launch must auto-create missing partner identity');
+assert(app.includes("source_type:'story_ai'"),'support cast must be generated from story roles');
