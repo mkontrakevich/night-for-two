@@ -34,10 +34,11 @@ function characterSummary(identity){
   };
 }
 function publicState(book,auth,ids={}){
+  const summaries={A:characterSummary(ids.A),B:characterSummary(ids.B)};
   const base={
     role:auth.role,
-    identity:{A:Boolean(ids.A?.approved),B:Boolean(ids.B?.approved)},
-    characters:{A:characterSummary(ids.A),B:characterSummary(ids.B)},
+    identity:{A:Boolean(summaries.A.ready),B:Boolean(summaries.B.ready)},
+    characters:summaries,
     my_character:ids[auth.role]?.character_card||null
   };
   if(!book)return{mode:'home',...base};
