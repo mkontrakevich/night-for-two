@@ -233,12 +233,14 @@ async function main(){
           referenceImages:refs,
           approved:false
         });
-        const calibration=await generateCalibration({identity:saved,role});
+        // Persist the expensive analysis/card before image calibration.
+        // Calibration runs as a separate request so a slow or interrupted image
+        // provider never forces the user to re-upload and re-analyse photos.
         return send(res,200,{
           ok:true,
           character:characterCard,
           identity:{role,approved:false,version:saved.version,coverage:builderMeta.coverage},
-          calibration:'data:image/jpeg;base64,'+calibration.base64
+          calibration_required:true
         });
       }
 
@@ -264,8 +266,7 @@ async function main(){
           referenceImages:refs,
           approved:false
         });
-        const calibration=await generateCalibration({identity:saved,role});
-        return send(res,200,{ok:true,identity:{role,approved:false,version:saved.version,profile:saved.profile},calibration:'data:image/jpeg;base64,'+calibration.base64});
+        return send(res,200,{ok:true,identity:{role,approved:false,version:saved.version,profile:saved.profile},calibration_required:true});
       }
 
       if(url.pathname==='/novel2/api/identity/register'){
