@@ -16,7 +16,7 @@ import {createStoryBlueprint,createStoryBible,continueStory,generateAiCharacterR
 import {analyzeIdentity,buildLock} from './identity-engine.js';
 import {buildCharacterCard,buildSyntheticCharacter} from './character-builder.js';
 import {generateVisual,generateCalibration,generateSyntheticReference} from './visual-engine.js';
-import {fetchRelationshipContext,sliceRelationshipContext} from './relationship-context.js';
+import {fetchRelationshipContext,sliceRelationshipContext,explicitGenderForRole} from './relationship-context.js';
 import {PRESET_AI_CHARACTERS} from './ai-character-library.js';
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
@@ -57,6 +57,7 @@ function castCharacterSummary(entry){
     slot_key:String(entry?.slot_key||''),
     name:String(entry?.display_name||card?.passport?.fiction_name||''),
     story_role:String(card?.passport?.story_role||''),
+    gender:String(card?.passport?.gender||''),
     source_type:String(entry?.source_type||''),
     source_id:String(entry?.source_id||''),
     interactive_role:entry?.interactive_role||null,
@@ -71,6 +72,7 @@ function characterSummary(identity){
     name:String(card?.passport?.fiction_name||''),
     archetype:String(card?.passport?.archetype||''),
     story_role:String(card?.passport?.story_role||''),
+    gender:String(card?.passport?.gender||''),
     synthetic:Boolean(meta?.synthetic),
     control_mode:String(meta?.control_mode||'human'),
     relationship_grounded:Boolean(card?.behavioral_baseline?.relationship_grounded)
@@ -199,11 +201,23 @@ async function main(){
       }
 
       if(url.pathname==='/novel2/api/ai-characters'){
-        const characters=await listAiCharacters();
-        return send(res,200,{ok:true,characters:characters.map(x=>({
-          id:x.id,name:x.name,tags:x.tags,character_card:x.character_card,
-          has_reference:Array.isArray(x.reference_images)&&x.reference_images.length>0
-        }))});
+        const [characters,relationship]=await Promise.all([listAiCharacters(),fetchRelationshipContext()]);
+        return send(res,200,{
+          ok:true,
+          role_gender_hints:{
+            A:explicitGenderForRole(relationship,'A'),
+            B:explicitGenderForRole(relationship,'B')
+          },
+          gender_hint_policy:'explicit_profile_only',
+          characters:characters.map(x=>({
+            id:x.id,
+            name:x.name,
+            gender:String(x.character_card?.passport?.gender||''),
+            tags:x.tags,
+            character_card:x.character_card,
+            has_reference:Array.isArray(x.reference_images)&&x.reference_images.length>0
+          }))
+        });
       }
 
       if(url.pathname==='/novel2/api/story/draft/new'){
@@ -405,7 +419,13 @@ async function main(){
         }
         const counterpart=ids[auth.role]?.character_card||{};
         const relationship=await fetchRelationshipContext();
-        const synthetic=await buildSyntheticCharacter({role:targetRole,counterpartCard:counterpart,relationshipContext:sliceRelationshipContext(relationship,targetRole)});
+        const genderHint=explicitGenderForRole(relationship,targetRole);
+        const synthetic=await buildSyntheticCharacter({
+          role:targetRole,
+          counterpartCard:counterpart,
+          relationshipContext:sliceRelationshipContext(relationship,targetRole),
+          genderHint
+        });
         const identityLock=buildLock(targetRole,synthetic.visualProfile);
         const identityDraft={
           identity_lock:identityLock,

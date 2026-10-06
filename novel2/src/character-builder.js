@@ -235,7 +235,7 @@ export async function buildCharacterCard({role,visualProfile={},userFacts={},ref
   return card;
 }
 
-export async function buildSyntheticCharacter({role,counterpartCard={},relationshipContext={}}){
+export async function buildSyntheticCharacter({role,counterpartCard={},relationshipContext={},genderHint=''}){
   if(!['A','B'].includes(role))throw new Error('NOVEL2_CHARACTER_ROLE_INVALID');
   const grounded=Array.isArray(relationshipContext?.observations)&&relationshipContext.observations.length>0;
   const output=await jsonCompletion({
@@ -248,10 +248,13 @@ export async function buildSyntheticCharacter({role,counterpartCard={},relations
       counterpart_character:counterpartCard||{},
       sanitized_pair_communication:relationshipContext,
       relationship_context_available:grounded,
+      explicit_gender_hint:['female','male','nonbinary'].includes(String(genderHint))?String(genderHint):'',
       randomization_rules:[
         'Выбери конкретное лицо, волосы, телосложение, осанку и 4–6 отличительных визуальных маркеров.',
         'Не используй знаменитостей и не описывай персонажа как копию реального человека.',
         'Возраст строго 21+.',
+        'Если explicit_gender_hint задан, используй именно его как гендер персонажа. Этот hint считается явной метаданной, а не выводом из переписки.',
+        'Если explicit_gender_hint пуст, гендер выбери случайно из female, male, nonbinary.',
         'Внешность является случайной художественной оболочкой и не должна выводиться из переписки.',
         'Если коммуникационный профиль отсутствующего участника есть, сохрани его наблюдаемый стиль общения, инициативу, темп, поддержку и ритм как behavioral baseline.',
         'Не выводи из переписки интимные, медицинские, религиозные, политические или другие чувствительные свойства.',
