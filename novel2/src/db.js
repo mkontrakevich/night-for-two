@@ -265,6 +265,16 @@ export async function listStoryDrafts(limit=8) {
   return rows;
 }
 
+export async function deleteStoryDraft(id) {
+  const {rows}=await db.query(
+    `DELETE FROM novel2_story_drafts
+      WHERE id=$1 AND pair_key=$2 AND status='draft'
+      RETURNING id,title,status`,
+    [id,pairKey()]
+  );
+  return rows[0]||null;
+}
+
 export async function markStoryDraftUsed(id,castConfig={}) {
   const {rows}=await db.query(
     `UPDATE novel2_story_drafts
