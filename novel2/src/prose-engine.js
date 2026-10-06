@@ -52,7 +52,7 @@ function cleanScene(value={}) {
   };
 }
 
-export async function createStoryBible({characters={}}={}) {
+export async function createStoryBible({characters={},relationshipContext={}}={}) {
   const A=characters.A&&typeof characters.A==='object'?characters.A:null;
   const B=characters.B&&typeof characters.B==='object'?characters.B:null;
   if(!A?.passport||!B?.passport) throw new Error('NOVEL2_CHARACTER_CARDS_REQUIRED');
@@ -64,12 +64,20 @@ export async function createStoryBible({characters={}}={}) {
     user:{
       task:'Создай скрытую архитектуру нового романа и первую сцену вокруг двух уже созданных пользовательских персонажей. Их карточки — канон героев, а не черновик.',
       player_characters:{A,B},
+      sanitized_pair_dynamics:{
+        raw_messages:false,
+        observations:Array.isArray(relationshipContext?.observations)?relationshipContext.observations.slice(0,18):[],
+        preferences:Array.isArray(relationshipContext?.preferences)?relationshipContext.preferences.slice(0,12):[],
+        dynamics:Array.isArray(relationshipContext?.dynamics)?relationshipContext.dynamics.slice(0,10):[]
+      },
       character_contract:[
         'Сохраняй fiction_name, возраст 21+, речевую манеру, внутреннее противоречие и заявленную сюжетную роль каждого героя.',
         'Не меняй внешность, биографию и устойчивые черты героя без сюжетно объяснённого события.',
         'visual_dna используется как источник для visual_beat, но не вставляется в прозу техническим языком.',
         'Психология в character card является художественной характеристикой персонажа, а не диагнозом реального человека.',
-        'Роман должен столкнуть особенности A и B так, чтобы их характеры реально влияли на конфликт и притяжение.'
+        'Роман должен столкнуть особенности A и B так, чтобы их характеры реально влияли на конфликт и притяжение.',
+        'Sanitized pair dynamics можно использовать для узнаваемого ритма общения, инициативы, поддержки и планирования, но нельзя цитировать, реконструировать или выдавать исходные сообщения.',
+        'Не выводи из общения интимные предпочтения, сексуальные границы, диагнозы, религию, политику и другие чувствительные характеристики.'
       ],
       output:{
         title:'',
