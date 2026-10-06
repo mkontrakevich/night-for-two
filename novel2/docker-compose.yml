@@ -32,6 +32,15 @@ services:
     ports:
       - "5690:5690"
     restart: unless-stopped
+    networks:
+      - default
+      - night_context
 
 volumes:
   novel2_pg:
+
+
+networks:
+  night_context:
+    external: true
+    name: night_for_two_context
