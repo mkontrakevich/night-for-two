@@ -28,7 +28,7 @@
 <script>
 const app=document.getElementById('app');
 const tg=window.Telegram?.WebApp;try{tg?.ready();tg?.expand()}catch{}
-let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null,forceBuilder=false,menuMode=false,libraryBooks=[],libraryDrafts=[],storyDraft=null,aiCharacters=[];
+let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null,forceBuilder=false,menuMode=false,libraryBooks=[],libraryDrafts=[],storyDraft=null,aiCharacters=[],roleGenderHints={A:'',B:''};
 
 function telegramInitData(){
  const sdk=String(window.Telegram?.WebApp?.initData||'');
@@ -67,6 +67,7 @@ async function loadAiCharacters(){
  try{
    const j=await api('ai-characters');
    aiCharacters=Array.isArray(j.characters)?j.characters:[];
+   roleGenderHints=j.role_gender_hints&&typeof j.role_gender_hints==='object'?j.role_gender_hints:{A:'',B:''};
  }catch{}
 }
 async function loadLibrary(){
@@ -146,11 +147,20 @@ async function openStoryDraft(id){
  await loadAiCharacters();
  renderStoryDraft();
 }
-function aiOptions(selected=''){
- return aiCharacters.map(x=>'<option value="ai:'+esc(x.id)+'" '+(selected==='ai:'+x.id?'selected':'')+'>'+esc(x.name)+' · '+esc((x.tags||[]).slice(0,3).join(', '))+'</option>').join('');
+function genderLabel(value=''){
+ return ({female:'женщина',male:'мужчина',nonbinary:'небинарный персонаж'})[String(value)]||'гендер не указан';
 }
-function defaultAi(index=0){
- return aiCharacters[index%Math.max(1,aiCharacters.length)]?.id||'';
+function aiOptions(selected='',preferredGender=''){
+ const list=[...aiCharacters].sort((a,b)=>{
+   const ap=preferredGender&&a.gender===preferredGender?0:1,bp=preferredGender&&b.gender===preferredGender?0:1;
+   return ap-bp||String(a.name).localeCompare(String(b.name),'ru');
+ });
+ return list.map(x=>'<option value="ai:'+esc(x.id)+'" '+(selected==='ai:'+x.id?'selected':'')+'>'+esc(x.name)+' · '+esc(genderLabel(x.gender))+' · '+esc((x.tags||[]).slice(0,2).join(', '))+'</option>').join('');
+}
+function defaultAi(index=0,preferredGender=''){
+ const preferred=preferredGender?aiCharacters.filter(x=>x.gender===preferredGender):[];
+ const pool=preferred.length?preferred:aiCharacters;
+ return pool[index%Math.max(1,pool.length)]?.id||'';
 }
 function renderStoryDraft(){
  if(!storyDraft){menuMode=true;renderMainMenu();return}
@@ -158,13 +168,17 @@ function renderStoryDraft(){
  const runtime=['A','B'];
  let html='';
  interactive.forEach((slot,i)=>{
-   const role=runtime[i],summary=state?.characters?.[role]||{},own=role===state?.role;
-   const playerOption=summary.ready?'<option value="player:'+role+'" selected>Игрок '+role+' · '+esc(summary.name||'готов')+'</option>':'<option value="player:'+role+'" disabled>Игрок '+role+' · персонаж не создан</option>';
-   const ai=own?'':aiOptions(!summary.ready?'ai:'+defaultAi(i):'');
-   html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||('Главная роль '+(i+1)))+'</strong><p>'+esc(slot.description||'Интерактивный герой истории')+'</p><select data-cast-slot="'+esc(slot.slot_key)+'" data-runtime-role="'+role+'">'+playerOption+ai+'</select></div>';
+   const role=runtime[i],summary=state?.characters?.[role]||{},own=role===state?.role,hint=String(roleGenderHints?.[role]||'');
+   const playerOption=summary.ready?'<option value="player:'+role+'" selected>Игрок '+role+' · '+esc(summary.name||'готов')+(summary.gender?' · '+esc(genderLabel(summary.gender)):'')+'</option>':'<option value="player:'+role+'" disabled>Игрок '+role+' · персонаж не создан</option>';
+   const suggested=!summary.ready?'ai:'+defaultAi(i,hint):'';
+   const ai=own?'':aiOptions(suggested,hint);
+   const hintText=hint?'<div class="hint">Рекомендуемый гендер для этой роли: '+esc(genderLabel(hint))+' · источник: подтверждённые данные профиля пары. Можно изменить вручную.</div>':'<div class="hint">Гендер не зафиксирован в профиле пары — доступны все варианты.</div>';
+   html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||('Главная роль '+(i+1)))+'</strong><p>'+esc(slot.description||'Интерактивный герой истории')+'</p>'+hintText+'<select data-cast-slot="'+esc(slot.slot_key)+'" data-runtime-role="'+role+'">'+playerOption+ai+'</select></div>';
  });
+ const diversity=['female','male','nonbinary'];
  support.forEach((slot,i)=>{
-   html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||'AI-персонаж')+'</strong><p>'+esc(slot.description||'Дополнительная роль истории')+'</p><select data-cast-slot="'+esc(slot.slot_key)+'">'+aiOptions('ai:'+defaultAi(i+2))+'</select></div>';
+   const preferred=diversity[i%diversity.length],selected='ai:'+defaultAi(i+2,preferred);
+   html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||'AI-персонаж')+'</strong><p>'+esc(slot.description||'Дополнительная роль истории')+'</p><div class="hint">Автоподбор распределяет разные гендеры между дополнительными героями; выбор можно изменить.</div><select data-cast-slot="'+esc(slot.slot_key)+'">'+aiOptions(selected,preferred)+'</select></div>';
  });
  const ownReady=Boolean(state?.characters?.[state?.role||'A']?.ready);
  app.innerHTML='<section class="storySetup"><div class="kicker">STORY FIRST · CAST SECOND</div><h1>'+esc(storyDraft.title||bp.title||'Новая история')+'</h1><p>'+esc(storyDraft.logline||bp.logline||'')+'</p><div class="storyMeta">'+esc(bp.genre_tone||'')+'</div><div class="libraryTitle">Каст романа</div>'+html+'<div class="actions"><button class="primary" id="launchDraft" '+(ownReady?'':'disabled')+'>Начать роман</button><button class="secondary" id="backToMenu">Вернуться в меню</button></div>'+(!ownReady?'<div class="hint">Чтобы начать роман, сначала создайте своего персонажа. Черновик истории уже сохранён.</div>':'')+'</section>';
