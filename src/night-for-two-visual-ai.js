@@ -68,7 +68,7 @@ async function imageRequest({prompt,inputReferences=[]}) {
     try{
       const payload={model,prompt,aspect_ratio:'9:16',output_format:'jpeg'};
       if(Array.isArray(inputReferences)&&inputReferences.length)payload.input_references=inputReferences;
-      if(model.includes('seedream'))payload.resolution=process.env.NIGHT_VISUAL_RESOLUTION||'1K';
+      if(model.includes('seedream'))payload.resolution=process.env.NIGHT_VISUAL_RESOLUTION||'2K';
       const response=await fetch('https://openrouter.ai/api/v1/images',{method:'POST',headers:{authorization:`Bearer ${key}`,'content-type':'application/json','HTTP-Referer':'https://github.com/mkontrakevich/night-for-two','X-Title':'MARINS Night for Two Visuals'},body:JSON.stringify(payload)});
       const json=await response.json();
       if(!response.ok)throw new Error(`OPENROUTER_IMAGE_${response.status}:${json?.error?.message||'failed'}`);
