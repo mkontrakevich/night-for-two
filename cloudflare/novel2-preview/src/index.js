@@ -35,12 +35,16 @@ h1{font:400 34px/1.05 Georgia,serif;margin:0 0 12px}p{margin:0;color:#b8aaa0;fon
 
 function recoveryPage(){
   return new Response(recoveryHtml(),{
-    status:503,
+    // Telegram WebView should keep rendering the Mini App shell while the
+    // private origin reconnects. A 200 document response avoids replacing the
+    // app with a raw transport error page; API/health requests still return 502.
+    status:200,
     headers:{
       'content-type':'text/html; charset=utf-8',
       'cache-control':'no-store',
       'retry-after':'2',
       'x-novel2-preview':'1',
+      'x-novel2-degraded':'origin_recovery',
       'x-novel2-origin-recovery':'1'
     }
   });
