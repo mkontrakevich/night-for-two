@@ -16,6 +16,11 @@ const PROSE_SYSTEM = `
 — оригинальная проза: не копируй и не имитируй конкретного автора, книгу, персонажей или узнаваемые фразы.
 
 GAMEPLAY
+— это прежде всего РОМАН, а не частый обмен короткими ходами;
+— между решениями игрока должен идти полноценный литературный фрагмент: ориентир 900–1500 слов, 8–14 абзацев и минимум 3 самостоятельных драматургических бита;
+— не останавливай сцену после каждой реплики. Второстепенные персонажи и AI-герой могут говорить, двигаться, менять ситуацию и развивать конфликт без немедленного возврата управления игроку;
+— перед новым primary_interaction сцена должна продвинуть хотя бы два из четырёх слоёв: сюжет, отношения, тайну/ставку, физическую ситуацию;
+— решение игрока запрашивается только в точке, где его ответ действительно меняет ход сцены, отношения, риск или направление сюжета;
 — после каждой сцены один конкретный герой получает естественный повод ответить или действовать;
 — primary_interaction.type почти всегда "free_reply";
 — prompt — реплика, вопрос или ситуация внутри сцены;
@@ -55,7 +60,7 @@ function cleanScene(value={}) {
   return {
     chapter_no:Math.max(1,Number(s.chapter_no)||1),
     chapter_title:String(s.chapter_title||'').slice(0,100),
-    prose:String(s.prose||'').trim().slice(0,12000),
+    prose:String(s.prose||'').trim().slice(0,18000),
     target_role:['A','B'].includes(String(s.target_role))?String(s.target_role):'A',
     primary_interaction:{
       type:'free_reply',
@@ -70,6 +75,51 @@ function cleanScene(value={}) {
     continuity_updates:s.continuity_updates&&typeof s.continuity_updates==='object'?s.continuity_updates:{},
     hook:String(s.hook||'').trim().slice(0,500)
   };
+}
+
+const LONG_SCENE_MIN_CHARS=4200;
+const LONG_SCENE_TARGET='5500–9500 знаков, обычно 900–1500 слов';
+
+async function ensureLongScene(scene,{storyBible={},recentTurns=[],reason=''}={}){
+  if(scene.prose.length>=LONG_SCENE_MIN_CHARS)return scene;
+  const data=await jsonCompletion({
+    system:PROSE_SYSTEM,
+    temperature:.74,
+    maxTokens:5600,
+    user:{
+      task:'Расширь уже написанную сцену до полноценного фрагмента романа. Не добавляй нового решения игрока раньше финала и не меняй смысл уже заданной точки выбора.',
+      length_target:LONG_SCENE_TARGET,
+      short_scene:scene,
+      story_bible:storyBible,
+      recent_turns:recentTurns,
+      reason,
+      output:{
+        scene:{
+          chapter_no:scene.chapter_no,
+          chapter_title:scene.chapter_title,
+          prose:'',
+          target_role:scene.target_role,
+          primary_interaction:scene.primary_interaction,
+          optional_actions:scene.optional_actions,
+          visual_beat:scene.visual_beat,
+          visual_scene:scene.visual_scene,
+          continuity_updates:scene.continuity_updates,
+          hook:scene.hook
+        }
+      },
+      hard_rules:[
+        'Сохрани тот же target_role и ту же финальную точку взаимодействия.',
+        'Не пиши за героя, которым должен управлять пользователь, его решающую реплику или выбор.',
+        'Добавь 3–5 последовательных драматургических битов до точки решения.',
+        'Развивай локацию, предметную среду, действия, характерный диалог, внутреннее напряжение и причинность.',
+        'Не заполняй объём повторением эмоций, одинаковыми взглядами, паузами и абстрактным напряжением.',
+        'Сцена должна читаться как часть романа, а не как удлинённый игровой prompt.',
+        'visual_scene обнови так, чтобы он соответствовал итоговой расширенной сцене.'
+      ]
+    }
+  });
+  const expanded=cleanScene(data.scene||{});
+  return expanded.prose.length>=scene.prose.length?expanded:scene;
 }
 
 export async function createStoryBible({characters={},relationshipContext={}}={}) {
@@ -136,14 +186,18 @@ export async function createStoryBible({characters={},relationshipContext={}}={}
         'Начни с конкретной ситуации, а не с анкеты или знакомства с интерфейсом.',
         'Не объясняй устройство игры внутри прозы.',
         'Первая сцена должна проявить хотя бы по одной уникальной черте каждого персонажа.',
+        'Первая сцена должна быть полноценным литературным эпизодом: ориентир 5500–9500 знаков, 8–14 абзацев, 3–5 драматургических битов до первого решения игрока.',
+        'Не прерывай сцену ради решения после одной-двух реплик. Сначала дай событию, локации, отношениям и конфликту реально развиться.',
         'Первая сцена должна закончиться прямой репликой или обстоятельством, на которое один игрок должен ответить.',
         'visual_scene обязательно описывает фактическую локацию сцены, присутствующих героев, их положение, одежду, значимые предметы и свет. Это технический канон для иллюстрации, а не декоративный mood prompt.',
         'characters_present содержит только A/B, которые физически находятся в кадре текущей сцены.'
       ]
     }
   });
-  const first=cleanScene(data.first_scene||{});
+  let first=cleanScene(data.first_scene||{});
   if(!data.title||first.prose.length<500) throw new Error('NOVEL2_BIBLE_INVALID');
+  first=await ensureLongScene(first,{storyBible:{...data,player_characters:{A,B}},reason:'first_scene'});
+  if(first.prose.length<2500) throw new Error('NOVEL2_BIBLE_TOO_SHORT');
   return {...data,player_characters:{A,B},first_scene:first};
 }
 
@@ -154,7 +208,7 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
     temperature:.82,
     maxTokens:5200,
     user:{
-      task:'Продолжи роман после свободного ответа игрока. Ответ игрока — каноническое действие его героя.',
+      task:'Продолжи роман после свободного ответа игрока. Ответ игрока — каноническое действие его героя. Напиши полноценный длинный литературный эпизод до следующего действительно значимого решения.',
       story_bible:bible,
       canon,
       current_scene:book.current_scene||{},
@@ -186,6 +240,8 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
       },
       hard_rules:[
         'Покажи последствия именно того, что написал игрок.',
+        'Между этим ответом и следующим решением дай ориентировочно 5500–9500 знаков прозы, 8–14 абзацев и 3–5 драматургических битов.',
+        'Не возвращай управление игроку после каждой короткой реплики: персонажи вокруг него должны успеть ответить, действовать, изменить обстановку и продвинуть конфликт.',
         'Не повторяй его фразу дословно без необходимости.',
         'Не обнуляй конфликт и не делай универсальную романтическую паузу.',
         'Сохраняй имена, роли, знания персонажей, предметы, место и причинность.',
@@ -196,8 +252,10 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
       ]
     }
   });
-  const scene=cleanScene(data.scene||{});
+  let scene=cleanScene(data.scene||{});
   if(scene.prose.length<350) throw new Error('NOVEL2_SCENE_INVALID');
+  scene=await ensureLongScene(scene,{storyBible:bible,recentTurns,reason:'between_player_decisions'});
+  if(scene.prose.length<2500) throw new Error('NOVEL2_SCENE_TOO_SHORT');
   return {scene,canon:data.canon&&typeof data.canon==='object'?data.canon:canon};
 }
 
