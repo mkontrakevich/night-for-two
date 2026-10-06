@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0909">
-<title>Interactive Novel 2.0</title>
+<title>Interactive Novel 2.0</title>\n<script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <style>
 :root{--bg:#0b0909;--paper:#f1e8d8;--ink:#231d18;--muted:#8e8174;--red:#8e2833;--line:rgba(36,29,24,.16);--safe:env(safe-area-inset-bottom)}
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}button,textarea{font:inherit}
@@ -25,11 +25,27 @@
 const app=document.getElementById('app');
 const tg=window.Telegram?.WebApp;try{tg?.ready();tg?.expand()}catch{}
 let state=null,busy=false,selectedAction='',calibrationImage='';
-function authHeaders(){const h={};if(tg?.initData)h['x-telegram-init-data']=tg.initData;if(location.hostname==='localhost')h['x-novel2-local-user']=localStorage.getItem('novel2_local_user')||'local_a';return h}
+function telegramInitData(){
+ const sdk=String(window.Telegram?.WebApp?.initData||'');
+ if(sdk)return sdk;
+ for(const raw of [location.search,location.hash]){
+   const q=String(raw||'').replace(/^[?#]/,'');
+   if(!q)continue;
+   const value=new URLSearchParams(q).get('tgWebAppData');
+   if(value)return String(value);
+ }
+ return '';
+}
+function authHeaders(){
+ const h={},data=telegramInitData();
+ if(data)h['x-telegram-init-data']=data;
+ if(location.hostname==='localhost')h['x-novel2-local-user']=localStorage.getItem('novel2_local_user')||'local_a';
+ return h
+}
 async function api(path,body={}){const r=await fetch('/novel2/api/'+path,{method:'POST',headers:{'content-type':'application/json',...authHeaders()},body:JSON.stringify(body)});const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||'REQUEST_FAILED');return j}
 function esc(v=''){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function loading(text='Продолжаем историю…'){app.innerHTML='<section class="loading"><div><i></i><div>'+esc(text)+'</div></div></section>'}
-async function refresh(){loading('Открываем роман…');try{state=(await api('state')).state;render()}catch(e){app.innerHTML='<section class="loading"><div>'+esc(e.message)+'</div></section>'}}
+async function refresh(){loading('Открываем роман…');try{state=(await api('state')).state;render()}catch(e){const missing=e.message==='NOVEL2_ACCESS_DENIED'&&!telegramInitData();app.innerHTML='<section class="loading"><div>'+esc(missing?'Telegram не передал данные входа. Закройте окно и откройте 18+ ещё раз.':e.message)+'</div></section>'}}
 function render(){
  if(calibrationImage){
    app.innerHTML='<section class="calibration"><div class="kicker">CHARACTER CALIBRATION</div><h1>Это один и тот же персонаж?</h1><p>Проверьте лицо, профиль, нос, линию челюсти, волосы и пропорции. Только после подтверждения этот образ становится визуальным каноном романа.</p><img src="'+calibrationImage+'" alt=""><div class="actions"><button class="primary" id="approveIdentity">Зафиксировать персонажа</button><button class="secondary" id="regenIdentity">Пересобрать калибровку</button></div></section>';
