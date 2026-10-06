@@ -190,3 +190,22 @@ export async function saveVisual({bookId,turnNo,visualKey,prompt,model,imageBase
   );
   return rows[0];
 }
+
+
+export async function claimSyntheticControl(role) {
+  const {rows}=await db.query(
+    `UPDATE novel2_identity
+       SET builder_meta=jsonb_set(
+             jsonb_set(builder_meta,'{control_mode}','"human"'::jsonb,true),
+             '{claimed_at}',to_jsonb(now()::text),true
+           ),
+           updated_at=now()
+       WHERE pair_key=$1
+         AND role=$2
+         AND builder_meta->>'synthetic'='true'
+         AND builder_meta->>'control_mode'='ai'
+       RETURNING *`,
+    [pairKey(),role]
+  );
+  return rows[0]||null;
+}

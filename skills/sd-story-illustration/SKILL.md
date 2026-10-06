@@ -126,3 +126,21 @@ arbitrary player photos
 The character card is not a claim about the real person's psychology. Personality, biography, role and romantic dynamics are fictional properties created for the novel. Only observable visual geometry is grounded in the uploaded reference images.
 
 One image may be used. Missing views must be marked unknown and resolved only through calibration/approval, never silently invented as a factual visual trait.
+
+
+## Synthetic stand-in identity
+
+When a second player has not yet created a Character Card, Novel 2 may create a fully fictional stand-in. This follows the same identity discipline as a photo-based character:
+
+```
+random fictional appearance
+→ Visual Identity Profile
+→ Identity Lock
+→ canonical generated reference plate
+→ persisted reference image
+→ scene generation
+```
+
+The generator must not randomize the stand-in on every scene. Randomization occurs once, before the Story Bible is created. The resulting reference plate and immutable lock become canonical for that novel.
+
+When the real player later takes control, the active novel keeps the same visual identity. Replacing the stand-in with the player's own photo-based identity is allowed only before the novel begins.

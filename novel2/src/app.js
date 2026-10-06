@@ -4,11 +4,15 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {config,assertProductionConfig} from './config.js';
 import {authenticate} from './auth.js';
-import {initDb,latestBook,createBook,appendTurn,recentTurns,advanceBook,identities,saveIdentity,approveIdentity,getVisual,previousVisual,saveVisual,db} from './db.js';
-import {createStoryBible,continueStory} from './prose-engine.js';
+import {
+  initDb,latestBook,createBook,appendTurn,recentTurns,advanceBook,
+  identities,saveIdentity,approveIdentity,claimSyntheticControl,
+  getVisual,previousVisual,saveVisual,db
+} from './db.js';
+import {createStoryBible,continueStory,generateAiCharacterReply} from './prose-engine.js';
 import {analyzeIdentity,buildLock} from './identity-engine.js';
-import {buildCharacterCard} from './character-builder.js';
-import {generateVisual,generateCalibration} from './visual-engine.js';
+import {buildCharacterCard,buildSyntheticCharacter} from './character-builder.js';
+import {generateVisual,generateCalibration,generateSyntheticReference} from './visual-engine.js';
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const htmlPath=path.resolve(__dirname,'../public/index.html');
@@ -26,12 +30,18 @@ async function bodyJson(req){
 }
 function characterSummary(identity){
   const card=identity?.character_card||{};
+  const meta=identity?.builder_meta||{};
   return{
     ready:Boolean(identity?.approved&&card?.passport),
     name:String(card?.passport?.fiction_name||''),
     archetype:String(card?.passport?.archetype||''),
-    story_role:String(card?.passport?.story_role||'')
+    story_role:String(card?.passport?.story_role||''),
+    synthetic:Boolean(meta?.synthetic),
+    control_mode:String(meta?.control_mode||'human')
   };
+}
+function isAiControlled(ids,role){
+  return Boolean(ids?.[role]?.approved&&ids?.[role]?.builder_meta?.synthetic&&ids?.[role]?.builder_meta?.control_mode==='ai');
 }
 function publicState(book,auth,ids={}){
   const summaries={A:characterSummary(ids.A),B:characterSummary(ids.B)};
@@ -49,8 +59,38 @@ function publicState(book,auth,ids={}){
     book:{id:book.id,title:book.title,chapter_no:book.chapter_no,turn_no:book.turn_no},
     scene,
     active_role:book.active_role,
-    can_reply:String(book.active_role)===String(auth.role)
+    active_control_mode:isAiControlled(ids,book.active_role)?'ai':'human',
+    can_reply:String(book.active_role)===String(auth.role)&&!isAiControlled(ids,book.active_role)
   };
+}
+async function driveAiTurns(book,ids,maxTurns=4){
+  let current=book;
+  for(let i=0;i<maxTurns&&current&&isAiControlled(ids,current.active_role);i++){
+    const role=current.active_role;
+    const history=await recentTurns(current.id,18);
+    const auto=await generateAiCharacterReply({
+      book:current,
+      recentTurns:history,
+      role,
+      characterCard:ids[role]?.character_card||{}
+    });
+    const replyTurn=Number(current.turn_no||0)+1;
+    await appendTurn(current.id,replyTurn,role,'reply',auto.reply,{
+      action_key:auto.actionKey,
+      control_mode:'ai',
+      synthetic:true
+    });
+    const next=await continueStory({
+      book:current,
+      recentTurns:await recentTurns(current.id,18),
+      playerRole:role,
+      playerReply:auto.reply,
+      actionKey:auto.actionKey
+    });
+    current=await advanceBook(current,{scene:next.scene,canon:next.canon,activeRole:next.scene.target_role});
+  }
+  if(current&&isAiControlled(ids,current.active_role)) throw new Error('NOVEL2_AI_TURN_LOOP');
+  return current;
 }
 
 async function main(){
@@ -70,7 +110,18 @@ async function main(){
       let book=await latestBook();
       let ids=await identities();
 
+      // An actual authenticated player immediately takes control of a synthetic
+      // stand-in created for their role. The visual identity stays unchanged
+      // inside an active novel, so the story never suffers an identity swap.
+      if(ids[auth.role]?.builder_meta?.synthetic&&ids[auth.role]?.builder_meta?.control_mode==='ai'){
+        await claimSyntheticControl(auth.role);
+        ids=await identities();
+      }
+
       if(url.pathname==='/novel2/api/state'){
+        if(book){
+          book=await driveAiTurns(book,ids);
+        }
         return send(res,200,{ok:true,state:publicState(book,auth,ids)});
       }
 
@@ -83,12 +134,13 @@ async function main(){
           const bible=await createStoryBible({characters:{A:ids.A.character_card,B:ids.B.character_card}});
           book=await createBook({title:bible.title,storyBible:bible,scene:bible.first_scene,activeRole:bible.first_scene.target_role});
         }
+        book=await driveAiTurns(book,ids);
         return send(res,200,{ok:true,state:publicState(book,auth,ids)});
       }
 
       if(url.pathname==='/novel2/api/reply'){
         if(!book)return send(res,400,{ok:false,error:'NOVEL2_BOOK_REQUIRED'});
-        if(String(book.active_role)!==auth.role)return send(res,409,{ok:false,error:'NOVEL2_NOT_YOUR_TURN'});
+        if(String(book.active_role)!==auth.role||isAiControlled(ids,auth.role))return send(res,409,{ok:false,error:'NOVEL2_NOT_YOUR_TURN'});
         const reply=String(input.reply||'').trim();
         if(reply.length<1||reply.length>3000)return send(res,400,{ok:false,error:'NOVEL2_REPLY_INVALID'});
 
@@ -98,10 +150,56 @@ async function main(){
         const next=await continueStory({book,recentTurns:history,playerRole:auth.role,playerReply:reply,actionKey:String(input.action_key||'')});
         book=await advanceBook(book,{scene:next.scene,canon:next.canon,activeRole:next.scene.target_role});
         ids=await identities();
+        book=await driveAiTurns(book,ids);
         return send(res,200,{ok:true,state:publicState(book,auth,ids)});
       }
 
+      if(url.pathname==='/novel2/api/character/random'){
+        if(book)return send(res,409,{ok:false,error:'NOVEL2_RANDOM_CHARACTER_ONLY_BEFORE_START'});
+        const targetRole=auth.role==='A'?'B':'A';
+        const existing=ids[targetRole];
+        if(existing?.approved&&!existing?.builder_meta?.synthetic){
+          return send(res,409,{ok:false,error:'NOVEL2_OTHER_PLAYER_ALREADY_READY'});
+        }
+        const counterpart=ids[auth.role]?.character_card||{};
+        const synthetic=await buildSyntheticCharacter({role:targetRole,counterpartCard:counterpart});
+        const identityLock=buildLock(targetRole,synthetic.visualProfile);
+        const identityDraft={
+          identity_lock:identityLock,
+          character_card:synthetic.characterCard,
+          reference_images:[]
+        };
+        const reference=await generateSyntheticReference({identity:identityDraft,role:targetRole});
+        const referenceData='data:image/jpeg;base64,'+reference.base64;
+        const builderMeta={
+          synthetic:true,
+          control_mode:'ai',
+          reference_count:0,
+          generated_reference:true,
+          created_by_role:auth.role,
+          created_at:new Date().toISOString(),
+          version:'synthetic-character-1'
+        };
+        const saved=await saveIdentity(targetRole,{
+          profile:synthetic.visualProfile,
+          characterCard:synthetic.characterCard,
+          builderMeta,
+          identityLock,
+          referenceImages:[referenceData],
+          approved:true
+        });
+        ids=await identities();
+        return send(res,200,{
+          ok:true,
+          target_role:targetRole,
+          character:saved.character_card,
+          reference_image:referenceData,
+          state:publicState(null,auth,ids)
+        });
+      }
+
       if(url.pathname==='/novel2/api/character/build'){
+        if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
         const role=auth.role;
         const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,6):[];
         if(refs.length<1)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
@@ -114,6 +212,8 @@ async function main(){
           referenceCount:refs.length
         });
         const builderMeta={
+          synthetic:false,
+          control_mode:'human',
           reference_count:refs.length,
           coverage:analyzed.profile?.reference_coverage||{},
           created_at:new Date().toISOString(),
@@ -137,33 +237,57 @@ async function main(){
       }
 
       if(url.pathname==='/novel2/api/identity/analyze'){
+        if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
         const role=auth.role;
         const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,6):[];
         if(refs.length<1)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
         const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts:input.user_facts||{}});
         const characterCard=await buildCharacterCard({role,visualProfile:analyzed.profile,userFacts:input.user_facts||{},referenceCount:refs.length});
-        const saved=await saveIdentity(role,{profile:analyzed.profile,characterCard,builderMeta:{reference_count:refs.length,coverage:analyzed.profile?.reference_coverage||{},version:'character-builder-1'},identityLock:analyzed.identityLock,referenceImages:refs,approved:false});
+        const saved=await saveIdentity(role,{
+          profile:analyzed.profile,
+          characterCard,
+          builderMeta:{
+            synthetic:false,
+            control_mode:'human',
+            reference_count:refs.length,
+            coverage:analyzed.profile?.reference_coverage||{},
+            version:'character-builder-1'
+          },
+          identityLock:analyzed.identityLock,
+          referenceImages:refs,
+          approved:false
+        });
         const calibration=await generateCalibration({identity:saved,role});
         return send(res,200,{ok:true,identity:{role,approved:false,version:saved.version,profile:saved.profile},calibration:'data:image/jpeg;base64,'+calibration.base64});
       }
 
       if(url.pathname==='/novel2/api/identity/register'){
+        if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
         const role=auth.role;
         const profile=input.profile&&typeof input.profile==='object'?input.profile:{};
         const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,6):[];
         if(!Object.keys(profile).length)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_PROFILE_REQUIRED'});
         const identityLock=buildLock(role,profile);
-        await saveIdentity(role,{profile,characterCard:input.character_card||{},builderMeta:input.builder_meta||{},identityLock,referenceImages:refs,approved:Boolean(input.approved)});
+        await saveIdentity(role,{
+          profile,
+          characterCard:input.character_card||{},
+          builderMeta:{synthetic:false,control_mode:'human',...(input.builder_meta||{})},
+          identityLock,
+          referenceImages:refs,
+          approved:Boolean(input.approved)
+        });
         ids=await identities();
         return send(res,200,{ok:true,identity:{role,approved:Boolean(ids[role]?.approved),version:ids[role]?.version||1}});
       }
 
       if(url.pathname==='/novel2/api/identity/approve'){
+        if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
         const saved=await approveIdentity(auth.role);
         return send(res,200,{ok:true,identity:{role:auth.role,approved:true,version:saved.version}});
       }
 
       if(url.pathname==='/novel2/api/identity/calibrate'){
+        if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
         ids=await identities();
         const identity=ids[auth.role];
         if(!identity)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_NOT_FOUND'});

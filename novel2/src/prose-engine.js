@@ -148,3 +148,35 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
   if(scene.prose.length<350) throw new Error('NOVEL2_SCENE_INVALID');
   return {scene,canon:data.canon&&typeof data.canon==='object'?data.canon:canon};
 }
+
+
+export async function generateAiCharacterReply({book,recentTurns,role,characterCard}) {
+  if(!['A','B'].includes(role)) throw new Error('NOVEL2_AI_ROLE_INVALID');
+  const scene=book?.current_scene||{};
+  const data=await jsonCompletion({
+    system:PROSE_SYSTEM,
+    temperature:.82,
+    maxTokens:1800,
+    user:{
+      task:'Сыграй один ход за временного AI-персонажа, пока реальный второй игрок не подключился. Дай только естественную реплику/действие этого героя, без продолжения сцены.',
+      player_role:role,
+      character_card:characterCard||{},
+      story_bible:book?.story_bible||{},
+      current_scene:scene,
+      recent_turns:recentTurns||[],
+      interaction_prompt:scene?.primary_interaction?.prompt||'',
+      output:{reply:'',action_key:''},
+      hard_rules:[
+        'Пиши от лица и характера только этого героя.',
+        'Не управляй вторым главным героем.',
+        'Не пересказывай всю сцену.',
+        'Ответ должен быть достаточно содержательным, чтобы prose engine мог построить последствия.',
+        'Сохраняй заявленную манеру речи, внутреннее противоречие и границы персонажа.',
+        'Не превращай ответ в меню вариантов.'
+      ]
+    }
+  });
+  const reply=String(data?.reply||'').trim().slice(0,3000);
+  if(!reply) throw new Error('NOVEL2_AI_REPLY_EMPTY');
+  return {reply,actionKey:String(data?.action_key||'').trim().slice(0,80)};
+}

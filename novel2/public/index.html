@@ -70,17 +70,27 @@ function render(){
    return;
  }
  if(!state||state.mode==='home'){
-   const role=state?.role||'A',mine=Boolean(state?.characters?.[role]?.ready),both=Boolean(state?.characters?.A?.ready&&state?.characters?.B?.ready),card=state?.my_character;
+   const role=state?.role||'A',other=role==='A'?'B':'A',mineSummary=state?.characters?.[role]||{},otherSummary=state?.characters?.[other]||{},mine=Boolean(mineSummary.ready&&!mineSummary.synthetic),both=Boolean(state?.characters?.A?.ready&&state?.characters?.B?.ready),card=state?.my_character;
+   const mySynthetic=Boolean(mineSummary.ready&&mineSummary.synthetic);
    const setup=mine
      ? '<div class="readyCard"><div class="kicker">ВАШ ГЕРОЙ</div><h3>'+esc(card?.passport?.fiction_name||'Персонаж зафиксирован')+'</h3><div class="meta">'+esc(card?.passport?.archetype||card?.passport?.story_role||'Visual Identity сохранён')+'</div><p>'+esc(card?.passport?.story_hook||card?.literary_portrait||'Карточка персонажа и визуальная идентичность готовы к роману.')+'</p></div>'
-     : '<div class="builder"><h2>Создайте персонажа из ваших фото</h2><p>Загрузите любые имеющиеся фотографии. Достаточно одной; несколько ракурсов повышают точность. Система сама выделит устойчивую внешность, соберёт художественный характер, Visual DNA и покажет калибровку перед фиксацией.</p><div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Подойдут портреты, селфи, полный рост, разные годы и одежда. Необязательно готовить специальную фотосессию.</div></div><div class="field"><label>Имя героя · необязательно</label><input id="characterName" type="text" maxlength="80" placeholder="Оставьте пустым — система придумает"></div><div class="field"><label>Пожелание к персонажу · необязательно</label><textarea id="characterNote" maxlength="1200" placeholder="Например: сдержанный, уверенный, архитектор; или просто оставьте пустым — характер будет создан автоматически."></textarea></div><button class="primary" id="buildCharacter">Создать карточку персонажа</button></div>';
-   app.innerHTML='<section class="cover"><div class="kicker">Interactive Novel 2.0</div><h1>Роман начинается с героя</h1><p>Сначала мы создаём двух настоящих персонажей романа. Их внешность, характер, речевая манера и напряжение между ними становятся частью Story Bible и сохраняются от сцены к сцене.</p>'+setup+'<div class="pairState"><span>Герой A · '+(state?.characters?.A?.ready?esc(state.characters.A.name||'готов'):'не готов')+'</span><span>Герой B · '+(state?.characters?.B?.ready?esc(state.characters.B.name||'готов'):'не готов')+'</span></div><div class="actions">'+(both?'<button class="primary" id="start">Начать роман с этими героями</button>':'<button class="secondary" disabled>Роман откроется после фиксации двух персонажей</button>')+'</div></section>';
+     : '<div class="builder"><h2>'+(mySynthetic?'Для вас уже есть временный AI-персонаж':'Создайте персонажа из ваших фото')+'</h2><p>'+(mySynthetic?'Можно оставить его и играть этим героем, либо заменить его своей внешностью до начала романа.':'Загрузите любые имеющиеся фотографии. Достаточно одной; несколько ракурсов повышают точность. Система сама выделит устойчивую внешность, соберёт художественный характер, Visual DNA и покажет калибровку перед фиксацией.')+'</p><div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Подойдут портреты, селфи, полный рост, разные годы и одежда. Необязательно готовить специальную фотосессию.</div></div><div class="field"><label>Имя героя · необязательно</label><input id="characterName" type="text" maxlength="80" placeholder="Оставьте пустым — система придумает"></div><div class="field"><label>Пожелание к персонажу · необязательно</label><textarea id="characterNote" maxlength="1200" placeholder="Например: сдержанный, уверенный, архитектор; или просто оставьте пустым — характер будет создан автоматически."></textarea></div><button class="primary" id="buildCharacter">Создать карточку персонажа</button></div>';
+   const otherAi=Boolean(otherSummary.ready&&otherSummary.synthetic);
+   const partnerAction=!otherSummary.ready
+     ? '<button class="secondary" id="buildRandomCharacter">Второй игрок пока не подключился — создать AI-персонажа</button>'
+     : otherAi
+       ? '<button class="secondary" id="buildRandomCharacter">Пересоздать временного AI-персонажа</button>'
+       : '';
+   const tag=x=>x?.ready?esc((x.name||'готов')+(x.synthetic?' · AI':'')):'не готов';
+   app.innerHTML='<section class="cover"><div class="kicker">Interactive Novel 2.0</div><h1>Роман начинается с героя</h1><p>Роман может стартовать вдвоём или с временным AI-персонажем. Случайный герой получает одну зафиксированную внешность, Character Card и Visual DNA и не меняется между сценами.</p>'+setup+'<div class="pairState"><span>Герой A · '+tag(state?.characters?.A)+'</span><span>Герой B · '+tag(state?.characters?.B)+'</span></div><div class="actions">'+(both?'<button class="primary" id="start">Начать роман с этими героями</button>':'')+partnerAction+(!both&&!partnerAction?'<button class="secondary" disabled>Роман откроется после второго персонажа</button>':'')+'</div></section>';
    if(document.getElementById('start'))document.getElementById('start').onclick=start;
    if(document.getElementById('buildCharacter'))document.getElementById('buildCharacter').onclick=buildCharacter;
+   if(document.getElementById('buildRandomCharacter'))document.getElementById('buildRandomCharacter').onclick=buildRandomCharacter;
    return;
  }
  const s=state.scene||{},actions=(s.optional_actions||[]).map(x=>'<button class="chip" data-action="'+esc(x.key)+'">'+esc(x.label)+'</button>').join('');
- app.innerHTML='<section class="reader"><div class="chrome"><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><img id="sceneImage" class="sceneImage" alt=""><article class="prose">'+esc(s.prose||'')+'</article><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(actions?'<div class="choiceRow">'+actions+'</div>':'')+'<div class="status">'+(state.can_reply?'Ваш ход · отвечайте от лица своего героя':'Ход второго героя · история продолжится после его ответа')+'</div></section><div class="replyDock"><textarea id="reply" placeholder="'+(state.can_reply?'Ответить от лица героя…':'Сейчас отвечает второй игрок')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить</button></div></div>';
+ const waitingText=state.active_control_mode==='ai'?'AI-персонаж продолжает сцену…':'Ход второго героя · история продолжится после его ответа';
+ app.innerHTML='<section class="reader"><div class="chrome"><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><img id="sceneImage" class="sceneImage" alt=""><article class="prose">'+esc(s.prose||'')+'</article><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(actions?'<div class="choiceRow">'+actions+'</div>':'')+'<div class="status">'+(state.can_reply?'Ваш ход · отвечайте от лица своего героя':waitingText)+'</div></section><div class="replyDock"><textarea id="reply" placeholder="'+(state.can_reply?'Ответить от лица героя…':'Сейчас отвечает второй персонаж')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить</button></div></div>';
  document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>{selectedAction=x.dataset.action;document.getElementById('selected').textContent='Выбрано: '+x.textContent});
  document.getElementById('send').onclick=sendReply;
  void loadVisual();
@@ -113,6 +123,15 @@ async function buildCharacter(){
    const refs=await filesToDataUrls(files);
    const j=await api('character/build',{reference_images:refs,user_facts:{preferred_name:preferredName,creator_note:creatorNote}});
    characterDraft=j.character||null;calibrationImage=j.calibration||'';render();
+ }catch(e){alert(e.message);refresh()}finally{busy=false}
+}
+async function buildRandomCharacter(){
+ if(busy)return;
+ busy=true;loading('Создаём случайного второго героя и фиксируем его внешность…');
+ try{
+   const j=await api('character/random');
+   state=j.state||state;
+   render();
  }catch(e){alert(e.message);refresh()}finally{busy=false}
 }
 async function approveIdentity(){

@@ -90,3 +90,25 @@ Flow:
 One photo is sufficient to build a draft. Missing angles are recorded as unknown rather than invented. Additional photos improve visual certainty. The user may optionally provide a preferred fictional name or a short creative note.
 
 The character card is saved with the visual identity and becomes a hard input to the prose engine. Story generation must preserve the character's fiction name, role, speech style, internal contradiction, visual DNA and approved appearance.
+
+
+## Missing-player stand-in
+
+A novel does not have to wait for the second player.
+
+If one approved human character exists and the other role is still empty, the connected player can create a fully fictional AI stand-in:
+
+```
+missing role
+→ randomized Character Card
+→ randomized concrete Visual Identity Profile
+→ immutable Identity Lock
+→ generated canonical reference plate
+→ approved synthetic character
+→ Story Bible
+→ AI-controlled free-reply turns
+```
+
+The synthetic appearance is generated once and persisted. All later illustrations use its canonical reference image plus Identity Lock, so the stand-in does not change face/body between scenes.
+
+If the real player later opens the Mini App, control of that role switches from AI to the authenticated human automatically. Inside an active novel the visual identity is preserved to avoid an identity swap. Before a novel starts, the player may replace the temporary synthetic character with a photo-based Character Card.

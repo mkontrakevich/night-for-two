@@ -13,12 +13,14 @@ assert(prose.includes('free_reply'));
 assert(prose.includes('пользовательская реплика становится каноном'));
 assert(prose.includes('NOVEL2_CHARACTER_CARDS_REQUIRED'));
 assert(prose.includes('player_characters'));
+assert(prose.includes('generateAiCharacterReply'));
 assert(!prose.includes('Fifty Shades'));
 
 const visual=fs.readFileSync(new URL('../src/visual-engine.js',import.meta.url),'utf8');
 assert(visual.includes('IDENTITY LOCK A'));
 assert(visual.includes('PAIR LOCK'));
 assert(visual.includes('inputReferences'));
+assert(visual.includes('generateSyntheticReference'));
 
 const html=fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
 assert(html.includes('Ответить от лица героя'));
@@ -27,6 +29,8 @@ assert(html.includes("api('character/build'"));
 assert(html.includes('Создайте персонажа из ваших фото'));
 assert(html.includes('Достаточно одной'));
 assert(html.includes('characterDraft'));
+assert(html.includes("api('character/random'"));
+assert(html.includes('AI-персонажа'));
 assert(html.includes('telegram-web-app.js'));
 assert(html.includes('telegramInitData()'));
 assert(html.includes('Зафиксировать персонажа'));
@@ -36,4 +40,10 @@ const builder=fs.readFileSync(new URL('../src/character-builder.js',import.meta.
 assert(builder.includes('Character Builder'));
 assert(builder.includes('visual_dna'));
 assert(builder.includes('fictionalized'));
-console.log('NOVEL2_SMOKE_OK free_reply=true character_cards=true identity_lock=true single_reader=true');
+assert(builder.includes('buildSyntheticCharacter'));
+assert(builder.includes('synthetic_standin'));
+const app=fs.readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
+assert(app.includes('driveAiTurns'));
+assert(app.includes("'/novel2/api/character/random'"));
+assert(app.includes("control_mode:'ai'"));
+console.log('NOVEL2_SMOKE_OK free_reply=true character_cards=true ai_standin=true identity_lock=true single_reader=true');
