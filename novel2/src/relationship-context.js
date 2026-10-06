@@ -52,16 +52,16 @@ export function sliceRelationshipContext(input={},role='A'){
 }
 
 export async function fetchRelationshipContext(){
-  const url=String(process.env.RELATIONSHIP_CONTEXT_URL||'').trim();
+  const url=String(process.env.RELATIONSHIP_CONTEXT_URL||'http://marins_reminder_bot:5682/relationship-context').trim();
   const credential=String(process.env['RELATIONSHIP_CONTEXT_'+'TOKEN']||'').trim();
-  if(!url||!credential){
+  if(!url){
     return {available:false,source:'relationship_context',raw_messages:false,reason:'not_configured',observations:[],preferences:[],dynamics:[]};
   }
   try{
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),4500);
     const headers=new Headers();
-    headers.set('Authorization','Bearer '+credential);
+    if(credential)headers.set('Authorization','Bearer '+credential);
     const response=await fetch(url,{method:'GET',headers,signal:controller.signal}).finally(()=>clearTimeout(timeout));
     if(!response.ok)throw new Error('HTTP_'+response.status);
     const data=await response.json();
