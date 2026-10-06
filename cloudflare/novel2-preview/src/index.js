@@ -1,14 +1,6 @@
 function json(status,payload){
   return Response.json(payload,{status,headers:{'cache-control':'no-store','x-novel2-preview':'1'}});
 }
-function forwardedHeaders(request,incoming){
-  const headers=new Headers(request.headers);
-  headers.delete('host');
-  headers.delete('content-length');
-  headers.set('x-forwarded-host',incoming.host);
-  headers.set('x-forwarded-proto','https');
-  return headers;
-}
 export default{
   async fetch(request,env){
     const incoming=new URL(request.url);
@@ -20,22 +12,10 @@ export default{
     const host=env.NOVEL2_ORIGIN_HOST,port=env.NOVEL2_ORIGIN_PORT||'5690';
     if(!host) return json(503,{ok:false,error:'NOVEL2_ORIGIN_HOST_MISSING'});
     const target=new URL(incoming.pathname+incoming.search,`http://${host}:${port}`);
-
+    const upstream=new Request(target.toString(),request);
+    upstream.headers.set('x-forwarded-host',incoming.host);
+    upstream.headers.set('x-forwarded-proto','https');
     try{
-      let upstream;
-      if(request.method==='GET'||request.method==='HEAD'){
-        upstream=new Request(target.toString(),request);
-        upstream.headers.set('x-forwarded-host',incoming.host);
-        upstream.headers.set('x-forwarded-proto','https');
-      }else{
-        const body=await request.arrayBuffer();
-        upstream=new Request(target.toString(),{
-          method:request.method,
-          headers:forwardedHeaders(request,incoming),
-          body
-        });
-      }
-
       const response=await env.NOVEL2_VPC.fetch(upstream);
       const headers=new Headers(response.headers);
       headers.set('cache-control','no-store');
