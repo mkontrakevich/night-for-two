@@ -231,22 +231,18 @@ function renderStoryDraft(){
  const runtime=['A','B'];
  let html='';
  interactive.forEach((slot,i)=>{
-   const role=runtime[i],summary=state?.characters?.[role]||{},hint=String(roleGenderHints?.[role]||''),previewId='cast-preview-'+String(i);
-   const playerOption=summary.ready?'<option value="player:'+role+'" selected>Игрок '+role+' · играть своим персонажем · '+esc(summary.name||'готов')+'</option>':'<option value="player:'+role+'" disabled>Игрок '+role+' · свой персонаж ещё не создан</option>';
-   const suggested=!summary.ready?'ai:'+defaultAi(i,hint):'';
-   const ai=aiOptions(suggested,hint);
-   const hintText=hint?'<div class="hint">Подсказка по гендеру основана только на подтверждённых данных профиля пары. Это рекомендация, а не ограничение выбора.</div>':'<div class="hint">Можно выбрать любого готового персонажа. Игрок '+role+' будет управлять им вручную после подключения.</div>';
-   html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||('Главная роль '+(i+1)))+'</strong><p>'+esc(slot.description||'Интерактивный герой истории')+'</p>'+hintText+'<select data-cast-slot="'+esc(slot.slot_key)+'" data-runtime-role="'+role+'" data-preview-id="'+previewId+'">'+playerOption+ai+'</select><div id="'+previewId+'"></div></div>';
+   const role=runtime[i],summary=state?.characters?.[role]||{},previewId='cast-preview-'+String(i);
+   const ready=Boolean(summary.ready);
+   const name=summary.name||('Игрок '+role);
+   const note=ready?(summary.synthetic?'AI-версия персонажа пары':'персонаж пользователя'):'AI создаст персонажа пары автоматически';
+   html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||('Главная роль '+(i+1)))+'</strong><p>'+esc(slot.description||'Интерактивный герой истории')+'</p>'+castPreviewHtml(role,name,summary.gender||'',summary.avatar||'',note)+'<input type="hidden" data-cast-slot="'+esc(slot.slot_key)+'" value="player:'+role+'"></div>';
  });
- const diversity=['female','male','nonbinary'];
- support.forEach((slot,i)=>{
-   const preferred=diversity[i%diversity.length],selected='ai:'+defaultAi(i+2,preferred);
-   html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||'AI-персонаж')+'</strong><p>'+esc(slot.description||'Дополнительная роль истории')+'</p><div class="hint">Этим персонажем управляет AI внутри истории.</div><select data-cast-slot="'+esc(slot.slot_key)+'">'+aiOptions(selected,preferred)+'</select></div>';
+ support.forEach((slot)=>{
+   html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||'AI-персонаж')+'</strong><p>'+esc(slot.description||'Дополнительная роль истории')+'</p><div class="hint">Персонаж будет автоматически создан AI под эту роль и станет частью рассказа.</div><input type="hidden" data-cast-slot="'+esc(slot.slot_key)+'" value="auto:story"></div>';
  });
- app.innerHTML='<section class="storySetup"><div class="kicker">STORY FIRST · CAST SECOND</div><h1>'+esc(storyDraft.title||bp.title||'Новая история')+'</h1><p>'+esc(storyDraft.logline||bp.logline||'')+'</p><div class="storyMeta">'+esc(bp.genre_tone||'')+'</div><div class="libraryTitle">Каст романа</div>'+html+'<div class="actions"><button class="primary" id="launchDraft">Начать роман</button><button class="secondary" id="backToMenu">Вернуться в меню</button></div><div class="hint">Игрок A и Игрок B — контроллеры. Их персонажи выбираются отдельно для каждого романа. Если второй игрок ещё не подключился, выбранного героя временно ведёт AI и передаёт управление игроку при входе.</div></section>';
+ app.innerHTML='<section class="storySetup"><div class="kicker">STORY FIRST</div><h1>'+esc(storyDraft.title||bp.title||'Новая история')+'</h1><p>'+esc(storyDraft.logline||bp.logline||'')+'</p><div class="storyMeta">'+esc(bp.genre_tone||'')+'</div><div class="libraryTitle">Персонажи истории</div>'+html+'<div class="actions"><button class="primary" id="launchDraft">Начать роман</button><button class="secondary" id="backToMenu">Вернуться в меню</button></div><div class="hint">До начала романа пользователь создаёт только своего персонажа. Если персонаж пары ещё не создан, система создаст его AI-версию автоматически. Остальные AI-персонажи создаются из сюжета и необходимых ему ролей.</div></section>';
  document.getElementById('backToMenu').onclick=()=>{storyDraft=null;menuMode=true;renderMainMenu()};
  document.getElementById('launchDraft').onclick=launchStoryDraft;
- document.querySelectorAll('[data-runtime-role]').forEach(el=>{el.onchange=()=>void refreshCastPreview(el);void refreshCastPreview(el)});
 }
 async function launchStoryDraft(){
  if(busy||!storyDraft)return;
@@ -381,7 +377,6 @@ async function startNewBook(){
  try{
    const j=await api('story/draft/new',{creative_brief:''});
    storyDraft=j.draft;menuMode=false;
-   await loadAiCharacters();
    renderStoryDraft();
  }catch(e){alert(e.message);menuMode=true;renderMainMenu()}finally{busy=false}
 }
