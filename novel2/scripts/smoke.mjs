@@ -22,6 +22,8 @@ const html=fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8
 assert(html.includes('Ответить от лица героя'));
 assert(html.includes("api('reply'"));
 assert(html.includes("api('identity/analyze'"));
+assert(html.includes('telegram-web-app.js'));
+assert(html.includes('telegramInitData()'));
 assert(html.includes('Зафиксировать персонажа'));
 assert(!html.includes('Секс-купоны'));
 
