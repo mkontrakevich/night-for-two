@@ -3,7 +3,7 @@ import fs from 'node:fs';
 
 const files=[
   'src/app.js','src/auth.js','src/db.js','src/ai.js',
-  'src/prose-engine.js','src/identity-engine.js','src/visual-engine.js',
+  'src/prose-engine.js','src/identity-engine.js','src/character-builder.js','src/visual-engine.js',
   'public/index.html'
 ];
 for(const file of files)assert(fs.existsSync(new URL('../'+file,import.meta.url)),file+' missing');
@@ -11,6 +11,8 @@ for(const file of files)assert(fs.existsSync(new URL('../'+file,import.meta.url)
 const prose=fs.readFileSync(new URL('../src/prose-engine.js',import.meta.url),'utf8');
 assert(prose.includes('free_reply'));
 assert(prose.includes('пользовательская реплика становится каноном'));
+assert(prose.includes('NOVEL2_CHARACTER_CARDS_REQUIRED'));
+assert(prose.includes('player_characters'));
 assert(!prose.includes('Fifty Shades'));
 
 const visual=fs.readFileSync(new URL('../src/visual-engine.js',import.meta.url),'utf8');
@@ -21,10 +23,17 @@ assert(visual.includes('inputReferences'));
 const html=fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
 assert(html.includes('Ответить от лица героя'));
 assert(html.includes("api('reply'"));
-assert(html.includes("api('identity/analyze'"));
+assert(html.includes("api('character/build'"));
+assert(html.includes('Создайте персонажа из ваших фото'));
+assert(html.includes('Достаточно одной'));
+assert(html.includes('characterDraft'));
 assert(html.includes('telegram-web-app.js'));
 assert(html.includes('telegramInitData()'));
 assert(html.includes('Зафиксировать персонажа'));
 assert(!html.includes('Секс-купоны'));
 
-console.log('NOVEL2_SMOKE_OK free_reply=true identity_lock=true single_reader=true');
+const builder=fs.readFileSync(new URL('../src/character-builder.js',import.meta.url),'utf8');
+assert(builder.includes('Character Builder'));
+assert(builder.includes('visual_dna'));
+assert(builder.includes('fictionalized'));
+console.log('NOVEL2_SMOKE_OK free_reply=true character_cards=true identity_lock=true single_reader=true');
