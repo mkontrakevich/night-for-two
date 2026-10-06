@@ -16,6 +16,11 @@ assert(prose.includes('player_characters'));
 assert(prose.includes('generateAiCharacterReply'));
 assert(!prose.includes('Fifty Shades'));
 
+const ai=fs.readFileSync(new URL('../src/ai.js',import.meta.url),'utf8');
+assert(ai.includes("NOVEL2_IMAGE_RESOLUTION||'2K'"));
+assert(!ai.includes("payload.resolution='1K'"));
+assert(ai.includes('retryPayload'));
+
 const visual=fs.readFileSync(new URL('../src/visual-engine.js',import.meta.url),'utf8');
 assert(visual.includes('IDENTITY LOCK A'));
 assert(visual.includes('PAIR LOCK'));

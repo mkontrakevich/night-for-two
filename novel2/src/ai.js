@@ -63,18 +63,43 @@ export async function imageCompletion({prompt,inputReferences=[]}) {
   if (!config.openRouterKey) throw new Error('NOVEL2_OPENROUTER_KEY_MISSING');
   const payload={model:config.imageModel,prompt,aspect_ratio:'9:16',output_format:'jpeg'};
   if (inputReferences.length) payload.input_references = inputReferences;
-  if (config.imageModel.includes('seedream')) payload.resolution='1K';
-  const response=await fetch('https://openrouter.ai/api/v1/images',{
-    method:'POST',
-    headers:{
-      authorization:`Bearer ${config.openRouterKey}`,
-      'content-type':'application/json',
-      'HTTP-Referer':'https://github.com/mkontrakevich/night-for-two',
-      'X-Title':'Interactive Novel 2.0 Visuals'
-    },
-    body:JSON.stringify(payload)
-  });
-  const json=await response.json();
+
+  // Seedream 4.5 rejects 9:16 "1K" (576x1024) because it is below the
+  // provider's minimum output-pixel budget. Use 2K by default. If a provider
+  // implementation still rejects an explicit resolution, retry once with the
+  // resolution omitted so the provider can choose its supported default.
+  if (config.imageModel.includes('seedream')) {
+    payload.resolution=process.env.NOVEL2_IMAGE_RESOLUTION||'2K';
+  }
+
+  const requestImage=async body=>{
+    const response=await fetch('https://openrouter.ai/api/v1/images',{
+      method:'POST',
+      headers:{
+        authorization:`Bearer ${config.openRouterKey}`,
+        'content-type':'application/json',
+        'HTTP-Referer':'https://github.com/mkontrakevich/night-for-two',
+        'X-Title':'Interactive Novel 2.0 Visuals'
+      },
+      body:JSON.stringify(body)
+    });
+    const json=await response.json();
+    return {response,json};
+  };
+
+  let {response,json}=await requestImage(payload);
+  const message=String(json?.error?.message||'');
+  if(
+    !response.ok &&
+    config.imageModel.includes('seedream') &&
+    payload.resolution &&
+    /output pixels|larger resolution|minimum/i.test(message)
+  ){
+    const retryPayload={...payload};
+    delete retryPayload.resolution;
+    ({response,json}=await requestImage(retryPayload));
+  }
+
   if(!response.ok) throw new Error('NOVEL2_IMAGE_'+response.status+':'+String(json?.error?.message||'failed'));
   const first=json?.data?.[0];
   if(!first?.b64_json) throw new Error('NOVEL2_IMAGE_EMPTY');
