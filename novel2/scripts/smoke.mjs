@@ -47,7 +47,12 @@ const presets=fs.readFileSync(new URL('../src/ai-character-library.js',import.me
 assert(presets.includes('PRESET_AI_CHARACTERS'));
 assert(presets.includes('ai_ada'));
 assert(presets.includes('ai_lev'));
-assert((presets.match(/id:'ai_/g)||[]).length>=6);
+assert((presets.match(/id:'ai_/g)||[]).length>=8);
+assert(presets.includes("gender:'female'"));
+assert(presets.includes("gender:'male'"));
+assert(presets.includes("gender:'nonbinary'"));
+assert(presets.includes('ai_rin'));
+assert(presets.includes('ai_noa'));
 
 const html=fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
 assert(html.includes('Ответить от лица героя'));
@@ -66,6 +71,10 @@ assert(html.includes("api('book/delete'"));
 assert(html.includes('Мои романы'));
 assert(html.includes('Черновики историй'));
 assert(html.includes('data-cast-slot'));
+assert(html.includes('roleGenderHints'));
+assert(html.includes('genderLabel'));
+assert(html.includes('Рекомендуемый гендер'));
+assert(html.includes('небинарный персонаж'));
 assert(html.includes('AI-персонаж отвечает автоматически'));
 assert(html.includes('telegram-web-app.js'));
 assert(html.includes('telegramInitData()'));
@@ -76,11 +85,16 @@ assert(builder.includes('Character Builder'));
 assert(builder.includes('visual_dna'));
 assert(builder.includes('fictionalized'));
 assert(builder.includes('buildSyntheticCharacter'));
+assert(builder.includes('genderHint'));
+assert(builder.includes('explicit_gender_hint'));
 assert(builder.includes('behavioral_baseline'));
 
 const relationship=fs.readFileSync(new URL('../src/relationship-context.js',import.meta.url),'utf8');
 assert(relationship.includes('raw_messages:false'));
 assert(relationship.includes('intimate_inference_from_dialogue:false'));
+assert(relationship.includes('explicitGenderForRole'));
+assert(relationship.includes("explicit_relationship_metadata"));
+assert(relationship.includes("user_confirmed"));
 
 const {normalizeIdentityProfile}=await import('../src/identity-engine.js');
 const normalizedWrapped=normalizeIdentityProfile({
@@ -110,6 +124,9 @@ assert(dbSource.includes('updateBookCastReference'));
 const app=fs.readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
 assert(app.includes('seedAiCharacterLibrary'));
 assert(app.includes("'/novel2/api/ai-characters'"));
+assert(app.includes('role_gender_hints'));
+assert(app.includes("gender_hint_policy:'explicit_profile_only'"));
+assert(app.includes('explicitGenderForRole'));
 assert(app.includes("'/novel2/api/story/draft/new'"));
 assert(app.includes("'/novel2/api/story/draft/launch'"));
 assert(app.includes("'/novel2/api/book/rename'"));
