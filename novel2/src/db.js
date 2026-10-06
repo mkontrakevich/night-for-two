@@ -448,3 +448,15 @@ export async function claimSyntheticControl(role) {
   );
   return rows[0]||null;
 }
+
+
+export async function claimBookCastControl(bookId,role) {
+  const {rows}=await db.query(
+    `UPDATE novel2_book_cast
+        SET control_mode='human'
+      WHERE book_id=$1 AND interactive_role=$2 AND control_mode='ai'
+      RETURNING *`,
+    [bookId,role]
+  );
+  return rows[0]||null;
+}
