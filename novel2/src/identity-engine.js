@@ -173,9 +173,7 @@ function buildLock(role, profile={}) {
 
 async function requestProfile({role,referenceImages,userFacts,repairOf=null}){
   return visionJsonCompletion({
-    system:IDENTITY_SYSTEM+(repairOf?'
-
-ПРЕДЫДУЩИЙ ОТВЕТ НЕ СООТВЕТСТВОВАЛ СХЕМЕ. Верни объект с КЛЮЧАМИ face, hair, body, distinctive_geometry, appearance_notes, stable_core_traits, variable_traits, unknown_traits, reference_coverage, do_not_drift. Даже если часть внешности не видна, НЕ опускай раздел — оставь его поля пустыми и добавь неизвестное в unknown_traits.':''),
+    system:IDENTITY_SYSTEM+(repairOf?'\n\nПРЕДЫДУЩИЙ ОТВЕТ НЕ СООТВЕТСТВОВАЛ СХЕМЕ. Верни объект с КЛЮЧАМИ face, hair, body, distinctive_geometry, appearance_notes, stable_core_traits, variable_traits, unknown_traits, reference_coverage, do_not_drift. Даже если часть внешности не видна, НЕ опускай раздел — оставь его поля пустыми и добавь неизвестное в unknown_traits.':''),
     temperature:repairOf?0:.08,
     maxTokens:3000,
     images:referenceImages,
