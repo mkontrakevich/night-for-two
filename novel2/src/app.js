@@ -7,6 +7,7 @@ import {authenticate} from './auth.js';
 import {initDb,latestBook,createBook,appendTurn,recentTurns,advanceBook,identities,saveIdentity,approveIdentity,getVisual,previousVisual,saveVisual,db} from './db.js';
 import {createStoryBible,continueStory} from './prose-engine.js';
 import {analyzeIdentity,buildLock} from './identity-engine.js';
+import {buildCharacterCard} from './character-builder.js';
 import {generateVisual,generateCalibration} from './visual-engine.js';
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
@@ -23,17 +24,31 @@ async function bodyJson(req){
   if(!chunks.length)return{};
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
+function characterSummary(identity){
+  const card=identity?.character_card||{};
+  return{
+    ready:Boolean(identity?.approved&&card?.passport),
+    name:String(card?.passport?.fiction_name||''),
+    archetype:String(card?.passport?.archetype||''),
+    story_role:String(card?.passport?.story_role||'')
+  };
+}
 function publicState(book,auth,ids={}){
-  if(!book)return{mode:'home',role:auth.role,identity:{A:Boolean(ids.A?.approved),B:Boolean(ids.B?.approved)}};
+  const base={
+    role:auth.role,
+    identity:{A:Boolean(ids.A?.approved),B:Boolean(ids.B?.approved)},
+    characters:{A:characterSummary(ids.A),B:characterSummary(ids.B)},
+    my_character:ids[auth.role]?.character_card||null
+  };
+  if(!book)return{mode:'home',...base};
   const scene=book.current_scene||{};
   return{
     mode:'reader',
-    role:auth.role,
+    ...base,
     book:{id:book.id,title:book.title,chapter_no:book.chapter_no,turn_no:book.turn_no},
     scene,
     active_role:book.active_role,
-    can_reply:String(book.active_role)===String(auth.role),
-    identity:{A:Boolean(ids.A?.approved),B:Boolean(ids.B?.approved)}
+    can_reply:String(book.active_role)===String(auth.role)
   };
 }
 
@@ -59,11 +74,14 @@ async function main(){
       }
 
       if(url.pathname==='/novel2/api/start'){
+        ids=await identities();
+        if(!ids.A?.approved||!ids.B?.approved||!ids.A?.character_card?.passport||!ids.B?.character_card?.passport){
+          return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_CARDS_REQUIRED'});
+        }
         if(!book){
-          const bible=await createStoryBible();
+          const bible=await createStoryBible({characters:{A:ids.A.character_card,B:ids.B.character_card}});
           book=await createBook({title:bible.title,storyBible:bible,scene:bible.first_scene,activeRole:bible.first_scene.target_role});
         }
-        ids=await identities();
         return send(res,200,{ok:true,state:publicState(book,auth,ids)});
       }
 
@@ -82,12 +100,48 @@ async function main(){
         return send(res,200,{ok:true,state:publicState(book,auth,ids)});
       }
 
+      if(url.pathname==='/novel2/api/character/build'){
+        const role=auth.role;
+        const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,6):[];
+        if(refs.length<1)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
+        const userFacts=input.user_facts&&typeof input.user_facts==='object'?input.user_facts:{};
+        const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts});
+        const characterCard=await buildCharacterCard({
+          role,
+          visualProfile:analyzed.profile,
+          userFacts,
+          referenceCount:refs.length
+        });
+        const builderMeta={
+          reference_count:refs.length,
+          coverage:analyzed.profile?.reference_coverage||{},
+          created_at:new Date().toISOString(),
+          version:'character-builder-1'
+        };
+        const saved=await saveIdentity(role,{
+          profile:analyzed.profile,
+          characterCard,
+          builderMeta,
+          identityLock:analyzed.identityLock,
+          referenceImages:refs,
+          approved:false
+        });
+        const calibration=await generateCalibration({identity:saved,role});
+        return send(res,200,{
+          ok:true,
+          character:characterCard,
+          identity:{role,approved:false,version:saved.version,coverage:builderMeta.coverage},
+          calibration:'data:image/jpeg;base64,'+calibration.base64
+        });
+      }
+
       if(url.pathname==='/novel2/api/identity/analyze'){
         const role=auth.role;
         const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,6):[];
         if(refs.length<2)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
         const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts:input.user_facts||{}});
-        const saved=await saveIdentity(role,{profile:analyzed.profile,identityLock:analyzed.identityLock,referenceImages:refs,approved:false});
+        const characterCard=await buildCharacterCard({role,visualProfile:analyzed.profile,userFacts:input.user_facts||{},referenceCount:refs.length});
+        const saved=await saveIdentity(role,{profile:analyzed.profile,characterCard,builderMeta:{reference_count:refs.length,coverage:analyzed.profile?.reference_coverage||{},version:'character-builder-1'},identityLock:analyzed.identityLock,referenceImages:refs,approved:false});
         const calibration=await generateCalibration({identity:saved,role});
         return send(res,200,{ok:true,identity:{role,approved:false,version:saved.version,profile:saved.profile},calibration:'data:image/jpeg;base64,'+calibration.base64});
       }
@@ -98,7 +152,7 @@ async function main(){
         const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,6):[];
         if(!Object.keys(profile).length)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_PROFILE_REQUIRED'});
         const identityLock=buildLock(role,profile);
-        await saveIdentity(role,{profile,identityLock,referenceImages:refs,approved:Boolean(input.approved)});
+        await saveIdentity(role,{profile,characterCard:input.character_card||{},builderMeta:input.builder_meta||{},identityLock,referenceImages:refs,approved:Boolean(input.approved)});
         ids=await identities();
         return send(res,200,{ok:true,identity:{role,approved:Boolean(ids[role]?.approved),version:ids[role]?.version||1}});
       }
