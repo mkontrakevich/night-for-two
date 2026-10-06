@@ -156,3 +156,71 @@ export async function buildCharacterCard({role,visualProfile={},userFacts={},ref
   });
   return normalizeCharacterCard(output,role);
 }
+
+
+export async function buildSyntheticCharacter({role,counterpartCard={}}){
+  if(!['A','B'].includes(role))throw new Error('NOVEL2_CHARACTER_ROLE_INVALID');
+  const output=await jsonCompletion({
+    system:CHARACTER_BUILDER_SYSTEM,
+    temperature:.96,
+    maxTokens:6000,
+    user:{
+      task:'Создай полностью вымышленного случайного взрослого персонажа-заполнитель для отсутствующего второго игрока. Он должен иметь конкретную, визуально запоминаемую и устойчивую внешность, а также полноценную карточку героя. Это не анализ реального человека.',
+      player_role:role,
+      counterpart_character:counterpartCard||{},
+      randomization_rules:[
+        'Выбери конкретное лицо, волосы, телосложение, осанку и 4–6 отличительных визуальных маркеров.',
+        'Не используй знаменитостей и не описывай персонажа как копию реального человека.',
+        'Возраст строго 21+.',
+        'Создай визуальный контраст с уже существующим персонажем, но не превращай его в карикатуру.',
+        'Не оставляй unknown_traits для базовых признаков: это полностью вымышленный персонаж, его внешность можно определить целиком.',
+        'После создания внешность считается неизменным каноном.'
+      ],
+      output_schema:{
+        visual_profile:{
+          face:{overall_shape:'',jaw:'',cheekbones:'',brow:'',eyes_visual:'',nose_geometry:'',mouth_geometry:''},
+          hair:{color:'',length:'',texture:'',hairline:'',default_style:''},
+          body:{height:'',relative_height:'',build:'',shoulder_waist_ratio:'',limb_proportions:'',posture:''},
+          distinctive_geometry:[],
+          appearance_notes:[],
+          stable_core_traits:[],
+          variable_traits:[],
+          unknown_traits:[],
+          reference_coverage:{face_confidence:'high',profile_confidence:'high',body_confidence:'high',missing_views:[]},
+          do_not_drift:[]
+        },
+        character_card:{
+          passport:{fiction_name:'',age:28,gender:'',story_role:'',archetype:'',biography:'',story_hook:''},
+          visual:{
+            general_impression:'',face:'',hair:'',eyes:'',build:'',posture_motion:'',wardrobe_style:'',
+            signature_markers:[],immutable_traits:[],variable_traits:[],unknown_traits:[]
+          },
+          psychology:{
+            temperament:'',speech_style:'',public_goal:'',hidden_need:'',contradiction:'',weakness:'',tension_point:''
+          },
+          romance:{
+            attraction_type:'',dynamic:'',boundaries:'',emotional_triggers:[],tension_mechanics:[]
+          },
+          literary_portrait:'',
+          visual_dna:{
+            short_visual_summary:'',stable_core_traits:[],appearance_anchor_prompt:'',wardrobe_anchor:'',
+            mood_anchor:'',negative_prompt:'',consistency_rules:[],do_not_change:[]
+          },
+          story_start:{
+            best_first_scene:'',best_counterpart_contrast:'',first_spark:'',hidden_danger:''
+          }
+        }
+      }
+    }
+  });
+  const visualProfile=output?.visual_profile&&typeof output.visual_profile==='object'?output.visual_profile:{};
+  const characterCard=normalizeCharacterCard(output?.character_card||{},role);
+  characterCard.builder_notes={
+    fictionalized:true,
+    based_on_user_references:false,
+    synthetic_standin:true,
+    adult_only:true
+  };
+  if(!visualProfile?.face||!visualProfile?.hair||!visualProfile?.body)throw new Error('NOVEL2_SYNTHETIC_VISUAL_INVALID');
+  return {visualProfile,characterCard};
+}
