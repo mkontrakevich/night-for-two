@@ -68,3 +68,25 @@ Optional:
 - NOVEL2_IMAGE_MODEL
 - NOVEL2_PORT
 - NOVEL2_LOCAL_TEST_MODE=1
+
+
+## Character constructor
+
+Novel 2 starts from two approved character cards, not generic protagonists.
+
+Flow:
+
+```
+1–6 arbitrary user photos
+→ Visual Identity Profile
+→ fictional Character Card
+→ Visual DNA / immutable Identity Lock
+→ calibration sheet
+→ explicit approval
+→ Story Bible for A + B
+→ free-reply novel
+```
+
+One photo is sufficient to build a draft. Missing angles are recorded as unknown rather than invented. Additional photos improve visual certainty. The user may optionally provide a preferred fictional name or a short creative note.
+
+The character card is saved with the visual identity and becomes a hard input to the prose engine. Story generation must preserve the character's fiction name, role, speech style, internal contradiction, visual DNA and approved appearance.

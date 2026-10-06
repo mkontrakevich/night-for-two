@@ -4,27 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0909">
-<title>Interactive Novel 2.0</title>\n<script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+<title>Interactive Novel 2.0</title>
+<script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <style>
-:root{--bg:#0b0909;--paper:#f1e8d8;--ink:#231d18;--muted:#8e8174;--red:#8e2833;--line:rgba(36,29,24,.16);--safe:env(safe-area-inset-bottom)}
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}button,textarea{font:inherit}
+:root{--paper:#f1e8d8;--ink:#231d18;--muted:#8e8174;--red:#8e2833;--line:rgba(36,29,24,.16);--safe:env(safe-area-inset-bottom)}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}button,textarea,input{font:inherit}
 #app{max-width:720px;margin:auto;min-height:100dvh;background:var(--paper);color:var(--ink)}
-.cover{min-height:100dvh;padding:14vh 26px calc(32px + var(--safe));display:flex;flex-direction:column;background:radial-gradient(circle at 70% 12%,#5a3131,transparent 34%),linear-gradient(160deg,#1b1614,#070707 62%);color:#fff}
-.kicker{font-size:11px;letter-spacing:.18em;text-transform:uppercase;opacity:.62}.cover h1{font:400 clamp(44px,13vw,74px)/.93 Georgia,serif;letter-spacing:-.05em;margin:18px 0}.cover p{max-width:530px;font:400 18px/1.55 Georgia,serif;color:#d7cdc4}.actions{margin-top:auto;display:grid;gap:10px}.primary,.secondary{border:0;border-radius:18px;min-height:54px;padding:14px 18px}.primary{background:#fff;color:#17120f;font-weight:700}.secondary{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.16)}
+.cover{min-height:100dvh;padding:10vh 22px calc(28px + var(--safe));display:flex;flex-direction:column;background:radial-gradient(circle at 72% 8%,#553031,transparent 33%),linear-gradient(160deg,#1b1614,#070707 62%);color:#fff}
+.kicker{font-size:10px;letter-spacing:.18em;text-transform:uppercase;opacity:.58}.cover h1,.calibration h1{font:400 clamp(40px,12vw,68px)/.94 Georgia,serif;letter-spacing:-.045em;margin:16px 0}.cover>p{max-width:560px;font:400 17px/1.55 Georgia,serif;color:#d7cdc4}
+.actions{margin-top:auto;display:grid;gap:9px}.primary,.secondary{border:0;border-radius:18px;min-height:54px;padding:14px 18px}.primary{background:#fff;color:#17120f;font-weight:700}.secondary{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.16)}button:disabled{opacity:.4}
+.builder{margin:24px 0 18px;padding:18px;border:1px solid rgba(255,255,255,.15);border-radius:22px;background:rgba(255,255,255,.055);backdrop-filter:blur(10px)}.builder h2{font:500 22px/1.15 Georgia,serif;margin:0 0 8px}.builder p{font-size:13px;line-height:1.48;color:#cfc4bc;margin:0 0 13px}.field{display:grid;gap:6px;margin:12px 0}.field label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#a99b92}.field input[type=text],.field textarea{width:100%;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.22);color:#fff;border-radius:14px;padding:12px 13px;outline:none}.field textarea{min-height:82px;resize:vertical}.field input[type=file]{width:100%;color:#ddd}.hint{font-size:11px;color:#9f9188;line-height:1.4}
+.pairState{display:flex;gap:8px;margin:10px 0 18px;flex-wrap:wrap}.pairState span{font-size:11px;padding:7px 9px;border-radius:999px;background:rgba(255,255,255,.08)}
+.readyCard{margin:22px 0;padding:18px;border:1px solid rgba(255,255,255,.15);border-radius:22px;background:rgba(255,255,255,.055)}.readyCard h3{font:500 25px/1.1 Georgia,serif;margin:0 0 5px}.readyCard .meta{font-size:12px;color:#b9aaa1;margin-bottom:9px}.readyCard p{font:400 14px/1.5 Georgia,serif;color:#d9cdc5;margin:0}
+.calibration{min-height:100dvh;padding:24px 20px calc(30px + var(--safe));background:linear-gradient(160deg,#161210,#080706 70%);color:#fff}.calibration h1{font-size:42px}.calibration>p{font:400 15px/1.55 Georgia,serif;color:#cfc2ba}.calibration img{display:block;width:100%;border-radius:22px;margin:18px 0;max-height:62vh;object-fit:contain;background:#181310}.cardPreview{padding:18px;border:1px solid rgba(255,255,255,.14);border-radius:20px;background:rgba(255,255,255,.05);margin:0 0 18px}.cardPreview h2{font:500 28px/1.05 Georgia,serif;margin:0 0 5px}.cardPreview .meta{color:#a99c94;font-size:12px;margin-bottom:12px}.cardPreview p{font:400 15px/1.52 Georgia,serif;color:#ddd1c8}.cardPreview dl{margin:12px 0 0;display:grid;grid-template-columns:110px 1fr;gap:7px 10px;font-size:12px}.cardPreview dt{color:#8f8178}.cardPreview dd{margin:0;color:#e3d9d1}
 .reader{min-height:100dvh;padding-bottom:190px}.chrome{position:sticky;top:0;z-index:5;padding:16px 18px 13px;background:linear-gradient(var(--paper) 78%,rgba(241,232,216,.9));border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:14px}.bookTitle{font:600 12px/1.3 Georgia,serif}.chapter{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
-.sceneImage{display:none;width:100%;aspect-ratio:9/16;object-fit:cover}.sceneImage.on{display:block}
-.prose{padding:34px 24px 24px;font:400 20px/1.72 Georgia,serif;white-space:pre-wrap}.turnPrompt{margin:8px 24px 0;padding:20px 0;border-top:1px solid var(--line);font:600 17px/1.45 Georgia,serif}
-.replyDock{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(720px,100%);padding:10px 14px calc(12px + var(--safe));background:linear-gradient(rgba(241,232,216,.2),var(--paper) 16%);backdrop-filter:blur(12px);border-top:1px solid var(--line)}
-.replyDock textarea{width:100%;min-height:72px;max-height:150px;resize:none;border:1px solid var(--line);background:#fffaf1;border-radius:18px;padding:13px 14px;color:var(--ink);outline:none}.replyDock textarea:focus{border-color:#8e2833}
-.replyRow{display:grid;grid-template-columns:1fr auto;gap:9px;margin-top:8px}.send{border:0;border-radius:16px;background:var(--red);color:white;padding:0 20px;font-weight:700;min-height:48px}.send:disabled{opacity:.35}.status{padding:10px 24px 28px;color:var(--muted);font-size:13px}.choiceRow{display:flex;gap:8px;overflow:auto;padding:0 24px 8px}.chip{border:1px solid var(--line);background:#fff9ef;color:var(--ink);border-radius:999px;padding:9px 12px;white-space:nowrap}
-.identityPanel{margin-top:28px;padding:18px;border:1px solid rgba(255,255,255,.16);border-radius:20px;background:rgba(255,255,255,.05)}.identityPanel b{display:block;margin-bottom:8px}.identityPanel p{font:400 14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;color:#cfc3bb;margin:0 0 12px}.identityPanel input{display:block;width:100%;margin:10px 0;color:#ddd}.pairState{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.pairState span{font-size:11px;padding:7px 9px;border-radius:999px;background:rgba(255,255,255,.08)}.calibration{min-height:100dvh;padding:22px;background:#0d0b0a;color:#fff}.calibration img{display:block;width:100%;border-radius:22px;margin:16px 0;max-height:68vh;object-fit:contain;background:#181310}.calibration h1{font:400 36px/1 Georgia,serif;margin:12px 0}.loading{min-height:100dvh;display:grid;place-items:center;padding:30px;background:#14110f;color:#e9dfd6;text-align:center}.loading i{display:block;width:34px;height:34px;margin:0 auto 16px;border:2px solid #554943;border-top-color:#eee1d3;border-radius:50%;animation:r 1s linear infinite}@keyframes r{to{transform:rotate(360deg)}}
+.sceneImage{display:none;width:100%;aspect-ratio:9/16;object-fit:cover}.sceneImage.on{display:block}.prose{padding:34px 24px 24px;font:400 20px/1.72 Georgia,serif;white-space:pre-wrap}.turnPrompt{margin:8px 24px 0;padding:20px 0;border-top:1px solid var(--line);font:600 17px/1.45 Georgia,serif}
+.replyDock{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(720px,100%);padding:10px 14px calc(12px + var(--safe));background:linear-gradient(rgba(241,232,216,.2),var(--paper) 16%);backdrop-filter:blur(12px);border-top:1px solid var(--line)}.replyDock textarea{width:100%;min-height:72px;max-height:150px;resize:none;border:1px solid var(--line);background:#fffaf1;border-radius:18px;padding:13px 14px;color:var(--ink);outline:none}.replyRow{display:grid;grid-template-columns:1fr auto;gap:9px;margin-top:8px}.send{border:0;border-radius:16px;background:var(--red);color:white;padding:0 20px;font-weight:700;min-height:48px}.status{padding:10px 24px 28px;color:var(--muted);font-size:13px}.choiceRow{display:flex;gap:8px;overflow:auto;padding:0 24px 8px}.chip{border:1px solid var(--line);background:#fff9ef;color:var(--ink);border-radius:999px;padding:9px 12px;white-space:nowrap}
+.loading{min-height:100dvh;display:grid;place-items:center;padding:30px;background:#14110f;color:#e9dfd6;text-align:center}.loading i{display:block;width:34px;height:34px;margin:0 auto 16px;border:2px solid #554943;border-top-color:#eee1d3;border-radius:50%;animation:r 1s linear infinite}@keyframes r{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body><main id="app"></main>
 <script>
 const app=document.getElementById('app');
 const tg=window.Telegram?.WebApp;try{tg?.ready();tg?.expand()}catch{}
-let state=null,busy=false,selectedAction='',calibrationImage='';
+let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null;
+
 function telegramInitData(){
  const sdk=String(window.Telegram?.WebApp?.initData||'');
  if(sdk)return sdk;
@@ -40,41 +44,98 @@ function authHeaders(){
  const h={},data=telegramInitData();
  if(data)h['x-telegram-init-data']=data;
  if(location.hostname==='localhost')h['x-novel2-local-user']=localStorage.getItem('novel2_local_user')||'local_a';
- return h
+ return h;
 }
-async function api(path,body={}){const r=await fetch('/novel2/api/'+path,{method:'POST',headers:{'content-type':'application/json',...authHeaders()},body:JSON.stringify(body)});const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||'REQUEST_FAILED');return j}
+async function api(path,body={}){
+ const r=await fetch('/novel2/api/'+path,{method:'POST',headers:{'content-type':'application/json',...authHeaders()},body:JSON.stringify(body)});
+ const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||'REQUEST_FAILED');return j;
+}
 function esc(v=''){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function loading(text='Продолжаем историю…'){app.innerHTML='<section class="loading"><div><i></i><div>'+esc(text)+'</div></div></section>'}
-async function refresh(){loading('Открываем роман…');try{state=(await api('state')).state;render()}catch(e){const missing=e.message==='NOVEL2_ACCESS_DENIED'&&!telegramInitData();app.innerHTML='<section class="loading"><div>'+esc(missing?'Telegram не передал данные входа. Закройте окно и откройте 18+ ещё раз.':e.message)+'</div></section>'}}
+async function refresh(){
+ loading('Открываем роман…');
+ try{state=(await api('state')).state;render()}
+ catch(e){const missing=e.message==='NOVEL2_ACCESS_DENIED'&&!telegramInitData();app.innerHTML='<section class="loading"><div>'+esc(missing?'Telegram не передал данные входа. Закройте окно и откройте 18+ ещё раз.':e.message)+'</div></section>'}
+}
+function characterCardHtml(card){
+ const p=card?.passport||{},psy=card?.psychology||{},rom=card?.romance||{};
+ return '<div class="cardPreview"><div class="kicker">CHARACTER CARD</div><h2>'+esc(p.fiction_name||'Ваш персонаж')+'</h2><div class="meta">'+esc((p.age?p.age+' · ':'')+(p.archetype||p.story_role||''))+'</div><p>'+esc(card?.literary_portrait||p.story_hook||'')+'</p><dl><dt>Роль</dt><dd>'+esc(p.story_role||'—')+'</dd><dt>Характер</dt><dd>'+esc(psy.temperament||'—')+'</dd><dt>Речь</dt><dd>'+esc(psy.speech_style||'—')+'</dd><dt>Динамика</dt><dd>'+esc(rom.dynamic||'—')+'</dd><dt>Крючок</dt><dd>'+esc(p.story_hook||'—')+'</dd></dl></div>';
+}
 function render(){
- if(calibrationImage){
-   app.innerHTML='<section class="calibration"><div class="kicker">CHARACTER CALIBRATION</div><h1>Это один и тот же персонаж?</h1><p>Проверьте лицо, профиль, нос, линию челюсти, волосы и пропорции. Только после подтверждения этот образ становится визуальным каноном романа.</p><img src="'+calibrationImage+'" alt=""><div class="actions"><button class="primary" id="approveIdentity">Зафиксировать персонажа</button><button class="secondary" id="regenIdentity">Пересобрать калибровку</button></div></section>';
+ if(calibrationImage&&characterDraft){
+   app.innerHTML='<section class="calibration"><div class="kicker">CHARACTER CONSTRUCTOR</div><h1>Персонаж собран</h1><p>Мы свели ваши фотографии в один Visual Identity, создали художественную карточку героя и калибровочный образ. Проверьте, что человек на всех ракурсах выглядит как один и тот же персонаж.</p>'+characterCardHtml(characterDraft)+'<img src="'+calibrationImage+'" alt="Калибровка персонажа"><div class="actions"><button class="primary" id="approveIdentity">Зафиксировать персонажа</button><button class="secondary" id="regenIdentity">Пересобрать калибровку</button><button class="secondary" id="rebuildCharacter">Создать персонажа заново</button></div></section>';
    document.getElementById('approveIdentity').onclick=approveIdentity;
    document.getElementById('regenIdentity').onclick=regenerateCalibration;
+   document.getElementById('rebuildCharacter').onclick=()=>{calibrationImage='';characterDraft=null;render()};
    return;
  }
  if(!state||state.mode==='home'){
-   const mine=Boolean(state?.identity?.[state?.role]),both=Boolean(state?.identity?.A&&state?.identity?.B);
+   const role=state?.role||'A',mine=Boolean(state?.identity?.[role]),both=Boolean(state?.identity?.A&&state?.identity?.B),card=state?.my_character;
    const setup=mine
-     ? '<div class="identityPanel"><b>Ваш персонаж зафиксирован</b><p>Identity Lock сохранён. Иллюстрации будут использовать один и тот же профиль и исходные референсы.</p></div>'
-     : '<div class="identityPanel"><b>Сначала зафиксируем вашего персонажа</b><p>Загрузите 2–6 оригинальных фотографий: анфас, ¾, профиль и полный рост. Система соберёт Visual Identity Profile и покажет калибровочный лист.</p><input id="identityFiles" type="file" accept="image/*" multiple><button class="primary" id="buildIdentity">Создать персонажа</button></div>';
-   app.innerHTML='<section class="cover"><div class="kicker">Interactive Novel 2.0</div><h1>Роман, который отвечает вам</h1><p>Вы играете своего героя собственными словами. Реплика становится каноном, а следующая сцена строится из её последствий.</p>'+setup+'<div class="pairState"><span>Герой A · '+(state?.identity?.A?'готов':'не готов')+'</span><span>Герой B · '+(state?.identity?.B?'готов':'не готов')+'</span></div><div class="actions">'+(both?'<button class="primary" id="start">Начать новый роман</button>':'<button class="secondary" disabled>Роман откроется после фиксации обоих персонажей</button>')+'</div></section>';
+     ? '<div class="readyCard"><div class="kicker">ВАШ ГЕРОЙ</div><h3>'+esc(card?.passport?.fiction_name||'Персонаж зафиксирован')+'</h3><div class="meta">'+esc(card?.passport?.archetype||card?.passport?.story_role||'Visual Identity сохранён')+'</div><p>'+esc(card?.passport?.story_hook||card?.literary_portrait||'Карточка персонажа и визуальная идентичность готовы к роману.')+'</p></div>'
+     : '<div class="builder"><h2>Создайте персонажа из ваших фото</h2><p>Загрузите любые имеющиеся фотографии. Достаточно одной; несколько ракурсов повышают точность. Система сама выделит устойчивую внешность, соберёт художественный характер, Visual DNA и покажет калибровку перед фиксацией.</p><div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Подойдут портреты, селфи, полный рост, разные годы и одежда. Необязательно готовить специальную фотосессию.</div></div><div class="field"><label>Имя героя · необязательно</label><input id="characterName" type="text" maxlength="80" placeholder="Оставьте пустым — система придумает"></div><div class="field"><label>Пожелание к персонажу · необязательно</label><textarea id="characterNote" maxlength="1200" placeholder="Например: сдержанный, уверенный, архитектор; или просто оставьте пустым — характер будет создан автоматически."></textarea></div><button class="primary" id="buildCharacter">Создать карточку персонажа</button></div>';
+   app.innerHTML='<section class="cover"><div class="kicker">Interactive Novel 2.0</div><h1>Роман начинается с героя</h1><p>Сначала мы создаём двух настоящих персонажей романа. Их внешность, характер, речевая манера и напряжение между ними становятся частью Story Bible и сохраняются от сцены к сцене.</p>'+setup+'<div class="pairState"><span>Герой A · '+(state?.characters?.A?.ready?esc(state.characters.A.name||'готов'):'не готов')+'</span><span>Герой B · '+(state?.characters?.B?.ready?esc(state.characters.B.name||'готов'):'не готов')+'</span></div><div class="actions">'+(both?'<button class="primary" id="start">Начать роман с этими героями</button>':'<button class="secondary" disabled>Роман откроется после фиксации двух персонажей</button>')+'</div></section>';
    if(document.getElementById('start'))document.getElementById('start').onclick=start;
-   if(document.getElementById('buildIdentity'))document.getElementById('buildIdentity').onclick=buildIdentity;
+   if(document.getElementById('buildCharacter'))document.getElementById('buildCharacter').onclick=buildCharacter;
    return;
  }
- const s=state.scene||{}, actions=(s.optional_actions||[]).map(x=>'<button class="chip" data-action="'+esc(x.key)+'">'+esc(x.label)+'</button>').join('');
+ const s=state.scene||{},actions=(s.optional_actions||[]).map(x=>'<button class="chip" data-action="'+esc(x.key)+'">'+esc(x.label)+'</button>').join('');
  app.innerHTML='<section class="reader"><div class="chrome"><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><img id="sceneImage" class="sceneImage" alt=""><article class="prose">'+esc(s.prose||'')+'</article><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(actions?'<div class="choiceRow">'+actions+'</div>':'')+'<div class="status">'+(state.can_reply?'Ваш ход · отвечайте от лица своего героя':'Ход второго героя · история продолжится после его ответа')+'</div></section><div class="replyDock"><textarea id="reply" placeholder="'+(state.can_reply?'Ответить от лица героя…':'Сейчас отвечает второй игрок')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить</button></div></div>';
  document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>{selectedAction=x.dataset.action;document.getElementById('selected').textContent='Выбрано: '+x.textContent});
  document.getElementById('send').onclick=sendReply;
  void loadVisual();
 }
-async function filesToDataUrls(files){const out=[];for(const file of [...files].slice(0,6)){out.push(await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=reject;r.readAsDataURL(file)}))}return out}
-async function buildIdentity(){if(busy)return;const input=document.getElementById('identityFiles'),files=input?.files;if(!files||files.length<2){alert('Нужно минимум две фотографии.');return}busy=true;loading('Собираем геометрию лица и пропорции…');try{const refs=await filesToDataUrls(files);const j=await api('identity/analyze',{reference_images:refs});calibrationImage=j.calibration||'';render()}catch(e){alert(e.message);refresh()}finally{busy=false}}
-async function approveIdentity(){if(busy)return;busy=true;loading('Фиксируем Identity Lock…');try{await api('identity/approve');calibrationImage='';await refresh()}catch(e){alert(e.message);render()}finally{busy=false}}
-async function regenerateCalibration(){if(busy)return;busy=true;loading('Пересобираем калибровку…');try{const j=await api('identity/calibrate');calibrationImage=j.calibration||'';render()}catch(e){alert(e.message);render()}finally{busy=false}}
-async function start(){if(busy)return;busy=true;loading('Создаём мир, героев и первый конфликт…');try{state=(await api('start')).state;render()}catch(e){alert(e.message);refresh()}finally{busy=false}}
-async function sendReply(){if(busy||!state?.can_reply)return;const box=document.getElementById('reply'),reply=box.value.trim();if(!reply)return;busy=true;loading('Переписываем следующий эпизод из вашего ответа…');try{state=(await api('reply',{reply,action_key:selectedAction})).state;selectedAction='';render()}catch(e){alert(e.message);refresh()}finally{busy=false}}
+async function rawDataUrl(file){
+ return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=reject;r.readAsDataURL(file)});
+}
+async function fileToReference(file){
+ const fallback=()=>rawDataUrl(file);
+ try{
+   const src=URL.createObjectURL(file),img=new Image();
+   await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=src});
+   const max=1800,scale=Math.min(1,max/Math.max(img.naturalWidth||1,img.naturalHeight||1));
+   const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+   const ctx=canvas.getContext('2d',{alpha:false});ctx.drawImage(img,0,0,canvas.width,canvas.height);URL.revokeObjectURL(src);
+   return canvas.toDataURL('image/jpeg',.84);
+ }catch{return fallback()}
+}
+async function filesToDataUrls(files){
+ const out=[];for(const file of [...files].slice(0,6))out.push(await fileToReference(file));return out;
+}
+async function buildCharacter(){
+ if(busy)return;
+ const input=document.getElementById('characterFiles'),files=input?.files;
+ if(!files||files.length<1){alert('Загрузите хотя бы одну фотографию.');return}
+ const preferredName=String(document.getElementById('characterName')?.value||'').trim();
+ const creatorNote=String(document.getElementById('characterNote')?.value||'').trim();
+ busy=true;loading('Анализируем фотографии и собираем карточку персонажа…');
+ try{
+   const refs=await filesToDataUrls(files);
+   const j=await api('character/build',{reference_images:refs,user_facts:{preferred_name:preferredName,creator_note:creatorNote}});
+   characterDraft=j.character||null;calibrationImage=j.calibration||'';render();
+ }catch(e){alert(e.message);refresh()}finally{busy=false}
+}
+async function approveIdentity(){
+ if(busy)return;busy=true;loading('Фиксируем карточку и Visual Identity…');
+ try{await api('identity/approve');calibrationImage='';characterDraft=null;await refresh()}
+ catch(e){alert(e.message);render()}finally{busy=false}
+}
+async function regenerateCalibration(){
+ if(busy)return;busy=true;loading('Пересобираем калибровочный образ…');
+ try{const j=await api('identity/calibrate');calibrationImage=j.calibration||'';render()}
+ catch(e){alert(e.message);render()}finally{busy=false}
+}
+async function start(){
+ if(busy)return;busy=true;loading('Строим Story Bible вокруг двух персонажей…');
+ try{state=(await api('start')).state;render()}catch(e){alert(e.message);refresh()}finally{busy=false}
+}
+async function sendReply(){
+ if(busy||!state?.can_reply)return;const box=document.getElementById('reply'),reply=box.value.trim();if(!reply)return;
+ busy=true;loading('Продолжаем роман из вашей реплики…');
+ try{state=(await api('reply',{reply,action_key:selectedAction})).state;selectedAction='';render()}catch(e){alert(e.message);refresh()}finally{busy=false}
+}
 async function loadVisual(){try{const j=await api('visual');const img=document.getElementById('sceneImage');if(img&&j.image){img.src=j.image;img.classList.add('on')}}catch{}}
 refresh();
-</script></body></html>
+</script>
+</body>
+</html>

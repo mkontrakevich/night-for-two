@@ -106,3 +106,23 @@ Production rules:
 - Generic wording such as "same broad couple archetype" is forbidden as a substitute for an identity lock.
 - Recreating a character from prose alone is forbidden once canonical references exist.
 - If a calibration image fails identity consistency, regenerate calibration or revise the profile; do not promote the failed image into story canon.
+
+
+## Character Card bridge
+
+For Novel 2, character creation precedes story generation.
+
+```
+arbitrary player photos
+→ Visual Identity Profile
+→ fictional Character Card
+→ Visual DNA
+→ immutable Identity Lock
+→ calibration + approval
+→ Story Bible
+→ SD scene illustrations
+```
+
+The character card is not a claim about the real person's psychology. Personality, biography, role and romantic dynamics are fictional properties created for the novel. Only observable visual geometry is grounded in the uploaded reference images.
+
+One image may be used. Missing views must be marked unknown and resolved only through calibration/approval, never silently invented as a factual visual trait.
