@@ -419,7 +419,13 @@ async function main(){
         }
         const counterpart=ids[auth.role]?.character_card||{};
         const relationship=await fetchRelationshipContext();
-        const synthetic=await buildSyntheticCharacter({role:targetRole,counterpartCard:counterpart,relationshipContext:sliceRelationshipContext(relationship,targetRole)});
+        const genderHint=explicitGenderForRole(relationship,targetRole);
+        const synthetic=await buildSyntheticCharacter({
+          role:targetRole,
+          counterpartCard:counterpart,
+          relationshipContext:sliceRelationshipContext(relationship,targetRole),
+          genderHint
+        });
         const identityLock=buildLock(targetRole,synthetic.visualProfile);
         const identityDraft={
           identity_lock:identityLock,
