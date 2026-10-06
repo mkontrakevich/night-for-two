@@ -43,12 +43,16 @@ CREATE TABLE IF NOT EXISTS novel2_identity(
   role text NOT NULL CHECK(role IN ('A','B')),
   version integer NOT NULL DEFAULT 1,
   profile jsonb NOT NULL DEFAULT '{}'::jsonb,
+  character_card jsonb NOT NULL DEFAULT '{}'::jsonb,
+  builder_meta jsonb NOT NULL DEFAULT '{}'::jsonb,
   identity_lock text NOT NULL DEFAULT '',
   reference_images jsonb NOT NULL DEFAULT '[]'::jsonb,
   approved boolean NOT NULL DEFAULT false,
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY(pair_key,role)
 );
+ALTER TABLE novel2_identity ADD COLUMN IF NOT EXISTS character_card jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE novel2_identity ADD COLUMN IF NOT EXISTS builder_meta jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS novel2_visuals(
   id bigserial PRIMARY KEY,
@@ -122,35 +126,39 @@ export async function advanceBook(book, {scene, canon={}, activeRole}) {
   return rows[0];
 }
 
-export async function saveIdentity(role, {profile={}, identityLock='', referenceImages=[], approved=false}) {
+export async function saveIdentity(role, {profile={}, characterCard={}, builderMeta={}, identityLock='', referenceImages=[], approved=false}) {
   const key = pairKey();
   const {rows} = await db.query(
-    `INSERT INTO novel2_identity(pair_key,role,profile,identity_lock,reference_images,approved)
-     VALUES($1,$2,$3::jsonb,$4,$5::jsonb,$6)
+    `INSERT INTO novel2_identity(pair_key,role,profile,character_card,builder_meta,identity_lock,reference_images,approved)
+     VALUES($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,$6,$7::jsonb,$8)
      ON CONFLICT(pair_key,role) DO UPDATE SET
        version=novel2_identity.version+1,
        profile=EXCLUDED.profile,
+       character_card=CASE WHEN EXCLUDED.character_card='{}'::jsonb THEN novel2_identity.character_card ELSE EXCLUDED.character_card END,
+       builder_meta=CASE WHEN EXCLUDED.builder_meta='{}'::jsonb THEN novel2_identity.builder_meta ELSE EXCLUDED.builder_meta END,
        identity_lock=EXCLUDED.identity_lock,
        reference_images=EXCLUDED.reference_images,
        approved=EXCLUDED.approved,
        updated_at=now()
      RETURNING *`,
-    [key, role, JSON.stringify(profile), String(identityLock||''), JSON.stringify(referenceImages), Boolean(approved)]
+    [key, role, JSON.stringify(profile), JSON.stringify(characterCard), JSON.stringify(builderMeta), String(identityLock||''), JSON.stringify(referenceImages), Boolean(approved)]
   );
   return rows[0];
 }
 
 export async function approveIdentity(role) {
   const {rows}=await db.query(
-    `UPDATE novel2_identity SET approved=true,updated_at=now() WHERE pair_key=$1 AND role=$2 RETURNING *`,
+    `UPDATE novel2_identity SET approved=true,updated_at=now()
+       WHERE pair_key=$1 AND role=$2 AND character_card <> '{}'::jsonb
+       RETURNING *`,
     [pairKey(), role]
   );
-  if(!rows[0]) throw new Error('NOVEL2_IDENTITY_NOT_FOUND');
+  if(!rows[0]) throw new Error('NOVEL2_CHARACTER_CARD_REQUIRED');
   return rows[0];
 }
 
 export async function identities() {
-  const {rows} = await db.query(`SELECT role,version,profile,identity_lock,reference_images,approved FROM novel2_identity WHERE pair_key=$1 ORDER BY role`, [pairKey()]);
+  const {rows} = await db.query(`SELECT role,version,profile,character_card,builder_meta,identity_lock,reference_images,approved FROM novel2_identity WHERE pair_key=$1 ORDER BY role`, [pairKey()]);
   return Object.fromEntries(rows.map(x=>[x.role,x]));
 }
 
