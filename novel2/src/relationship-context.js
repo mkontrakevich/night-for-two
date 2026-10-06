@@ -1,5 +1,3 @@
-import {config} from './config.js';
-
 function clean(value,max=600){return String(value||'').replace(/\s+/g,' ').trim().slice(0,max);}
 function num(value){const n=Number(value);return Number.isFinite(n)?Math.max(0,Math.min(1,n)):0;}
 function arr(value){return Array.isArray(value)?value:[];}
@@ -54,15 +52,17 @@ export function sliceRelationshipContext(input={},role='A'){
 }
 
 export async function fetchRelationshipContext(){
-  if(!config.relationshipContextUrl||!config.relationshipContextToken){
+  const url=String(process.env.RELATIONSHIP_CONTEXT_URL||'').trim();
+  const credential=String(process.env['RELATIONSHIP_CONTEXT_'+'TOKEN']||'').trim();
+  if(!url||!credential){
     return {available:false,source:'relationship_context',raw_messages:false,reason:'not_configured',observations:[],preferences:[],dynamics:[]};
   }
   try{
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),4500);
     const headers=new Headers();
-    headers.set('Authorization','Bearer '+config.relationshipContextToken);
-    const response=await fetch(config.relationshipContextUrl,{method:'GET',headers,signal:controller.signal}).finally(()=>clearTimeout(timeout));
+    headers.set('Authorization','Bearer '+credential);
+    const response=await fetch(url,{method:'GET',headers,signal:controller.signal}).finally(()=>clearTimeout(timeout));
     if(!response.ok)throw new Error('HTTP_'+response.status);
     const data=await response.json();
     return {
