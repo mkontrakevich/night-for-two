@@ -39,9 +39,9 @@ DRAMA
 function cleanVisualScene(value={},fallbackBeat='') {
   const v=value&&typeof value==='object'?value:{};
   const present=(Array.isArray(v.characters_present)?v.characters_present:[])
-    .map(x=>String(x||'').toUpperCase())
-    .filter((x,i,a)=>['A','B'].includes(x)&&a.indexOf(x)===i)
-    .slice(0,2);
+    .map(x=>String(x||'').trim())
+    .filter((x,i,a)=>/^[A-Za-z0-9_-]{1,60}$/.test(x)&&a.indexOf(x)===i)
+    .slice(0,8);
   return {
     location:String(v.location||'').trim().slice(0,900),
     location_details:String(v.location_details||'').trim().slice(0,1400),
@@ -122,18 +122,106 @@ async function ensureLongScene(scene,{storyBible={},recentTurns=[],reason=''}={}
   return expanded.prose.length>=scene.prose.length?expanded:scene;
 }
 
-export async function createStoryBible({characters={},relationshipContext={}}={}) {
+function normalizeStoryBlueprint(raw={}) {
+  const source=raw&&typeof raw==='object'?raw:{};
+  let slots=(Array.isArray(source.cast_slots)?source.cast_slots:[]).slice(0,6).map((slot,index)=>({
+    slot_key:String(slot?.slot_key||`role_${index+1}`).trim().replace(/[^A-Za-z0-9_-]/g,'_').slice(0,60),
+    narrative_function:String(slot?.narrative_function||'').trim().slice(0,500),
+    description:String(slot?.description||'').trim().slice(0,900),
+    interactive:Boolean(slot?.interactive),
+    required:slot?.required!==false,
+    desired_traits:(Array.isArray(slot?.desired_traits)?slot.desired_traits:[]).map(x=>String(x||'').trim()).filter(Boolean).slice(0,8)
+  })).filter(x=>x.slot_key);
+  if(slots.length<3){
+    slots=[
+      {slot_key:'lead_1',narrative_function:'первый интерактивный герой',description:'один из двух героев, чьи решения меняют сюжет',interactive:true,required:true,desired_traits:[]},
+      {slot_key:'lead_2',narrative_function:'второй интерактивный герой',description:'второй герой с собственной линией решений',interactive:true,required:true,desired_traits:[]},
+      {slot_key:'support_1',narrative_function:'ключевой AI-персонаж',description:'персонаж, который меняет ставки и направление истории',interactive:false,required:true,desired_traits:[]}
+    ];
+  }
+  const interactive=slots.filter(x=>x.interactive);
+  if(interactive.length!==2){
+    slots=slots.map((x,i)=>({...x,interactive:i<2}));
+  }
+  return {
+    title:String(source.title||'').trim().slice(0,140),
+    logline:String(source.logline||'').trim().slice(0,900),
+    controlling_idea:String(source.controlling_idea||'').trim().slice(0,900),
+    genre_tone:String(source.genre_tone||'').trim().slice(0,500),
+    world_bible:source.world_bible&&typeof source.world_bible==='object'?source.world_bible:{},
+    master_plot:Array.isArray(source.master_plot)?source.master_plot.slice(0,16):[],
+    threads:Array.isArray(source.threads)?source.threads.slice(0,16):[],
+    cast_slots:slots,
+    opening_situation:String(source.opening_situation||'').trim().slice(0,1400),
+    ending_direction:String(source.ending_direction||'').trim().slice(0,900)
+  };
+}
+
+export async function createStoryBlueprint({creativeBrief=''}={}) {
+  const data=await jsonCompletion({
+    system:PROSE_SYSTEM,
+    temperature:.93,
+    maxTokens:4800,
+    user:{
+      task:'Сначала придумай самостоятельную архитектуру нового романа БЕЗ привязки к конкретным существующим персонажам. Сначала история, конфликт, мир, ставки и роли; конкретных героев мы назначим после.',
+      creative_brief:String(creativeBrief||'').slice(0,1600),
+      output:{
+        title:'',
+        logline:'',
+        controlling_idea:'',
+        genre_tone:'',
+        world_bible:{},
+        master_plot:[],
+        threads:[],
+        opening_situation:'',
+        ending_direction:'',
+        cast_slots:[
+          {slot_key:'lead_1',narrative_function:'',description:'',interactive:true,required:true,desired_traits:[]},
+          {slot_key:'lead_2',narrative_function:'',description:'',interactive:true,required:true,desired_traits:[]},
+          {slot_key:'support_1',narrative_function:'',description:'',interactive:false,required:true,desired_traits:[]}
+        ]
+      },
+      hard_rules:[
+        'Не используй имена, внешность, биографию или психологию реальных/готовых персонажей: их ещё нет на этом этапе.',
+        'Создай 3–6 сюжетных ролей. Ровно две роли interactive=true; остальные роли предназначены для AI-персонажей.',
+        'Каждая дополнительная роль должна быть драматургически необходимой: союзник, соперник, свидетель, посредник, антагонист, источник тайны и т.п.',
+        'История должна работать до кастинга: если заменить всех персонажей другими, причинно-следственный каркас остаётся состоятельным.',
+        'Это взрослая художественная история; все будущие персонажи должны быть 21+.'
+      ]
+    }
+  });
+  const blueprint=normalizeStoryBlueprint(data);
+  if(!blueprint.title||!blueprint.logline) throw new Error('NOVEL2_STORY_BLUEPRINT_INVALID');
+  return blueprint;
+}
+
+export async function createStoryBible({characters={},supportingCast=[],blueprint={},relationshipContext={}}={}) {
   const A=characters.A&&typeof characters.A==='object'?characters.A:null;
   const B=characters.B&&typeof characters.B==='object'?characters.B:null;
   if(!A?.passport||!B?.passport) throw new Error('NOVEL2_CHARACTER_CARDS_REQUIRED');
 
+  const storyBlueprint=blueprint?.title?normalizeStoryBlueprint(blueprint):await createStoryBlueprint();
+  const supporting=(Array.isArray(supportingCast)?supportingCast:[]).slice(0,6).map(x=>({
+    slot_key:String(x?.slot_key||'').slice(0,60),
+    narrative_function:String(x?.narrative_function||'').slice(0,500),
+    character_card:x?.character_card||{}
+  })).filter(x=>x.slot_key&&x.character_card?.passport);
+
+  const assignedCast={
+    A,
+    B,
+    supporting:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))
+  };
+
   const data=await jsonCompletion({
     system:PROSE_SYSTEM,
-    temperature:.88,
-    maxTokens:7000,
+    temperature:.86,
+    maxTokens:7600,
     user:{
-      task:'Создай скрытую архитектуру нового романа и первую сцену вокруг двух уже созданных пользовательских персонажей. Их карточки — канон героев, а не черновик.',
-      player_characters:{A,B},
+      task:'Теперь засели уже готовую историю конкретными персонажами. Архитектура истории первична: не переписывай основной конфликт под характеры, а найди для каждого назначенного героя естественный способ выполнить его сюжетную функцию.',
+      story_blueprint:storyBlueprint,
+      assigned_cast:assignedCast,
+      supporting_cast_slots:supporting,
       sanitized_pair_dynamics:{
         raw_messages:false,
         observations:Array.isArray(relationshipContext?.observations)?relationshipContext.observations.slice(0,18):[],
@@ -141,26 +229,24 @@ export async function createStoryBible({characters={},relationshipContext={}}={}
         dynamics:Array.isArray(relationshipContext?.dynamics)?relationshipContext.dynamics.slice(0,10):[]
       },
       character_contract:[
-        'Сохраняй fiction_name, возраст 21+, речевую манеру, внутреннее противоречие и заявленную сюжетную роль каждого героя.',
-        'Не меняй внешность, биографию и устойчивые черты героя без сюжетно объяснённого события.',
-        'visual_dna используется как источник для visual_beat, но не вставляется в прозу техническим языком.',
-        'Психология в character card является художественной характеристикой персонажа, а не диагнозом реального человека.',
-        'Роман должен столкнуть особенности A и B так, чтобы их характеры реально влияли на конфликт и притяжение.',
-        'Sanitized pair dynamics можно использовать для узнаваемого ритма общения, инициативы, поддержки и планирования, но нельзя цитировать, реконструировать или выдавать исходные сообщения.',
-        'Не выводи из общения интимные предпочтения, сексуальные границы, диагнозы, религию, политику и другие чувствительные характеристики.'
+        'A и B — два интерактивных взрослых героя. Их пользователь принимает ключевые решения свободным текстом.',
+        'supporting_cast — полноценные AI-персонажи: они могут говорить, действовать, иметь собственные цели, конфликтовать и менять сюжет без отдельного пользовательского хода.',
+        'Не ограничивай сцену двумя людьми. Если по истории нужны три, четыре или больше действующих лиц, используй их.',
+        'Сохраняй fiction_name, возраст 21+, речевую манеру, внутреннее противоречие и устойчивую внешность каждой Character Card.',
+        'Не меняй заранее созданный story_blueprint ради удобства кастинга: персонажи помещаются в историю, а не история строится вокруг их анкет.',
+        'Sanitized pair dynamics можно использовать только для ритма общения A/B; не реконструируй исходные сообщения и чувствительные признаки.'
       ],
       output:{
-        title:'',
-        logline:'',
-        controlling_idea:'',
-        world_bible:{},
-        protagonists:{
-          A:{fiction_name:A.passport?.fiction_name||'',role:A.passport?.story_role||'',public_goal:A.psychology?.public_goal||'',private_need:A.psychology?.hidden_need||'',fear:'',contradiction:A.psychology?.contradiction||'',voice:A.psychology?.speech_style||''},
-          B:{fiction_name:B.passport?.fiction_name||'',role:B.passport?.story_role||'',public_goal:B.psychology?.public_goal||'',private_need:B.psychology?.hidden_need||'',fear:'',contradiction:B.psychology?.contradiction||'',voice:B.psychology?.speech_style||''}
-        },
+        title:storyBlueprint.title,
+        logline:storyBlueprint.logline,
+        controlling_idea:storyBlueprint.controlling_idea,
+        genre_tone:storyBlueprint.genre_tone,
+        world_bible:storyBlueprint.world_bible,
+        master_plot:storyBlueprint.master_plot,
+        threads:storyBlueprint.threads,
+        story_blueprint:storyBlueprint,
         player_characters:{A,B},
-        master_plot:[],
-        threads:[],
+        supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card])),
         canon:{},
         first_scene:{
           chapter_no:1,chapter_title:'',prose:'',target_role:'A',
@@ -182,23 +268,21 @@ export async function createStoryBible({characters={},relationshipContext={}}={}
         }
       },
       rules:[
-        'Оба главных героя совершеннолетние и уже определены карточками.',
-        'Начни с конкретной ситуации, а не с анкеты или знакомства с интерфейсом.',
-        'Не объясняй устройство игры внутри прозы.',
-        'Первая сцена должна проявить хотя бы по одной уникальной черте каждого персонажа.',
-        'Первая сцена должна быть полноценным литературным эпизодом: ориентир 5500–9500 знаков, 8–14 абзацев, 3–5 драматургических битов до первого решения игрока.',
-        'Не прерывай сцену ради решения после одной-двух реплик. Сначала дай событию, локации, отношениям и конфликту реально развиться.',
-        'Первая сцена должна закончиться прямой репликой или обстоятельством, на которое один игрок должен ответить.',
-        'visual_scene обязательно описывает фактическую локацию сцены, присутствующих героев, их положение, одежду, значимые предметы и свет. Это технический канон для иллюстрации, а не декоративный mood prompt.',
-        'characters_present содержит только A/B, которые физически находятся в кадре текущей сцены.'
+        'Начни с opening_situation story_blueprint и конкретного действия, а не с анкеты.',
+        'Первая сцена должна быть полноценным литературным эпизодом: ориентир 5500–9500 знаков, 8–14 абзацев, 3–5 драматургических битов.',
+        'Используй дополнительные AI-роли уже в первой сцене, если это естественно для opening_situation.',
+        'characters_present содержит slot_key/идентификаторы реально присутствующих персонажей. Для интерактивных игроков используй A и B; для AI — их slot_key.',
+        'visual_scene точно фиксирует локацию, присутствующих героев, положение тел, одежду, предметы и свет.',
+        'Первая сцена заканчивается значимым выбором A или B, а не обязательным ходом каждого присутствующего персонажа.'
       ]
     }
   });
   let first=cleanScene(data.first_scene||{});
   if(!data.title||first.prose.length<500) throw new Error('NOVEL2_BIBLE_INVALID');
-  first=await ensureLongScene(first,{storyBible:{...data,player_characters:{A,B}},reason:'first_scene'});
+  const bible={...data,story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
+  first=await ensureLongScene(first,{storyBible:bible,reason:'first_scene'});
   if(first.prose.length<2500) throw new Error('NOVEL2_BIBLE_TOO_SHORT');
-  return {...data,player_characters:{A,B},first_scene:first};
+  return {...bible,first_scene:first};
 }
 
 export async function continueStory({book, recentTurns, playerRole, playerReply, actionKey=''}) {
@@ -245,10 +329,12 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
         'Не повторяй его фразу дословно без необходимости.',
         'Не обнуляй конфликт и не делай универсальную романтическую паузу.',
         'Сохраняй имена, роли, знания персонажей, предметы, место и причинность.',
-        'Сверяй действия и реплики с player_characters из story_bible: характеры должны влиять на продолжение, а не быть декоративной анкетой.',
+        'Сверяй действия и реплики с player_characters и supporting_characters из story_bible: все присутствующие характеры должны влиять на продолжение.',
+        'AI-персонажи из supporting_characters сами говорят и действуют внутри сцены; для них не создавай пользовательский target_role.',
         'Следующий активный герой обычно другой игрок, если драматургически нет веской причины оставить ход текущему.',
         'visual_scene должен строго соответствовать только что написанной сцене: та же локация, те же физически присутствующие герои, их одежда, позы, реквизит и время/свет.',
-        'Не помещай героя в characters_present, если по прозе его физически нет в этой локации.'
+        'Не помещай героя в characters_present, если по прозе его физически нет в этой локации.',
+        'characters_present может содержать A, B и slot_key любых supporting_characters; не ограничивай кадр двумя персонажами.'
       ]
     }
   });
