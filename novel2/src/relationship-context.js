@@ -1,6 +1,17 @@
 function clean(value,max=600){return String(value||'').replace(/\s+/g,' ').trim().slice(0,max);}
 function num(value){const n=Number(value);return Number.isFinite(n)?Math.max(0,Math.min(1,n)):0;}
 function arr(value){return Array.isArray(value)?value:[];}
+function gender(value=''){
+  const v=String(value||'').trim().toLowerCase();
+  return ['female','male','nonbinary'].includes(v)?v:'';
+}
+function explicitParticipantGender(input={},subject=''){
+  const row=input?.participants?.[subject];
+  if(!row||typeof row!=='object')return '';
+  const source=String(row.source||'').trim().toLowerCase();
+  if(!['explicit_relationship_metadata','explicit_profile','user_confirmed'].includes(source))return '';
+  return gender(row.gender);
+}
 
 export function roleSubject(role){
   return role==='A'?'owner':role==='B'?'partner':'';
@@ -45,6 +56,7 @@ export function sliceRelationshipContext(input={},role='A'){
     raw_messages:false,
     intimate_inference_from_dialogue:false,
     subject,
+    participant_gender:explicitParticipantGender(input,subject),
     observations,
     preferences,
     dynamics
@@ -72,7 +84,8 @@ export async function fetchRelationshipContext(){
       policy:String(data?.policy||'lovestory_context_v1'),
       observations:arr(data?.observations),
       preferences:arr(data?.preferences),
-      dynamics:arr(data?.dynamics)
+      dynamics:arr(data?.dynamics),
+      participants:data?.participants&&typeof data.participants==='object'?data.participants:{}
     };
   }catch(error){
     return {
@@ -82,7 +95,13 @@ export async function fetchRelationshipContext(){
       reason:clean(error?.message||error,120),
       observations:[],
       preferences:[],
-      dynamics:[]
+      dynamics:[],
+      participants:{}
     };
   }
+}
+
+
+export function explicitGenderForRole(input={},role='A'){
+  return explicitParticipantGender(input,roleSubject(role));
 }
