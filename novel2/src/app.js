@@ -138,7 +138,7 @@ async function main(){
       if(url.pathname==='/novel2/api/identity/analyze'){
         const role=auth.role;
         const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,6):[];
-        if(refs.length<2)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
+        if(refs.length<1)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
         const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts:input.user_facts||{}});
         const characterCard=await buildCharacterCard({role,visualProfile:analyzed.profile,userFacts:input.user_facts||{},referenceCount:refs.length});
         const saved=await saveIdentity(role,{profile:analyzed.profile,characterCard,builderMeta:{reference_count:refs.length,coverage:analyzed.profile?.reference_coverage||{},version:'character-builder-1'},identityLock:analyzed.identityLock,referenceImages:refs,approved:false});
