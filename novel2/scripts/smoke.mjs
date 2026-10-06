@@ -54,6 +54,28 @@ const relationship=fs.readFileSync(new URL('../src/relationship-context.js',impo
 assert(relationship.includes('raw_messages:false'));
 assert(relationship.includes('intimate_inference_from_dialogue:false'));
 assert(relationship.includes('roleSubject'));
+const {normalizeIdentityProfile}=await import('../src/identity-engine.js');
+const normalizedWrapped=normalizeIdentityProfile({
+  visual_identity_profile:{
+    face:{shape:'oval',nose:'straight'},
+    hair:{color:'dark'},
+    stable_core_traits:['oval face']
+  }
+});
+assert.equal(normalizedWrapped.face.overall_shape,'oval');
+assert.equal(normalizedWrapped.face.nose_geometry,'straight');
+assert.equal(normalizedWrapped.hair.color,'dark');
+assert(normalizedWrapped.unknown_traits.includes('body proportions'));
+
+const normalizedPartial=normalizeIdentityProfile({
+  face:{eyes:'almond-shaped'},
+  appearance_notes:['front portrait only']
+});
+assert.equal(normalizedPartial.face.eyes_visual,'almond-shaped');
+assert(normalizedPartial.body);
+assert(normalizedPartial.reference_coverage);
+assert(!fs.readFileSync(new URL('../src/identity-engine.js',import.meta.url),'utf8').includes("if(!profile?.face||!profile?.hair||!profile?.body)"));
+
 const app=fs.readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
 assert(app.includes('driveAiTurns'));
 assert(app.includes("'/novel2/api/character/random'"));
