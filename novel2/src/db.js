@@ -460,3 +460,15 @@ export async function claimBookCastControl(bookId,role) {
   );
   return rows[0]||null;
 }
+
+
+export async function updateBookCastReference(bookId,slotKey,referenceImages=[]) {
+  const {rows}=await db.query(
+    `UPDATE novel2_book_cast
+        SET reference_images=$3::jsonb
+      WHERE book_id=$1 AND slot_key=$2
+      RETURNING *`,
+    [bookId,String(slotKey||''),JSON.stringify(referenceImages)]
+  );
+  return rows[0]||null;
+}
