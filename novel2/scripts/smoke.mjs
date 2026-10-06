@@ -14,6 +14,9 @@ assert(prose.includes('пользовательская реплика стан�
 assert(prose.includes('NOVEL2_CHARACTER_CARDS_REQUIRED'));
 assert(prose.includes('player_characters'));
 assert(prose.includes('generateAiCharacterReply'));
+assert(prose.includes('visual_scene'));
+assert(prose.includes('characters_present'));
+assert(prose.includes('локацию сцены'));
 assert(!prose.includes('Fifty Shades'));
 
 const ai=fs.readFileSync(new URL('../src/ai.js',import.meta.url),'utf8');
@@ -30,6 +33,11 @@ assert(visual.includes('IDENTITY LOCK A'));
 assert(visual.includes('PAIR LOCK'));
 assert(visual.includes('inputReferences'));
 assert(visual.includes('generateSyntheticReference'));
+assert(visual.includes('ILLUSTRATE THE CURRENT STORY SCENE'));
+assert(visual.includes('LOCATION:'));
+assert(visual.includes('CHARACTERS PHYSICALLY PRESENT'));
+assert(visual.includes('PROSE GROUNDING'));
+assert(visual.includes('meta?.continuity'));
 
 const html=fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
 assert(html.includes('Ответить от лица героя'));
@@ -46,6 +54,9 @@ assert(html.includes('реальный стиль общения пары'));
 assert(html.includes('telegram-web-app.js'));
 assert(html.includes('telegramInitData()'));
 assert(html.includes('Зафиксировать персонажа'));
+assert(html.includes('Выйти из рассказа'));
+assert(html.includes("api('book/exit'"));
+assert(html.includes('AI-персонаж отвечает автоматически'));
 assert(!html.includes('Секс-купоны'));
 
 const builder=fs.readFileSync(new URL('../src/character-builder.js',import.meta.url),'utf8');
@@ -82,9 +93,17 @@ assert(normalizedPartial.body);
 assert(normalizedPartial.reference_coverage);
 assert(!fs.readFileSync(new URL('../src/identity-engine.js',import.meta.url),'utf8').includes("if(!profile?.face||!profile?.hair||!profile?.body)"));
 
+const dbSource=fs.readFileSync(new URL('../src/db.js',import.meta.url),'utf8');
+assert(dbSource.includes('archiveBook(bookId'));
+assert(dbSource.includes("status='archived'"));
+
 const app=fs.readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
 assert(app.includes('driveAiTurns'));
 assert(app.includes("'/novel2/api/character/random'"));
 assert(app.includes("control_mode:'ai'"));
 assert(app.includes('calibration_required:true'));
+assert(app.includes("'/novel2/api/book/exit'"));
+assert(app.includes('archiveBook'));
+assert(app.includes('generated_automatically:true'));
+assert(app.includes('next.scene.target_role=humanRole'));
 console.log('NOVEL2_SMOKE_OK free_reply=true character_cards=true ai_standin=true identity_lock=true single_reader=true');
