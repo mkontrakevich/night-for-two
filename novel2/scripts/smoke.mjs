@@ -157,3 +157,7 @@ assert(index.includes('value="auto:story"'),'support cast must be story-generate
 assert(!index.includes("Можно выбрать любого готового персонажа"),'manual AI cast selection must stay removed');
 assert(app.includes('ensureSyntheticIdentity'),'launch must auto-create missing partner identity');
 assert(app.includes("source_type:'story_ai'"),'support cast must be generated from story roles');
+
+assert(index.includes('id="menuBuildAiPartner"'),'main menu must expose temporary AI partner generation');
+assert(index.includes('Пересоздать AI-персонажа'),'temporary AI partner must be regenerable before a real partner is present');
+assert(index.includes('menuBuildAiPartner.onclick=buildRandomCharacter'),'main-menu AI partner action must use the guarded partner generator');
