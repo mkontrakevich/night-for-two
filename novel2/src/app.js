@@ -8,7 +8,7 @@ import {
   initDb,latestBook,listBooks,renameBook,deleteBook,activateBook,createBook,appendTurn,recentTurns,advanceBook,archiveBook,
   identities,saveIdentity,approveIdentity,claimSyntheticControl,
   upsertAiCharacter,listAiCharacters,getAiCharacter,saveAiCharacterReference,
-  createStoryDraft,getStoryDraft,listStoryDrafts,markStoryDraftUsed,
+  createStoryDraft,getStoryDraft,listStoryDrafts,deleteStoryDraft,markStoryDraftUsed,
   saveBookCast,getBookCast,claimBookCastControl,updateBookCastReference,
   getVisual,previousVisual,saveVisual,db
 } from './db.js';
@@ -48,6 +48,19 @@ async function seedAiCharacterLibrary(){
     });
   }
 }
+async function ensureAiCharacterReference(ai){
+  if(!ai)return[];
+  let refs=Array.isArray(ai.reference_images)?ai.reference_images.filter(Boolean):[];
+  if(refs.length)return refs;
+  const generatedRef=await generateSyntheticReference({
+    identity:{identity_lock:ai.identity_lock,character_card:ai.character_card,reference_images:[]},
+    role:ai.name||ai.id
+  });
+  const data='data:image/jpeg;base64,'+generatedRef.base64;
+  await saveAiCharacterReference(ai.id,data);
+  ai.reference_images=[data];
+  return[data];
+}
 function bookCastRole(bookCast=[],role){
   return (Array.isArray(bookCast)?bookCast:[]).find(x=>String(x?.interactive_role||'')===String(role))||null;
 }
@@ -61,7 +74,8 @@ function castCharacterSummary(entry){
     source_type:String(entry?.source_type||''),
     source_id:String(entry?.source_id||''),
     interactive_role:entry?.interactive_role||null,
-    control_mode:String(entry?.control_mode||'ai')
+    control_mode:String(entry?.control_mode||'ai'),
+    avatar:String(Array.isArray(entry?.reference_images)&&entry.reference_images[0]||'')
   };
 }
 function characterSummary(identity){
@@ -75,7 +89,8 @@ function characterSummary(identity){
     gender:String(card?.passport?.gender||''),
     synthetic:Boolean(meta?.synthetic),
     control_mode:String(meta?.control_mode||'human'),
-    relationship_grounded:Boolean(card?.behavioral_baseline?.relationship_grounded)
+    relationship_grounded:Boolean(card?.behavioral_baseline?.relationship_grounded),
+    avatar:String(Array.isArray(identity?.reference_images)&&identity.reference_images[0]||'')
   };
 }
 function isAiControlled(ids,role,bookCast=[]){
@@ -178,6 +193,12 @@ async function main(){
         return send(res,200,{ok:true,books,drafts});
       }
 
+      if(url.pathname==='/novel2/api/story/draft/delete'){
+        const deleted=await deleteStoryDraft(input.draft_id);
+        if(!deleted)return send(res,404,{ok:false,error:'NOVEL2_STORY_DRAFT_NOT_FOUND'});
+        return send(res,200,{ok:true,deleted});
+      }
+
       if(url.pathname==='/novel2/api/book/rename'){
         const updated=await renameBook(input.book_id,input.title);
         if(!updated)return send(res,404,{ok:false,error:'NOVEL2_BOOK_NOT_FOUND'});
@@ -218,6 +239,13 @@ async function main(){
             has_reference:Array.isArray(x.reference_images)&&x.reference_images.length>0
           }))
         });
+      }
+
+      if(url.pathname==='/novel2/api/ai-character/avatar'){
+        const ai=await getAiCharacter(input.id);
+        if(!ai)return send(res,404,{ok:false,error:'NOVEL2_AI_CHARACTER_NOT_FOUND'});
+        const refs=await ensureAiCharacterReference(ai);
+        return send(res,200,{ok:true,id:ai.id,image:refs[0]||''});
       }
 
       if(url.pathname==='/novel2/api/story/draft/new'){
@@ -280,6 +308,8 @@ async function main(){
           }else if(token.startsWith('ai:')){
             const ai=await getAiCharacter(token.slice(3));
             if(!ai)return send(res,404,{ok:false,error:'NOVEL2_AI_CHARACTER_NOT_FOUND'});
+            const refs=await ensureAiCharacterReference(ai);
+            const participantReady=runtimeRole===auth.role||Boolean(ids[runtimeRole]?.approved&&!ids[runtimeRole]?.builder_meta?.synthetic);
             entry={
               slot_key:runtimeRole,
               narrative_function:String(slot.narrative_function||''),
@@ -290,8 +320,8 @@ async function main(){
               character_card:ai.character_card,
               visual_profile:ai.visual_profile||{},
               identity_lock:ai.identity_lock||'',
-              reference_images:ai.reference_images||[],
-              control_mode:'ai'
+              reference_images:refs,
+              control_mode:participantReady?'human':'ai'
             };
           }else{
             return send(res,400,{ok:false,error:'NOVEL2_CAST_ASSIGNMENT_INVALID:'+slot.slot_key});
@@ -579,16 +609,7 @@ async function main(){
           const entry=bookCast[i];
           if(entry.source_type!=='ai_library'||!present.has(String(entry.slot_key))||(Array.isArray(entry.reference_images)&&entry.reference_images.length))continue;
           const ai=await getAiCharacter(entry.source_id);
-          let refs=Array.isArray(ai?.reference_images)?ai.reference_images:[];
-          if(!refs.length&&ai){
-            const generatedRef=await generateSyntheticReference({
-              identity:{identity_lock:ai.identity_lock,character_card:ai.character_card,reference_images:[]},
-              role:ai.name||ai.id
-            });
-            const data='data:image/jpeg;base64,'+generatedRef.base64;
-            await saveAiCharacterReference(ai.id,data);
-            refs=[data];
-          }
+          const refs=await ensureAiCharacterReference(ai);
           if(refs.length){
             await updateBookCastReference(book.id,entry.slot_key,refs);
             entry.reference_images=refs;
