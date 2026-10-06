@@ -16,6 +16,7 @@ services:
   app:
     build: .
     env_file:
+      - ../.env
       - .env
     environment:
       DATABASE_URL: postgresql://novel2:${NOVEL2_DB_PASSWORD:-novel2-local}@postgres:5432/novel2
