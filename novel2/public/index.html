@@ -27,7 +27,7 @@
 <script>
 const app=document.getElementById('app');
 const tg=window.Telegram?.WebApp;try{tg?.ready();tg?.expand()}catch{}
-let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null;
+let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null,forceBuilder=false;
 
 function telegramInitData(){
  const sdk=String(window.Telegram?.WebApp?.initData||'');
@@ -73,9 +73,12 @@ function render(){
  if(!state||state.mode==='home'){
    const role=state?.role||'A',other=role==='A'?'B':'A',mineSummary=state?.characters?.[role]||{},otherSummary=state?.characters?.[other]||{},mine=Boolean(mineSummary.ready&&!mineSummary.synthetic),both=Boolean(state?.characters?.A?.ready&&state?.characters?.B?.ready),card=state?.my_character;
    const mySynthetic=Boolean(mineSummary.ready&&mineSummary.synthetic);
+   const hasDraft=Boolean(card?.passport)&&!mine&&!mySynthetic;
+   const builderHtml='<div class="builder"><h2>'+(mySynthetic?'Для вас уже есть временный AI-персонаж':'Создайте персонажа из ваших фото')+'</h2><p>'+(mySynthetic?'Можно оставить его и играть этим героем, либо заменить его своей внешностью до начала романа.':'Загрузите любые имеющиеся фотографии. Достаточно одной; несколько ракурсов повышают точность. Система сама выделит устойчивую внешность, а базовый характер и манеру общения возьмёт из накопленного профиля общения пары, если он доступен. Биография и драматургия останутся художественными. Затем создаст Visual DNA и покажет калибровку перед фиксацией.')+'</p><div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Подойдут портреты, селфи, полный рост, разные годы и одежда. Необязательно готовить специальную фотосессию.</div></div><div class="field"><label>Имя героя · необязательно</label><input id="characterName" type="text" maxlength="80" placeholder="Оставьте пустым — система придумает"></div><div class="field"><label>Пожелание к персонажу · необязательно</label><textarea id="characterNote" maxlength="1200" placeholder="Например: сдержанный, уверенный, архитектор; или просто оставьте пустым — характер будет создан автоматически."></textarea></div><button class="primary" id="buildCharacter">Создать карточку персонажа</button></div>';
+   const draftHtml='<div class="builder"><h2>Карточка уже сохранена</h2><p>Анализ фотографий завершён. Осталось построить калибровочный образ и подтвердить внешность. Если генерация изображения прервётся, повторный анализ фотографий не потребуется.</p>'+characterCardHtml(card)+'<div class="actions"><button class="primary" id="continueCalibration">Продолжить калибровку</button><button class="secondary" id="showBuilder">Загрузить другие фото</button></div></div>';
    const setup=mine
      ? '<div class="readyCard"><div class="kicker">ВАШ ГЕРОЙ</div><h3>'+esc(card?.passport?.fiction_name||'Персонаж зафиксирован')+'</h3><div class="meta">'+esc(card?.passport?.archetype||card?.passport?.story_role||'Visual Identity сохранён')+'</div><p>'+esc(card?.passport?.story_hook||card?.literary_portrait||'Карточка персонажа и визуальная идентичность готовы к роману.')+'</p></div>'
-     : '<div class="builder"><h2>'+(mySynthetic?'Для вас уже есть временный AI-персонаж':'Создайте персонажа из ваших фото')+'</h2><p>'+(mySynthetic?'Можно оставить его и играть этим героем, либо заменить его своей внешностью до начала романа.':'Загрузите любые имеющиеся фотографии. Достаточно одной; несколько ракурсов повышают точность. Система сама выделит устойчивую внешность, а базовый характер и манеру общения возьмёт из накопленного профиля общения пары, если он доступен. Биография и драматургия останутся художественными. Затем создаст Visual DNA и покажет калибровку перед фиксацией.')+'</p><div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Подойдут портреты, селфи, полный рост, разные годы и одежда. Необязательно готовить специальную фотосессию.</div></div><div class="field"><label>Имя героя · необязательно</label><input id="characterName" type="text" maxlength="80" placeholder="Оставьте пустым — система придумает"></div><div class="field"><label>Пожелание к персонажу · необязательно</label><textarea id="characterNote" maxlength="1200" placeholder="Например: сдержанный, уверенный, архитектор; или просто оставьте пустым — характер будет создан автоматически."></textarea></div><button class="primary" id="buildCharacter">Создать карточку персонажа</button></div>';
+     : (hasDraft&&!forceBuilder?draftHtml:builderHtml);
    const otherAi=Boolean(otherSummary.ready&&otherSummary.synthetic);
    const partnerAction=!otherSummary.ready
      ? '<button class="secondary" id="buildRandomCharacter">Второй игрок пока не подключился — создать AI-персонажа</button>'
@@ -86,6 +89,8 @@ function render(){
    app.innerHTML='<section class="cover"><div class="kicker">Interactive Novel 2.0</div><h1>Роман начинается с героя</h1><p>Роман может стартовать вдвоём или с временным AI-персонажем. Для реальных участников характер опирается на их наблюдаемый стиль общения в паре. У временного героя внешность случайная, но если профиль отсутствующего участника уже накоплен, его манера общения сохраняется.</p>'+setup+'<div class="pairState"><span>Герой A · '+tag(state?.characters?.A)+'</span><span>Герой B · '+tag(state?.characters?.B)+'</span></div><div class="actions">'+(both?'<button class="primary" id="start">Начать роман с этими героями</button>':'')+partnerAction+(!both&&!partnerAction?'<button class="secondary" disabled>Роман откроется после второго персонажа</button>':'')+'</div></section>';
    if(document.getElementById('start'))document.getElementById('start').onclick=start;
    if(document.getElementById('buildCharacter'))document.getElementById('buildCharacter').onclick=buildCharacter;
+   if(document.getElementById('continueCalibration'))document.getElementById('continueCalibration').onclick=continueCalibration;
+   if(document.getElementById('showBuilder'))document.getElementById('showBuilder').onclick=()=>{forceBuilder=true;render()};
    if(document.getElementById('buildRandomCharacter'))document.getElementById('buildRandomCharacter').onclick=buildRandomCharacter;
    return;
  }
@@ -123,8 +128,30 @@ async function buildCharacter(){
  try{
    const refs=await filesToDataUrls(files);
    const j=await api('character/build',{reference_images:refs,user_facts:{preferred_name:preferredName,creator_note:creatorNote}});
-   characterDraft=j.character||null;calibrationImage=j.calibration||'';render();
+   characterDraft=j.character||null;forceBuilder=false;
+   loading('Карточка сохранена. Создаём калибровочный образ…');
+   try{
+     const cal=await api('identity/calibrate');
+     calibrationImage=cal.calibration||'';
+     render();
+   }catch(calError){
+     state=(await api('state')).state;
+     render();
+     alert('Карточка персонажа уже сохранена. Не удалось получить только калибровочное изображение — нажмите «Продолжить калибровку».');
+   }
  }catch(e){alert(e.message);refresh()}finally{busy=false}
+}
+async function continueCalibration(){
+ if(busy)return;
+ busy=true;characterDraft=state?.my_character||characterDraft;loading('Создаём калибровочный образ…');
+ try{
+   const j=await api('identity/calibrate');
+   calibrationImage=j.calibration||'';
+   render();
+ }catch(e){
+   alert('Связь с генератором изображения прервалась. Карточка сохранена — можно повторить калибровку без повторной загрузки фото.');
+   refresh();
+ }finally{busy=false}
 }
 async function buildRandomCharacter(){
  if(busy)return;
