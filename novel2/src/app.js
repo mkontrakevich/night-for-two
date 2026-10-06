@@ -61,6 +61,31 @@ async function ensureAiCharacterReference(ai){
   ai.reference_images=[data];
   return[data];
 }
+
+async function ensureSyntheticIdentity(role,ids,createdByRole){
+  const existing=ids?.[role];
+  if(existing?.approved&&existing?.character_card?.passport)return existing;
+  const counterpartRole=role==='A'?'B':'A';
+  const relationship=await fetchRelationshipContext();
+  const synthetic=await buildSyntheticCharacter({
+    role,
+    counterpartCard:ids?.[counterpartRole]?.character_card||{},
+    relationshipContext:sliceRelationshipContext(relationship,role),
+    genderHint:explicitGenderForRole(relationship,role)
+  });
+  const identityLock=buildLock(role,synthetic.visualProfile);
+  const identityDraft={identity_lock:identityLock,character_card:synthetic.characterCard,reference_images:[]};
+  const reference=await generateSyntheticReference({identity:identityDraft,role});
+  const referenceData='data:image/jpeg;base64,'+reference.base64;
+  return saveIdentity(role,{
+    profile:synthetic.visualProfile,
+    characterCard:synthetic.characterCard,
+    builderMeta:{synthetic:true,control_mode:'ai',reference_count:0,generated_reference:true,created_by_role:createdByRole,created_at:new Date().toISOString(),version:'synthetic-character-2'},
+    identityLock,
+    referenceImages:[referenceData],
+    approved:true
+  });
+}
 function bookCastRole(bookCast=[],role){
   return (Array.isArray(bookCast)?bookCast:[]).find(x=>String(x?.interactive_role||'')===String(role))||null;
 }
@@ -288,9 +313,11 @@ async function main(){
           const token=String(assignments[slot.slot_key]||('player:'+runtimeRole));
           let entry=null;
           if(token==='player:'+runtimeRole){
-            const identity=ids[runtimeRole];
+            let identity=ids[runtimeRole];
             if(!identity?.approved||!identity?.character_card?.passport){
-              return send(res,409,{ok:false,error:'NOVEL2_PLAYER_CHARACTER_REQUIRED:'+runtimeRole});
+              if(runtimeRole===auth.role)return send(res,409,{ok:false,error:'NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED'});
+              identity=await ensureSyntheticIdentity(runtimeRole,ids,auth.role);
+              ids=await identities();
             }
             entry={
               slot_key:runtimeRole,
@@ -305,24 +332,6 @@ async function main(){
               reference_images:identity.reference_images||[],
               control_mode:isAiControlled(ids,runtimeRole,[])?'ai':'human'
             };
-          }else if(token.startsWith('ai:')){
-            const ai=await getAiCharacter(token.slice(3));
-            if(!ai)return send(res,404,{ok:false,error:'NOVEL2_AI_CHARACTER_NOT_FOUND'});
-            const refs=await ensureAiCharacterReference(ai);
-            const participantReady=runtimeRole===auth.role||Boolean(ids[runtimeRole]?.approved&&!ids[runtimeRole]?.builder_meta?.synthetic);
-            entry={
-              slot_key:runtimeRole,
-              narrative_function:String(slot.narrative_function||''),
-              source_type:'ai_library',
-              source_id:ai.id,
-              interactive_role:runtimeRole,
-              display_name:ai.name,
-              character_card:ai.character_card,
-              visual_profile:ai.visual_profile||{},
-              identity_lock:ai.identity_lock||'',
-              reference_images:refs,
-              control_mode:participantReady?'human':'ai'
-            };
           }else{
             return send(res,400,{ok:false,error:'NOVEL2_CAST_ASSIGNMENT_INVALID:'+slot.slot_key});
           }
@@ -336,30 +345,25 @@ async function main(){
           return send(res,409,{ok:false,error:'NOVEL2_CURRENT_PLAYER_MUST_BE_HUMAN'});
         }
 
-        const usedAi=new Set(castEntries.filter(x=>x.source_type==='ai_library').map(x=>x.source_id));
-        const library=await listAiCharacters();
         for(let i=0;i<support.length;i++){
           const slot=support[i];
-          let token=String(assignments[slot.slot_key]||'');
-          if(!token){
-            const fallback=library.find(x=>!usedAi.has(x.id))||library[i%Math.max(1,library.length)];
-            if(fallback)token='ai:'+fallback.id;
-          }
-          if(!token.startsWith('ai:'))return send(res,400,{ok:false,error:'NOVEL2_SUPPORT_CAST_REQUIRED:'+slot.slot_key});
-          const ai=await getAiCharacter(token.slice(3));
-          if(!ai)return send(res,404,{ok:false,error:'NOVEL2_AI_CHARACTER_NOT_FOUND'});
-          usedAi.add(ai.id);
+          const synthetic=await buildSyntheticCharacter({
+            role:'story-'+String(slot.slot_key||i),
+            counterpartCard:playerCards.A||{},
+            relationshipContext:{},
+            genderHint:''
+          });
           castEntries.push({
-            slot_key:String(slot.slot_key||'').slice(0,60),
+            slot_key:String(slot.slot_key||('support-'+i)).slice(0,60),
             narrative_function:String(slot.narrative_function||''),
-            source_type:'ai_library',
-            source_id:ai.id,
+            source_type:'story_ai',
+            source_id:null,
             interactive_role:null,
-            display_name:ai.name,
-            character_card:ai.character_card,
-            visual_profile:ai.visual_profile||{},
-            identity_lock:ai.identity_lock||'',
-            reference_images:ai.reference_images||[],
+            display_name:synthetic.characterCard?.passport?.fiction_name||String(slot.narrative_function||'AI-персонаж'),
+            character_card:synthetic.characterCard,
+            visual_profile:synthetic.visualProfile||{},
+            identity_lock:'',
+            reference_images:[],
             control_mode:'ai'
           });
         }
