@@ -58,3 +58,25 @@ export async function generateCalibration({identity,role}) {
   const result=await imageCompletion({prompt,inputReferences:refsOf(identity)});
   return {...result,prompt};
 }
+
+
+export async function generateSyntheticReference({identity,role}) {
+  if(!identity?.identity_lock) throw new Error('NOVEL2_IDENTITY_NOT_FOUND');
+  const card=identity.character_card||{};
+  const visual=card.visual||{};
+  const dna=card.visual_dna||{};
+  const prompt=[
+    `Create the canonical visual reference for PLAYER_${role}, one fully fictional adult character.`,
+    'This is the FIRST and authoritative appearance reference for the character. It must be visually specific, realistic and internally consistent.',
+    'Layout: one vertical editorial character plate with a dominant waist-up three-quarter portrait plus one smaller full-body view of the SAME person. No grid labels, no text.',
+    `CHARACTER: ${dna.short_visual_summary||visual.general_impression||''}`,
+    `FACE/HAIR/BODY: ${visual.face||''}; ${visual.hair||''}; ${visual.eyes||''}; ${visual.build||''}; ${visual.posture_motion||''}`,
+    `WARDROBE ANCHOR: ${dna.wardrobe_anchor||visual.wardrobe_style||'restrained contemporary clothing'}`,
+    identity.identity_lock,
+    'Neutral warm-gray studio, soft directional light, 65–85 mm portrait perspective, realistic skin texture, no beauty filter, no glamour retouching.',
+    'The portrait and full-body view must depict the exact same person with identical face geometry, hairline, age, build and proportions.',
+    'No text, no logos, no extra people.'
+  ].join('\n');
+  const result=await imageCompletion({prompt,inputReferences:[]});
+  return {...result,prompt};
+}
