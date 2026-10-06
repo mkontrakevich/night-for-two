@@ -31,8 +31,27 @@ DRAMA
 Верни только JSON.
 `;
 
+function cleanVisualScene(value={},fallbackBeat='') {
+  const v=value&&typeof value==='object'?value:{};
+  const present=(Array.isArray(v.characters_present)?v.characters_present:[])
+    .map(x=>String(x||'').toUpperCase())
+    .filter((x,i,a)=>['A','B'].includes(x)&&a.indexOf(x)===i)
+    .slice(0,2);
+  return {
+    location:String(v.location||'').trim().slice(0,900),
+    location_details:String(v.location_details||'').trim().slice(0,1400),
+    characters_present:present,
+    blocking:String(v.blocking||'').trim().slice(0,1200),
+    wardrobe:String(v.wardrobe||'').trim().slice(0,1000),
+    props:String(v.props||'').trim().slice(0,1000),
+    time_light:String(v.time_light||'').trim().slice(0,800),
+    camera_moment:String(v.camera_moment||fallbackBeat||'').trim().slice(0,1200)
+  };
+}
+
 function cleanScene(value={}) {
   const s=value&&typeof value==='object'?value:{};
+  const visualBeat=String(s.visual_beat||'').trim().slice(0,1200);
   return {
     chapter_no:Math.max(1,Number(s.chapter_no)||1),
     chapter_title:String(s.chapter_title||'').slice(0,100),
@@ -46,7 +65,8 @@ function cleanScene(value={}) {
       key:String(x?.key||'').slice(0,40),
       label:String(x?.label||'').slice(0,120)
     })).filter(x=>x.key&&x.label),
-    visual_beat:String(s.visual_beat||'').trim().slice(0,1200),
+    visual_beat:visualBeat,
+    visual_scene:cleanVisualScene(s.visual_scene||{},visualBeat),
     continuity_updates:s.continuity_updates&&typeof s.continuity_updates==='object'?s.continuity_updates:{},
     hook:String(s.hook||'').trim().slice(0,500)
   };
@@ -97,6 +117,16 @@ export async function createStoryBible({characters={},relationshipContext={}}={}
           primary_interaction:{type:'free_reply',prompt:''},
           optional_actions:[],
           visual_beat:'',
+          visual_scene:{
+            location:'',
+            location_details:'',
+            characters_present:['A','B'],
+            blocking:'',
+            wardrobe:'',
+            props:'',
+            time_light:'',
+            camera_moment:''
+          },
           continuity_updates:{},
           hook:''
         }
@@ -106,7 +136,9 @@ export async function createStoryBible({characters={},relationshipContext={}}={}
         'Начни с конкретной ситуации, а не с анкеты или знакомства с интерфейсом.',
         'Не объясняй устройство игры внутри прозы.',
         'Первая сцена должна проявить хотя бы по одной уникальной черте каждого персонажа.',
-        'Первая сцена должна закончиться прямой репликой или обстоятельством, на которое один игрок должен ответить.'
+        'Первая сцена должна закончиться прямой репликой или обстоятельством, на которое один игрок должен ответить.',
+        'visual_scene обязательно описывает фактическую локацию сцены, присутствующих героев, их положение, одежду, значимые предметы и свет. Это технический канон для иллюстрации, а не декоративный mood prompt.',
+        'characters_present содержит только A/B, которые физически находятся в кадре текущей сцены.'
       ]
     }
   });
@@ -137,6 +169,16 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
           primary_interaction:{type:'free_reply',prompt:''},
           optional_actions:[],
           visual_beat:'',
+          visual_scene:{
+            location:'',
+            location_details:'',
+            characters_present:['A','B'],
+            blocking:'',
+            wardrobe:'',
+            props:'',
+            time_light:'',
+            camera_moment:''
+          },
           continuity_updates:{},
           hook:''
         },
@@ -148,7 +190,9 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
         'Не обнуляй конфликт и не делай универсальную романтическую паузу.',
         'Сохраняй имена, роли, знания персонажей, предметы, место и причинность.',
         'Сверяй действия и реплики с player_characters из story_bible: характеры должны влиять на продолжение, а не быть декоративной анкетой.',
-        'Следующий активный герой обычно другой игрок, если драматургически нет веской причины оставить ход текущему.'
+        'Следующий активный герой обычно другой игрок, если драматургически нет веской причины оставить ход текущему.',
+        'visual_scene должен строго соответствовать только что написанной сцене: та же локация, те же физически присутствующие герои, их одежда, позы, реквизит и время/свет.',
+        'Не помещай героя в characters_present, если по прозе его физически нет в этой локации.'
       ]
     }
   });
@@ -166,7 +210,7 @@ export async function generateAiCharacterReply({book,recentTurns,role,characterC
     temperature:.82,
     maxTokens:1800,
     user:{
-      task:'Сыграй один ход за временного AI-персонажа, пока реальный второй игрок не подключился. Дай только естественную реплику/действие этого героя, без продолжения сцены.',
+      task:'Сыграй один ход за AI-персонажа автоматически. Дай естественную реплику и при необходимости короткое физическое действие этого героя, без продолжения сцены. Пользователь не должен писать реплики за AI-персонажа.',
       player_role:role,
       character_card:characterCard||{},
       story_bible:book?.story_bible||{},
@@ -180,7 +224,8 @@ export async function generateAiCharacterReply({book,recentTurns,role,characterC
         'Не пересказывай всю сцену.',
         'Ответ должен быть достаточно содержательным, чтобы prose engine мог построить последствия.',
         'Сохраняй заявленную манеру речи, внутреннее противоречие и границы персонажа.',
-        'Не превращай ответ в меню вариантов.'
+        'Не превращай ответ в меню вариантов.',
+        'Реплика должна звучать как самостоятельный ответ живого персонажа на текущую ситуацию, а не как служебный текст или пересказ prompt.'
       ]
     }
   });
