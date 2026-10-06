@@ -22,7 +22,12 @@
 .reader{min-height:100dvh;padding-bottom:190px}.chrome{position:sticky;top:0;z-index:5;padding:16px 18px 13px;background:linear-gradient(var(--paper) 78%,rgba(241,232,216,.9));border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:14px}.bookTitle{font:600 12px/1.3 Georgia,serif}.chapter{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}.exitStory{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:7px 11px;font-size:11px;white-space:nowrap}
 .sceneImage{display:none;width:100%;aspect-ratio:9/16;object-fit:cover}.sceneImage.on{display:block}.prose{padding:34px 24px 24px;font:400 20px/1.72 Georgia,serif;white-space:pre-wrap}.turnPrompt{margin:8px 24px 0;padding:20px 0;border-top:1px solid var(--line);font:600 17px/1.45 Georgia,serif}
 .replyDock{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(720px,100%);padding:10px 14px calc(12px + var(--safe));background:linear-gradient(rgba(241,232,216,.2),var(--paper) 16%);backdrop-filter:blur(12px);border-top:1px solid var(--line)}.replyDock textarea{width:100%;min-height:72px;max-height:150px;resize:none;border:1px solid var(--line);background:#fffaf1;border-radius:18px;padding:13px 14px;color:var(--ink);outline:none}.replyRow{display:grid;grid-template-columns:1fr auto;gap:9px;margin-top:8px}.send{border:0;border-radius:16px;background:var(--red);color:white;padding:0 20px;font-weight:700;min-height:48px}.status{padding:10px 24px 28px;color:var(--muted);font-size:13px}.choiceRow{display:flex;gap:8px;overflow:auto;padding:0 24px 8px}.chip{border:1px solid var(--line);background:#fff9ef;color:var(--ink);border-radius:999px;padding:9px 12px;white-space:nowrap}
-.loading{min-height:100dvh;display:grid;place-items:center;padding:30px;background:#14110f;color:#e9dfd6;text-align:center}.loading i{display:block;width:34px;height:34px;margin:0 auto 16px;border:2px solid #554943;border-top-color:#eee1d3;border-radius:50%;animation:r 1s linear infinite}@keyframes r{to{transform:rotate(360deg)}}
+.loading{min-height:100dvh;display:grid;place-items:center;padding:30px;background:#14110f;color:#e9dfd6;text-align:center}.loading i{display:block;width:34px;height:34px;margin:0 auto 16px;border:2px solid #554943;border-top-color:#eee1d3;border-radius:50%;animation:r 1s linear infinite}
+.processCard{width:min(560px,calc(100vw - 44px));margin:auto;padding:28px;border:1px solid #3b3634;background:#151312;text-align:left}
+.processTitle{font:600 clamp(24px,6vw,38px)/1.05 Georgia,serif;margin:0 0 10px}.processStatus{color:#c9c1bc;margin-bottom:22px}
+.processTrack{height:3px;background:#393331;overflow:hidden;margin:0 0 24px}.processTrack b{display:block;height:100%;width:var(--progress,12%);background:#eee4dc;transition:width .45s ease}
+.processSteps{display:grid;gap:12px}.processStep{display:flex;gap:12px;align-items:center;color:#777}.processStep.done{color:#d9d1cc}.processStep.active{color:#fff}.processDot{width:18px;height:18px;border:1px solid currentColor;display:grid;place-items:center;font-size:11px;flex:none}.processStep.active .processDot{animation:pulse 1s infinite}
+@keyframes r{to{transform:rotate(360deg)}}
 
 .editorialHero{position:relative;min-height:68vh;margin:-20px -18px 26px;padding:34px 22px 28px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;border-bottom:1px solid rgba(255,255,255,.18);background:radial-gradient(circle at 78% 42%,rgba(116,20,34,.5),transparent 34%),linear-gradient(118deg,#080808 0%,#10090a 48%,#2a0c12 100%)}
 .editorialHero:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.18),transparent 58%,rgba(0,0,0,.16));pointer-events:none}
@@ -60,10 +65,26 @@ function authHeaders(){
 }
 async function api(path,body={}){
  const r=await fetch('/novel2/api/'+path,{method:'POST',headers:{'content-type':'application/json',...authHeaders()},body:JSON.stringify(body)});
- const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||'REQUEST_FAILED');return j;
+ const raw=await r.text();let j;
+ try{j=raw?JSON.parse(raw):{}}
+ catch{throw new Error(r.ok?'Сервис вернул повреждённый ответ. Повторите операцию.':'Не удалось получить корректный ответ сервера.')}
+ if(!r.ok||!j.ok)throw new Error(j.error||'REQUEST_FAILED');return j;
 }
 function esc(v=''){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function loading(text='Продолжаем историю…'){app.innerHTML='<section class="loading"><div><i></i><div>'+esc(text)+'</div></div></section>'}
+let processTimer=null;
+function loading(text='Продолжаем историю…',kind='generic'){
+ clearInterval(processTimer);
+ const sets={
+  story:['Формируем замысел истории','Строим сюжет и конфликт','Определяем роли персонажей','Готовим роман к запуску'],
+  character:['Анализируем основу персонажа','Формируем характер и роль','Создаём Visual DNA','Фиксируем карточку'],
+  partner:['Формируем роль AI-партнёра','Создаём характер','Создаём внешность','Фиксируем AI-персонажа'],
+  image:['Готовим описание сцены','Собираем визуальные признаки','Генерируем изображение','Проверяем результат'],
+  generic:[text,'Обрабатываем данные','Проверяем результат']
+ };
+ const steps=sets[kind]||sets.generic;let current=0;
+ const paint=()=>{const pct=Math.min(92,Math.round(((current+.35)/steps.length)*100));app.innerHTML='<section class="loading"><div class="processCard" style="--progress:'+pct+'%"><div class="kicker">СОЗДАНИЕ</div><h2 class="processTitle">'+esc(text)+'</h2><div class="processStatus">Этап '+(current+1)+' из '+steps.length+' · операция выполняется</div><div class="processTrack"><b></b></div><div class="processSteps">'+steps.map((s,i)=>'<div class="processStep '+(i<current?'done':i===current?'active':'')+'"><span class="processDot">'+(i<current?'✓':i+1)+'</span><span>'+esc(s)+'</span></div>').join('')+'</div></div></section>'};
+ paint();processTimer=setInterval(()=>{if(current<steps.length-1){current++;paint()}},4200);
+}
 function askConfirm(message){
  if(tg?.showConfirm)return new Promise(resolve=>tg.showConfirm(String(message),ok=>resolve(Boolean(ok))));
  return Promise.resolve(window.confirm(String(message)));
@@ -356,7 +377,7 @@ async function buildCharacter(){
 }
 async function continueCalibration(){
  if(busy)return;
- busy=true;characterDraft=state?.my_character||characterDraft;loading('Создаём калибровочный образ…');
+ busy=true;characterDraft=state?.my_character||characterDraft;loading('Создаём калибровочный образ','image');
  try{
    const j=await api('identity/calibrate');
    calibrationImage=j.calibration||'';
@@ -368,7 +389,7 @@ async function continueCalibration(){
 }
 async function buildRandomCharacter(){
  if(busy)return;
- busy=true;loading('Создаём случайного второго героя и фиксируем его внешность…');
+ busy=true;loading('Создаём AI-персонажа B','partner');
  try{
    const j=await api('character/random');
    state=j.state||state;
@@ -387,7 +408,7 @@ async function regenerateCalibration(){
 }
 async function startNewBook(){
  if(busy)return;
- busy=true;loading('Сначала строим историю без персонажей…');
+ busy=true;loading('Создаём новую историю','story');
  try{
    const j=await api('story/draft/new',{creative_brief:''});
    storyDraft=j.draft;menuMode=false;
