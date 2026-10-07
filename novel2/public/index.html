@@ -46,7 +46,7 @@
 <script>
 const app=document.getElementById('app');
 const tg=window.Telegram?.WebApp;try{tg?.ready();tg?.expand()}catch{}
-let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null,forceBuilder=false,menuMode=false,libraryBooks=[],libraryDrafts=[],storyDraft=null,aiCharacters=[],roleGenderHints={A:'',B:''},characterDetailRole='',characterLooks={A:[],B:[]},characterLooksLoaded={A:false,B:false},characterViewerIndex=0,characterViewerRole='',aiAdvanceInFlight=false,aiAdvanceError='',aiAdvanceKey='';
+let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null,forceBuilder=false,menuMode=false,libraryBooks=[],libraryDrafts=[],storyDraft=null,resumeStoryDraftId='',aiCharacters=[],roleGenderHints={A:'',B:''},characterDetailRole='',characterLooks={A:[],B:[]},characterLooksLoaded={A:false,B:false},characterViewerIndex=0,characterViewerRole='',aiAdvanceInFlight=false,aiAdvanceError='',aiAdvanceKey='';
 let activeRequestControllers=new Set(),navigationEpoch=0;
 
 function telegramInitData(){
@@ -81,6 +81,7 @@ async function api(path,body={},timeoutMs=600000){
      if(/JSON|array element|position \d+|NOVEL2_AI_JSON_INVALID|Unexpected token|Expected ['"]/i.test(technical)){
        throw new Error('Не удалось собрать корректную структуру истории. Повторите создание — исходные данные не потеряны.');
      }
+     if(technical==='NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED')throw new Error('Сначала создайте и сохраните своего персонажа из фотографий.');
      throw new Error(technical||'REQUEST_FAILED');
    }
    return j;
@@ -460,21 +461,41 @@ async function refreshCastPreview(select){
 function renderStoryDraft(){
  if(!storyDraft){menuMode=true;renderMainMenu();return}
  const bp=storyDraft.blueprint||{},slots=Array.isArray(bp.cast_slots)?bp.cast_slots:[],interactive=slots.filter(x=>x.interactive).slice(0,2),support=slots.filter(x=>!x.interactive);
- const runtime=['A','B'];
+ const runtime=['A','B'],ownRole=String(state?.role||'A'),ownSummary=state?.characters?.[ownRole]||{};
+ const ownReady=Boolean(ownSummary.ready&&!ownSummary.synthetic&&ownSummary.character_card?.passport);
  let html='';
  interactive.forEach((slot,i)=>{
-   const role=runtime[i],summary=state?.characters?.[role]||{},previewId='cast-preview-'+String(i);
-   const ready=Boolean(summary.ready);
-   const name=summary.name||('Игрок '+role);
-   const note=ready?(summary.synthetic?'AI-версия персонажа пары':'персонаж пользователя'):'AI создаст персонажа пары автоматически';
-   html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||('Главная роль '+(i+1)))+'</strong><p>'+esc(slot.description||'Интерактивный герой истории')+'</p>'+castPreviewHtml(role,name,summary.gender||'',summary.avatar||'',note)+'<input type="hidden" data-cast-slot="'+esc(slot.slot_key)+'" value="player:'+role+'"></div>';
+   const role=runtime[i],summary=state?.characters?.[role]||{};
+   const ready=Boolean(summary.ready),isOwn=role===ownRole;
+   const name=ready?(summary.name||('Игрок '+role)):(isOwn?'Ваш персонаж':('Игрок '+role));
+   const note=isOwn
+     ? (ownReady?'ваш персонаж из фотографий':'нужно создать из ваших фото')
+     : (ready?(summary.synthetic?'AI-версия персонажа пары':'персонаж второго игрока'):'AI создаст персонажа пары автоматически');
+   const createOwn=isOwn&&!ownReady?'<button class="secondary" type="button" data-create-own-character>Создать моего персонажа из фото</button>':'';
+   html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||('Главная роль '+(i+1)))+'</strong><p>'+esc(slot.description||'Интерактивный герой истории')+'</p>'+castPreviewHtml(role,name,summary.gender||'',summary.avatar||'',note)+createOwn+'<input type="hidden" data-cast-slot="'+esc(slot.slot_key)+'" value="player:'+role+'"></div>';
  });
  support.forEach((slot)=>{
    html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||'AI-персонаж')+'</strong><p>'+esc(slot.description||'Дополнительная роль истории')+'</p><div class="hint">Персонаж будет автоматически создан AI под эту роль и станет частью рассказа.</div><input type="hidden" data-cast-slot="'+esc(slot.slot_key)+'" value="auto:story"></div>';
  });
- app.innerHTML='<section class="storySetup"><div class="kicker">STORY FIRST</div><h1>'+esc(storyDraft.title||bp.title||'Новая история')+'</h1><p>'+esc(storyDraft.logline||bp.logline||'')+'</p><div class="storyMeta">'+esc(bp.genre_tone||'')+'</div><div class="libraryTitle">Персонажи истории</div>'+html+'<div class="actions"><button class="primary" id="launchDraft">Начать роман</button><button class="secondary" id="backToMenu">Вернуться в меню</button></div><div class="hint">До начала романа пользователь создаёт только своего персонажа. Если персонаж пары ещё не создан, система создаст его AI-версию автоматически. Остальные AI-персонажи создаются из сюжета и необходимых ему ролей.</div></section>';
+ app.innerHTML='<section class="storySetup"><div class="kicker">STORY FIRST</div><h1>'+esc(storyDraft.title||bp.title||'Новая история')+'</h1><p>'+esc(storyDraft.logline||bp.logline||'')+'</p><div class="storyMeta">'+esc(bp.genre_tone||'')+'</div><div class="libraryTitle">Персонажи истории</div>'+html+'<div class="actions"><button class="primary" id="launchDraft" '+(ownReady?'':'disabled')+'>'+(ownReady?'Начать роман':'Сначала создайте своего персонажа')+'</button><button class="secondary" id="backToMenu">Вернуться в меню</button></div><div class="hint">'+(ownReady?'Ваш персонаж готов. Если персонаж пары ещё не создан, система создаст его AI-версию автоматически. Остальные AI-персонажи будут созданы из сюжета и необходимых ему ролей.':'Игрок '+esc(ownRole)+' — это вы. Его нельзя заменять случайным AI-героем: сначала создайте персонажа из своих фотографий. Персонаж отсутствующего игрока и дополнительные роли могут быть созданы AI автоматически.')+'</div></section>';
  document.getElementById('backToMenu').onclick=()=>{storyDraft=null;menuMode=true;renderMainMenu()};
- document.getElementById('launchDraft').onclick=launchStoryDraft;
+ const createOwn=document.querySelector('[data-create-own-character]');if(createOwn)createOwn.onclick=beginOwnCharacterForDraft;
+ document.getElementById('launchDraft').onclick=ownReady?launchStoryDraft:beginOwnCharacterForDraft;
+}
+function beginOwnCharacterForDraft(){
+ if(!storyDraft)return;
+ resumeStoryDraftId=String(storyDraft.id||'');
+ storyDraft=null;menuMode=false;forceBuilder=true;characterDetailRole='';
+ render();
+}
+async function resumeDraftAfterIdentity(){
+ const id=String(resumeStoryDraftId||'');resumeStoryDraftId='';
+ if(!id){await refresh();return}
+ state=(await api('state',{},15000)).state;
+ await loadLibrary();
+ const draft=libraryDrafts.find(x=>String(x.id)===id);
+ if(draft){storyDraft=draft;menuMode=false;forceBuilder=false;renderStoryDraft();return}
+ menuMode=true;renderMainMenu();
 }
 async function launchStoryDraft(){
  if(busy||!storyDraft)return;
@@ -632,7 +653,7 @@ async function buildRandomCharacter(){
 }
 async function approveIdentity(){
  if(busy)return;busy=true;loading('Фиксируем карточку и Visual Identity…');
- try{await api('identity/approve');calibrationImage='';characterDraft=null;await refresh()}
+ try{await api('identity/approve');calibrationImage='';characterDraft=null;await resumeDraftAfterIdentity()}
  catch(e){alert(e.message);render()}finally{busy=false}
 }
 async function regenerateCalibration(){
