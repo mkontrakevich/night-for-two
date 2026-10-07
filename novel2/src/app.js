@@ -15,7 +15,7 @@ import {
 } from './db.js';
 import {createStoryBlueprint,createStoryBible,continueStory,generateAiCharacterReply} from './prose-engine.js';
 import {analyzeIdentity,buildLock} from './identity-engine.js';
-import {buildCharacterCard,buildSyntheticCharacter} from './character-builder.js';
+import {buildCharacterCard,buildSyntheticCharacter,normalizeCharacterCard} from './character-builder.js';
 import {generateVisual,generateCalibration,generateSyntheticReference,generateCharacterLook,characterLookDefinition} from './visual-engine.js';
 import {fetchRelationshipContext,sliceRelationshipContext,explicitGenderForRole} from './relationship-context.js';
 import {PRESET_AI_CHARACTERS} from './ai-character-library.js';
@@ -91,7 +91,8 @@ function bookCastRole(bookCast=[],role){
   return (Array.isArray(bookCast)?bookCast:[]).find(x=>String(x?.interactive_role||'')===String(role))||null;
 }
 function castCharacterSummary(entry){
-  const card=entry?.character_card||{};
+  const role=String(entry?.interactive_role||entry?.slot_key||'A');
+  const card=normalizeCharacterCard(entry?.character_card||{},['A','B'].includes(role)?role:'A');
   return{
     slot_key:String(entry?.slot_key||''),
     name:String(entry?.display_name||card?.passport?.fiction_name||''),
@@ -105,8 +106,8 @@ function castCharacterSummary(entry){
     character_card:card
   };
 }
-function characterSummary(identity){
-  const card=identity?.character_card||{};
+function characterSummary(identity,role='A'){
+  const card=normalizeCharacterCard(identity?.character_card||{},role);
   const meta=identity?.builder_meta||{};
   return{
     ready:Boolean(identity?.approved&&card?.passport),
@@ -141,12 +142,12 @@ function isAiControlled(ids,role,bookCast=[]){
   return Boolean(ids?.[role]?.approved&&ids?.[role]?.builder_meta?.synthetic&&ids?.[role]?.builder_meta?.control_mode==='ai');
 }
 function publicState(book,auth,ids={},bookCast=[]){
-  const summaries={A:characterSummary(ids.A),B:characterSummary(ids.B)};
+  const summaries={A:characterSummary(ids.A,'A'),B:characterSummary(ids.B,'B')};
   const base={
     role:auth.role,
     identity:{A:Boolean(summaries.A.ready),B:Boolean(summaries.B.ready)},
     characters:summaries,
-    my_character:ids[auth.role]?.character_card||null
+    my_character:ids[auth.role]?.character_card?normalizeCharacterCard(ids[auth.role].character_card,auth.role):null
   };
   if(!book)return{mode:'home',...base};
   const scene=book.current_scene||{};
@@ -171,7 +172,7 @@ async function driveAiTurns(book,ids,bookCast=[],maxTurns=4){
       book:current,
       recentTurns:history,
       role,
-      characterCard:bookCastRole(bookCast,role)?.character_card||ids[role]?.character_card||{}
+      characterCard:normalizeCharacterCard(bookCastRole(bookCast,role)?.character_card||ids[role]?.character_card||{},role)
     });
     const replyTurn=Number(current.turn_no||0)+1;
     await appendTurn(current.id,replyTurn,role,'reply',auto.reply,{
@@ -352,7 +353,7 @@ async function main(){
               source_id:runtimeRole,
               interactive_role:runtimeRole,
               display_name:identity.character_card.passport.fiction_name||runtimeRole,
-              character_card:identity.character_card,
+              character_card:normalizeCharacterCard(identity.character_card,runtimeRole),
               visual_profile:identity.profile||{},
               identity_lock:identity.identity_lock||'',
               reference_images:identity.reference_images||[],
