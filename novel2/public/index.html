@@ -25,9 +25,9 @@
 .loading{min-height:100dvh;display:grid;place-items:center;padding:30px;background:#14110f;color:#e9dfd6;text-align:center}.loading i{display:block;width:34px;height:34px;margin:0 auto 16px;border:2px solid #554943;border-top-color:#eee1d3;border-radius:50%;animation:r 1s linear infinite}
 .processCard{width:min(560px,calc(100vw - 44px));margin:auto;padding:28px;border:1px solid #3b3634;background:#151312;text-align:left}
 .processTitle{font:600 clamp(24px,6vw,38px)/1.05 Georgia,serif;margin:0 0 10px}.processStatus{color:#c9c1bc;margin-bottom:22px}
-.processTrack{height:3px;background:#393331;overflow:hidden;margin:0 0 24px}.processTrack b{display:block;height:100%;width:var(--progress,12%);background:#eee4dc;transition:width .45s ease}
-.processSteps{display:grid;gap:12px}.processStep{display:flex;gap:12px;align-items:center;color:#777}.processStep.done{color:#d9d1cc}.processStep.active{color:#fff}.processDot{width:18px;height:18px;border:1px solid currentColor;display:grid;place-items:center;font-size:11px;flex:none}.processStep.active .processDot{animation:pulse 1s infinite}
-@keyframes r{to{transform:rotate(360deg)}}
+.processTrack{height:3px;background:#393331;overflow:hidden;margin:0 0 18px;position:relative}.processTrack b{display:block;height:100%;width:34%;background:#eee4dc;position:absolute;left:-34%;animation:processMove 1.4s ease-in-out infinite}
+.processMeta{font-size:12px;line-height:1.45;color:#8f8782;margin:0 0 16px}.processCancel{width:100%;min-height:48px;border:1px solid #5a514d;background:transparent;color:#eee4dc;border-radius:0}
+@keyframes processMove{0%{left:-34%}55%{left:52%}100%{left:100%}}@keyframes r{to{transform:rotate(360deg)}}
 
 .editorialHero{position:relative;min-height:68vh;margin:-20px -18px 26px;padding:34px 22px 28px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;border-bottom:1px solid rgba(255,255,255,.18);background:radial-gradient(circle at 78% 42%,rgba(116,20,34,.5),transparent 34%),linear-gradient(118deg,#080808 0%,#10090a 48%,#2a0c12 100%)}
 .editorialHero:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.18),transparent 58%,rgba(0,0,0,.16));pointer-events:none}
@@ -45,6 +45,7 @@
 const app=document.getElementById('app');
 const tg=window.Telegram?.WebApp;try{tg?.ready();tg?.expand()}catch{}
 let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null,forceBuilder=false,menuMode=false,libraryBooks=[],libraryDrafts=[],storyDraft=null,aiCharacters=[],roleGenderHints={A:'',B:''};
+let activeRequestControllers=new Set(),navigationEpoch=0;
 
 function telegramInitData(){
  const sdk=String(window.Telegram?.WebApp?.initData||'');
@@ -63,34 +64,58 @@ function authHeaders(){
  if(location.hostname==='localhost')h['x-novel2-local-user']=localStorage.getItem('novel2_local_user')||'local_a';
  return h;
 }
-async function api(path,body={}){
- const r=await fetch('/novel2/api/'+path,{method:'POST',headers:{'content-type':'application/json',...authHeaders()},body:JSON.stringify(body)});
- const raw=await r.text();let j;
- try{j=raw?JSON.parse(raw):{}}
- catch{throw new Error(r.ok?'Сервис вернул повреждённый ответ. Повторите операцию.':'Не удалось получить корректный ответ сервера.')}
- if(!r.ok||!j.ok){
-   const technical=String(j.error||'');
-   if(/JSON|array element|position \d+|NOVEL2_AI_JSON_INVALID|Unexpected token|Expected ['"]/i.test(technical)){
-     throw new Error('Не удалось собрать корректную структуру истории. Повторите создание — исходные данные не потеряны.');
+async function api(path,body={},timeoutMs=600000){
+ const epoch=navigationEpoch,controller=new AbortController();
+ activeRequestControllers.add(controller);
+ const timer=setTimeout(()=>controller.abort(),timeoutMs);
+ try{
+   const r=await fetch('/novel2/api/'+path,{method:'POST',headers:{'content-type':'application/json',...authHeaders()},body:JSON.stringify(body),signal:controller.signal});
+   if(epoch!==navigationEpoch)throw new Error('REQUEST_CANCELLED');
+   const raw=await r.text();let j;
+   try{j=raw?JSON.parse(raw):{}}
+   catch{throw new Error(r.ok?'Сервис вернул повреждённый ответ. Повторите операцию.':'Не удалось получить корректный ответ сервера.')}
+   if(!r.ok||!j.ok){
+     const technical=String(j.error||'');
+     if(/JSON|array element|position \d+|NOVEL2_AI_JSON_INVALID|Unexpected token|Expected ['"]/i.test(technical)){
+       throw new Error('Не удалось собрать корректную структуру истории. Повторите создание — исходные данные не потеряны.');
+     }
+     throw new Error(technical||'REQUEST_FAILED');
    }
-   throw new Error(technical||'REQUEST_FAILED');
+   return j;
+ }catch(e){
+   if(epoch!==navigationEpoch)throw new Error('REQUEST_CANCELLED');
+   if(controller.signal.aborted)throw new Error('Операция превысила лимит ожидания. Вернитесь в меню и попробуйте ещё раз.');
+   throw e;
+ }finally{
+   clearTimeout(timer);activeRequestControllers.delete(controller);
  }
- return j;
+}
+function isCancelled(e){return String(e?.message||'')==='REQUEST_CANCELLED'}
+function cancelRequestsToMenu(){
+ navigationEpoch++;
+ for(const controller of activeRequestControllers){try{controller.abort()}catch{}}
+ activeRequestControllers.clear();
+ clearInterval(processTimer);
+ busy=false;storyDraft=null;menuMode=true;
+ renderMainMenu();
+ void loadLibrary();
 }
 function esc(v=''){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 let processTimer=null;
-function loading(text='Продолжаем историю…',kind='generic'){
+function formatWait(seconds=0){
+ const s=Math.max(0,Math.floor(seconds)),m=Math.floor(s/60),r=s%60;
+ return String(m).padStart(2,'0')+':'+String(r).padStart(2,'0');
+}
+function loading(text='Продолжаем историю…',kind='generic',maxSeconds=600){
  clearInterval(processTimer);
- const sets={
-  story:['Формируем замысел истории','Строим сюжет и конфликт','Определяем роли персонажей','Готовим роман к запуску'],
-  character:['Анализируем основу персонажа','Формируем характер и роль','Создаём Visual DNA','Фиксируем карточку'],
-  partner:['Формируем роль AI-партнёра','Создаём характер','Создаём внешность','Фиксируем AI-персонажа'],
-  image:['Готовим описание сцены','Собираем визуальные признаки','Генерируем изображение','Проверяем результат'],
-  generic:[text,'Обрабатываем данные','Проверяем результат']
+ const started=Date.now();
+ const label=({story:'Создание истории',character:'Создание персонажа',partner:'Создание AI-партнёра',image:'Создание изображения',generic:'Обработка'})[kind]||'Обработка';
+ const paint=()=>{
+   const elapsed=Math.floor((Date.now()-started)/1000);
+   app.innerHTML='<section class="loading"><div class="processCard"><div class="kicker">'+esc(label)+'</div><h2 class="processTitle">'+esc(text)+'</h2><div class="processStatus">Время ожидания · '+formatWait(elapsed)+' / '+formatWait(maxSeconds)+'</div><div class="processTrack" aria-label="Операция выполняется"><b></b></div><p class="processMeta">Операция ещё выполняется. Таймер показывает реальное время ожидания; экран больше не зависает бессрочно.</p><button class="processCancel" id="cancelToMenu" type="button">В главное меню</button></div></section>';
+   const cancel=document.getElementById('cancelToMenu');if(cancel)cancel.onclick=cancelRequestsToMenu;
  };
- const steps=sets[kind]||sets.generic;let current=0;
- const paint=()=>{const pct=Math.min(92,Math.round(((current+.35)/steps.length)*100));app.innerHTML='<section class="loading"><div class="processCard" style="--progress:'+pct+'%"><div class="kicker">СОЗДАНИЕ</div><h2 class="processTitle">'+esc(text)+'</h2><div class="processStatus">Этап '+(current+1)+' из '+steps.length+' · операция выполняется</div><div class="processTrack"><b></b></div><div class="processSteps">'+steps.map((s,i)=>'<div class="processStep '+(i<current?'done':i===current?'active':'')+'"><span class="processDot">'+(i<current?'✓':i+1)+'</span><span>'+esc(s)+'</span></div>').join('')+'</div></div></section>'};
- paint();processTimer=setInterval(()=>{if(current<steps.length-1){current++;paint()}},4200);
+ paint();processTimer=setInterval(paint,1000);
 }
 function askConfirm(message){
  if(tg?.showConfirm)return new Promise(resolve=>tg.showConfirm(String(message),ok=>resolve(Boolean(ok))));
@@ -103,9 +128,9 @@ function avatarHtml(src='',name='',className='playerAvatar'){
  return '<div class="avatarFallback" aria-hidden="true">'+esc(initials)+'</div>';
 }
 async function refresh(){
- loading('Открываем роман…');
- try{state=(await api('state')).state;render()}
- catch(e){const missing=e.message==='NOVEL2_ACCESS_DENIED'&&!telegramInitData();app.innerHTML='<section class="loading"><div>'+esc(missing?'Telegram не передал данные входа. Закройте окно и откройте 18+ ещё раз.':e.message)+'</div></section>'}
+ loading('Открываем роман…','generic',600);
+ try{state=(await api('state',{},600000)).state;render()}
+ catch(e){if(isCancelled(e))return;const missing=e.message==='NOVEL2_ACCESS_DENIED'&&!telegramInitData();app.innerHTML='<section class="loading"><div>'+esc(missing?'Telegram не передал данные входа. Закройте окно и откройте 18+ ещё раз.':e.message)+'</div></section>'}
 }
 function characterCardHtml(card){
  const p=card?.passport||{},psy=card?.psychology||{},rom=card?.romance||{},base=card?.behavioral_baseline||{};
@@ -181,9 +206,9 @@ async function saveBookTitle(id){
  }catch(e){alert(e.message)}
 }
 async function openBook(id){
- if(busy)return;busy=true;loading('Открываем роман…');
- try{state=(await api('book/open',{book_id:id})).state;menuMode=false;storyDraft=null;render()}
- catch(e){alert(e.message);await refresh()}finally{busy=false}
+ if(busy)return;busy=true;loading('Открываем роман…','generic',600);
+ try{state=(await api('book/open',{book_id:id},600000)).state;menuMode=false;storyDraft=null;render()}
+ catch(e){if(isCancelled(e))return;alert(e.message);await refresh()}finally{busy=false}
 }
 async function archiveBookFromList(id){
  if(!state?.book||String(state.book.id)!==String(id))return;
@@ -291,11 +316,11 @@ async function launchStoryDraft(){
  const assignments={};
  document.querySelectorAll('[data-cast-slot]').forEach(el=>assignments[el.dataset.castSlot]=el.value);
  if(state?.mode==='reader'&&!await askConfirm('Начать новый роман? Текущий роман будет сохранён в архиве.'))return;
- busy=true;loading('Помещаем выбранных персонажей в готовую историю…');
+ busy=true;loading('Помещаем выбранных персонажей в готовую историю…','story',900);
  try{
-   const j=await api('story/draft/launch',{draft_id:storyDraft.id,assignments});
+   const j=await api('story/draft/launch',{draft_id:storyDraft.id,assignments},900000);
    state=j.state;storyDraft=null;menuMode=false;libraryBooks=[];libraryDrafts=[];render();
- }catch(e){alert(e.message);renderStoryDraft()}finally{busy=false}
+ }catch(e){if(isCancelled(e))return;alert(e.message);renderStoryDraft()}finally{busy=false}
 }
 function render(){
  if(storyDraft){renderStoryDraft();return}
@@ -396,12 +421,12 @@ async function continueCalibration(){
 }
 async function buildRandomCharacter(){
  if(busy)return;
- busy=true;loading('Создаём AI-персонажа B','partner');
+ busy=true;loading('Создаём AI-персонажа B','partner',600);
  try{
-   const j=await api('character/random');
+   const j=await api('character/random',{},600000);
    state=j.state||state;
    render();
- }catch(e){alert(e.message);refresh()}finally{busy=false}
+ }catch(e){if(isCancelled(e))return;alert(e.message);refresh()}finally{busy=false}
 }
 async function approveIdentity(){
  if(busy)return;busy=true;loading('Фиксируем карточку и Visual Identity…');
@@ -415,12 +440,12 @@ async function regenerateCalibration(){
 }
 async function startNewBook(){
  if(busy)return;
- busy=true;loading('Создаём новую историю','story');
+ busy=true;loading('Создаём новую историю','story',600);
  try{
-   const j=await api('story/draft/new',{creative_brief:''});
+   const j=await api('story/draft/new',{creative_brief:''},600000);
    storyDraft=j.draft;menuMode=false;
    renderStoryDraft();
- }catch(e){alert(e.message);menuMode=true;renderMainMenu()}finally{busy=false}
+ }catch(e){if(isCancelled(e))return;alert(e.message);menuMode=true;renderMainMenu()}finally{busy=false}
 }
 async function editCharacterFromMenu(){
  if(busy)return;
@@ -447,8 +472,8 @@ async function exitStory(ask=true){
 }
 async function sendReply(){
  if(busy||!state?.can_reply)return;const box=document.getElementById('reply'),reply=box.value.trim();if(!reply)return;
- busy=true;loading('Продолжаем роман из вашей реплики…');
- try{state=(await api('reply',{reply,action_key:selectedAction})).state;selectedAction='';render()}catch(e){alert(e.message);refresh()}finally{busy=false}
+ busy=true;loading('Продолжаем роман из вашей реплики…','story',600);
+ try{state=(await api('reply',{reply,action_key:selectedAction},600000)).state;selectedAction='';render()}catch(e){if(isCancelled(e))return;alert(e.message);refresh()}finally{busy=false}
 }
 async function loadVisual(){try{const j=await api('visual');const img=document.getElementById('sceneImage');if(img&&j.image){img.src=j.image;img.classList.add('on')}}catch{}}
 refresh();
