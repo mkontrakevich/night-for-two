@@ -99,6 +99,22 @@ CREATE TABLE IF NOT EXISTS novel2_book_cast(
 );
 CREATE INDEX IF NOT EXISTS novel2_book_cast_book_idx ON novel2_book_cast(book_id);
 
+CREATE TABLE IF NOT EXISTS novel2_character_looks(
+  pair_key text NOT NULL,
+  role text NOT NULL CHECK(role IN ('A','B')),
+  look_key text NOT NULL,
+  title text NOT NULL DEFAULT '',
+  prompt text NOT NULL DEFAULT '',
+  model text NOT NULL DEFAULT '',
+  image_base64 text NOT NULL DEFAULT '',
+  is_primary boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(pair_key,role,look_key)
+);
+CREATE INDEX IF NOT EXISTS novel2_character_looks_role_idx
+  ON novel2_character_looks(pair_key,role,updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS novel2_visuals(
   id bigserial PRIMARY KEY,
   book_id bigint NOT NULL REFERENCES novel2_books(id) ON DELETE CASCADE,
@@ -411,6 +427,100 @@ export async function identities() {
   return Object.fromEntries(rows.map(x=>[x.role,x]));
 }
 
+
+export async function listCharacterLooks(role) {
+  const {rows}=await db.query(
+    `SELECT look_key,title,prompt,model,image_base64,is_primary,created_at,updated_at
+       FROM novel2_character_looks
+      WHERE pair_key=$1 AND role=$2
+      ORDER BY is_primary DESC,
+               CASE look_key WHEN 'canonical' THEN 0 WHEN 'field' THEN 1 WHEN 'evening' THEN 2 WHEN 'tension' THEN 3 ELSE 9 END,
+               updated_at DESC`,
+    [pairKey(),String(role||'')]
+  );
+  return rows;
+}
+
+export async function saveCharacterLook({role,lookKey,title='',prompt='',model='',imageBase64='',isPrimary=false}) {
+  const {rows}=await db.query(
+    `INSERT INTO novel2_character_looks(pair_key,role,look_key,title,prompt,model,image_base64,is_primary)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+     ON CONFLICT(pair_key,role,look_key) DO UPDATE SET
+       title=EXCLUDED.title,
+       prompt=EXCLUDED.prompt,
+       model=EXCLUDED.model,
+       image_base64=EXCLUDED.image_base64,
+       is_primary=CASE WHEN EXCLUDED.is_primary THEN true ELSE novel2_character_looks.is_primary END,
+       updated_at=now()
+     RETURNING *`,
+    [pairKey(),String(role||''),String(lookKey||''),String(title||''),String(prompt||''),String(model||''),String(imageBase64||''),Boolean(isPrimary)]
+  );
+  return rows[0]||null;
+}
+
+export async function ensureCanonicalCharacterLook(role,identity) {
+  const refs=Array.isArray(identity?.reference_images)?identity.reference_images.filter(Boolean):[];
+  if(!refs.length)return null;
+  const existing=await listCharacterLooks(role);
+  if(existing.some(x=>x.look_key==='canonical'))return existing.find(x=>x.look_key==='canonical');
+  const raw=String(refs[0]||'').replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/,'');
+  if(!raw)return null;
+  return saveCharacterLook({
+    role,
+    lookKey:'canonical',
+    title:'Основной образ',
+    prompt:'Existing canonical identity reference',
+    model:'existing',
+    imageBase64:raw,
+    isPrimary:true
+  });
+}
+
+export async function selectCharacterLook(role,lookKey) {
+  const client=await db.connect();
+  try{
+    await client.query('BEGIN');
+    const {rows}=await client.query(
+      `SELECT * FROM novel2_character_looks
+        WHERE pair_key=$1 AND role=$2 AND look_key=$3
+        LIMIT 1`,
+      [pairKey(),String(role||''),String(lookKey||'')]
+    );
+    const selected=rows[0];
+    if(!selected)throw new Error('NOVEL2_CHARACTER_LOOK_NOT_FOUND');
+    await client.query(
+      `UPDATE novel2_character_looks SET is_primary=false,updated_at=now()
+        WHERE pair_key=$1 AND role=$2`,
+      [pairKey(),String(role||'')]
+    );
+    await client.query(
+      `UPDATE novel2_character_looks SET is_primary=true,updated_at=now()
+        WHERE pair_key=$1 AND role=$2 AND look_key=$3`,
+      [pairKey(),String(role||''),String(lookKey||'')]
+    );
+    const {rows:all}=await client.query(
+      `SELECT image_base64 FROM novel2_character_looks
+        WHERE pair_key=$1 AND role=$2 AND image_base64<>''
+        ORDER BY (look_key=$3) DESC,
+                 CASE look_key WHEN 'canonical' THEN 0 WHEN 'field' THEN 1 WHEN 'evening' THEN 2 WHEN 'tension' THEN 3 ELSE 9 END`,
+      [pairKey(),String(role||''),String(lookKey||'')]
+    );
+    const refs=all.slice(0,4).map(x=>'data:image/jpeg;base64,'+x.image_base64);
+    await client.query(
+      `UPDATE novel2_identity
+          SET reference_images=$3::jsonb,
+              builder_meta=jsonb_set(COALESCE(builder_meta,'{}'::jsonb),'{primary_look}',to_jsonb($4::text),true),
+              updated_at=now()
+        WHERE pair_key=$1 AND role=$2`,
+      [pairKey(),String(role||''),JSON.stringify(refs),String(lookKey||'')]
+    );
+    await client.query('COMMIT');
+    return selected;
+  }catch(error){
+    await client.query('ROLLBACK');
+    throw error;
+  }finally{client.release();}
+}
 
 export async function getVisual(bookId, visualKey) {
   const {rows}=await db.query(
