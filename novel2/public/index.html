@@ -23,7 +23,7 @@
 .calibration{min-height:100dvh;padding:24px 20px calc(30px + var(--safe));background:linear-gradient(160deg,#161210,#080706 70%);color:#fff}.calibration h1{font-size:42px}.calibration>p{font:400 15px/1.55 Georgia,serif;color:#cfc2ba}.calibration img{display:block;width:100%;border-radius:22px;margin:18px 0;max-height:62vh;object-fit:contain;background:#181310}.cardPreview{padding:18px;border:1px solid rgba(255,255,255,.14);border-radius:20px;background:rgba(255,255,255,.05);margin:0 0 18px}.cardPreview h2{font:500 28px/1.05 Georgia,serif;margin:0 0 5px}.cardPreview .meta{color:#a99c94;font-size:12px;margin-bottom:12px}.cardPreview p{font:400 15px/1.52 Georgia,serif;color:#ddd1c8}.cardPreview dl{margin:12px 0 0;display:grid;grid-template-columns:110px 1fr;gap:7px 10px;font-size:12px}.cardPreview dt{color:#8f8178}.cardPreview dd{margin:0;color:#e3d9d1}
 .reader{min-height:100dvh;padding-bottom:190px}.chrome{position:sticky;top:0;z-index:5;padding:16px 18px 13px;background:linear-gradient(var(--paper) 78%,rgba(241,232,216,.9));border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:14px}.bookTitle{font:600 12px/1.3 Georgia,serif}.chapter{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}.exitStory{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:7px 11px;font-size:11px;white-space:nowrap}
 .sceneImage{display:none;width:100%;aspect-ratio:9/16;object-fit:cover}.sceneImage.on{display:block}.prose{padding:34px 24px 24px;font:400 20px/1.72 Georgia,serif;white-space:pre-wrap}.turnPrompt{margin:8px 24px 0;padding:20px 0;border-top:1px solid var(--line);font:600 17px/1.45 Georgia,serif}
-.replyDock{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(720px,100%);padding:10px 14px calc(12px + var(--safe));background:linear-gradient(rgba(241,232,216,.2),var(--paper) 16%);backdrop-filter:blur(12px);border-top:1px solid var(--line)}.replyDock textarea{width:100%;min-height:72px;max-height:150px;resize:none;border:1px solid var(--line);background:#fffaf1;border-radius:18px;padding:13px 14px;color:var(--ink);outline:none}.replyRow{display:grid;grid-template-columns:1fr auto;gap:9px;margin-top:8px}.send{border:0;border-radius:16px;background:var(--red);color:white;padding:0 20px;font-weight:700;min-height:48px}.status{padding:10px 24px 28px;color:var(--muted);font-size:13px}.choiceRow{display:flex;gap:8px;overflow:auto;padding:0 24px 8px}.chip{border:1px solid var(--line);background:#fff9ef;color:var(--ink);border-radius:999px;padding:9px 12px;white-space:nowrap}
+.replyDock{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(720px,100%);padding:10px 14px calc(12px + var(--safe));background:linear-gradient(rgba(241,232,216,.2),var(--paper) 16%);backdrop-filter:blur(12px);border-top:1px solid var(--line)}.replyDock textarea{width:100%;min-height:72px;max-height:150px;resize:none;border:1px solid var(--line);background:#fffaf1;border-radius:18px;padding:13px 14px;color:var(--ink);outline:none}.replyRow{display:grid;grid-template-columns:1fr auto;gap:9px;margin-top:8px}.send{border:0;border-radius:16px;background:var(--red);color:white;padding:0 20px;font-weight:700;min-height:48px}.status{padding:10px 24px 28px;color:var(--muted);font-size:13px}.aiTurnStatus{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.aiTurnDot{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.7;animation:aiPulse 1.2s ease-in-out infinite}.aiRetry{border:1px solid var(--line);background:transparent;color:var(--ink);padding:7px 10px;border-radius:999px;font-size:11px}@keyframes aiPulse{0%,100%{opacity:.25;transform:scale(.82)}50%{opacity:1;transform:scale(1)}}.choiceRow{display:flex;gap:8px;overflow:auto;padding:0 24px 8px}.chip{border:1px solid var(--line);background:#fff9ef;color:var(--ink);border-radius:999px;padding:9px 12px;white-space:nowrap}
 .loading{min-height:100dvh;display:grid;place-items:center;padding:30px;background:#14110f;color:#e9dfd6;text-align:center}.loading i{display:block;width:34px;height:34px;margin:0 auto 16px;border:2px solid #554943;border-top-color:#eee1d3;border-radius:50%;animation:r 1s linear infinite}
 .processCard{width:min(560px,calc(100vw - 44px));margin:auto;padding:28px;border:1px solid #3b3634;background:#151312;text-align:left}
 .processTitle{font:600 clamp(24px,6vw,38px)/1.05 Georgia,serif;margin:0 0 10px}.processStatus{color:#c9c1bc;margin-bottom:22px}
@@ -46,7 +46,7 @@
 <script>
 const app=document.getElementById('app');
 const tg=window.Telegram?.WebApp;try{tg?.ready();tg?.expand()}catch{}
-let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null,forceBuilder=false,menuMode=false,libraryBooks=[],libraryDrafts=[],storyDraft=null,aiCharacters=[],roleGenderHints={A:'',B:''},characterDetailRole='',characterLooks={A:[],B:[]},characterLooksLoaded={A:false,B:false},characterViewerIndex=0,characterViewerRole='';
+let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null,forceBuilder=false,menuMode=false,libraryBooks=[],libraryDrafts=[],storyDraft=null,aiCharacters=[],roleGenderHints={A:'',B:''},characterDetailRole='',characterLooks={A:[],B:[]},characterLooksLoaded={A:false,B:false},characterViewerIndex=0,characterViewerRole='',aiAdvanceInFlight=false,aiAdvanceError='',aiAdvanceKey='';
 let activeRequestControllers=new Set(),navigationEpoch=0;
 
 function telegramInitData(){
@@ -130,9 +130,17 @@ function avatarHtml(src='',name='',className='playerAvatar'){
  return '<div class="avatarFallback" aria-hidden="true">'+esc(initials)+'</div>';
 }
 async function refresh(){
- loading('Открываем роман…','generic',600);
- try{state=(await api('state',{},600000)).state;render()}
- catch(e){if(isCancelled(e))return;const missing=e.message==='NOVEL2_ACCESS_DENIED'&&!telegramInitData();app.innerHTML='<section class="loading"><div>'+esc(missing?'Telegram не передал данные входа. Закройте окно и откройте 18+ ещё раз.':e.message)+'</div></section>'}
+ loading('Загружаем данные…','generic',15);
+ try{
+   state=(await api('state',{},15000)).state;
+   aiAdvanceError='';aiAdvanceKey='';
+   render();
+ }catch(e){
+   if(isCancelled(e))return;
+   const missing=e.message==='NOVEL2_ACCESS_DENIED'&&!telegramInitData();
+   app.innerHTML='<section class="loading"><div>'+esc(missing?'Telegram не передал данные входа. Закройте окно и откройте 18+ ещё раз.':e.message)+'</div><button class="processCancel" id="retryOpen" type="button">Повторить</button></section>';
+   const retry=document.getElementById('retryOpen');if(retry)retry.onclick=refresh;
+ }
 }
 function characterCardHtml(card){
  const p=card?.passport||{},psy=card?.psychology||{},rom=card?.romance||{},base=card?.behavioral_baseline||{};
@@ -355,9 +363,17 @@ async function saveBookTitle(id){
  }catch(e){alert(e.message)}
 }
 async function openBook(id){
- if(busy)return;busy=true;loading('Открываем роман…','generic',600);
- try{state=(await api('book/open',{book_id:id},600000)).state;menuMode=false;storyDraft=null;render()}
- catch(e){if(isCancelled(e))return;alert(e.message);await refresh()}finally{busy=false}
+ if(busy)return;
+ busy=true;loading('Открываем роман…','generic',15);
+ try{
+   state=(await api('book/open',{book_id:id},15000)).state;
+   menuMode=false;storyDraft=null;aiAdvanceError='';aiAdvanceKey='';
+   render();
+ }catch(e){
+   if(isCancelled(e))return;
+   alert('Не удалось открыть роман за 15 секунд. Попробуйте ещё раз.');
+   menuMode=true;renderMainMenu();
+ }finally{busy=false}
 }
 async function archiveBookFromList(id){
  if(!state?.book||String(state.book.id)!==String(id))return;
@@ -509,12 +525,49 @@ function render(){
    return;
  }
  const s=state.scene||{},actions=(s.optional_actions||[]).map(x=>'<button class="chip" data-action="'+esc(x.key)+'">'+esc(x.label)+'</button>').join('');
- const waitingText=state.active_control_mode==='ai'?'AI-персонаж продолжает сцену…':'Ход второго героя · история продолжится после его ответа';
- app.innerHTML='<section class="reader"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><button class="exitStory" id="mainMenu">Меню</button></div><img id="sceneImage" class="sceneImage" alt=""><article class="prose">'+esc(s.prose||'')+'</article><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(actions?'<div class="choiceRow">'+actions+'</div>':'')+'<div class="status">'+(state.can_reply?'Ваш ход · отвечайте от лица своего героя':waitingText)+'</div></section><div class="replyDock"><textarea id="reply" placeholder="'+(state.can_reply?'Ответить от лица героя…':'AI-персонаж отвечает автоматически')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить</button></div></div>';
+ const aiTurn=state.active_control_mode==='ai';
+ const waitingText=aiTurn
+   ?(aiAdvanceError?'Не удалось получить ход AI-персонажа.':'AI-персонаж пишет продолжение…')
+   :'Ход второго героя · история продолжится после его ответа';
+ const statusHtml=state.can_reply
+   ?'Ваш ход · отвечайте от лица своего героя'
+   :aiTurn
+     ?'<div class="aiTurnStatus"><span class="aiTurnDot"></span><span id="aiStatus">'+esc(waitingText)+'</span>'+(aiAdvanceError?'<button class="aiRetry" id="retryAiTurn" type="button">Повторить</button>':'')+'</div>'
+     :esc(waitingText);
+ app.innerHTML='<section class="reader"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><button class="exitStory" id="mainMenu">Меню</button></div><img id="sceneImage" class="sceneImage" alt=""><article class="prose">'+esc(s.prose||'')+'</article><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(actions?'<div class="choiceRow">'+actions+'</div>':'')+'<div class="status">'+statusHtml+'</div></section><div class="replyDock"><textarea id="reply" placeholder="'+(state.can_reply?'Ответить от лица героя…':aiTurn?'AI-персонаж формирует ответ…':'Ожидаем второго героя…')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить</button></div></div>';
  document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>{selectedAction=x.dataset.action;document.getElementById('selected').textContent='Выбрано: '+x.textContent});
  document.getElementById('send').onclick=sendReply;
  document.getElementById('mainMenu').onclick=openMainMenu;
+ const retryAi=document.getElementById('retryAiTurn');if(retryAi)retryAi.onclick=()=>{aiAdvanceError='';aiAdvanceKey='';render()};
  void loadVisual();
+ if(aiTurn&&!aiAdvanceInFlight&&!aiAdvanceError)setTimeout(()=>advanceAiTurn(),0);
+}
+async function advanceAiTurn(){
+ if(aiAdvanceInFlight||menuMode||state?.mode!=='reader'||state?.active_control_mode!=='ai')return;
+ const key=[state?.book?.id,state?.book?.turn_no,state?.active_role].join(':');
+ if(aiAdvanceError&&aiAdvanceKey===key)return;
+ aiAdvanceInFlight=true;aiAdvanceError='';aiAdvanceKey=key;
+ const started=Date.now();
+ const update=()=>{
+   const el=document.getElementById('aiStatus');
+   if(el)el.textContent='AI-персонаж пишет продолжение · '+formatWait((Date.now()-started)/1000);
+ };
+ update();const timer=setInterval(update,1000);
+ try{
+   const j=await api('ai/advance',{},180000);
+   if(menuMode)return;
+   state=j.state||state;
+   aiAdvanceError='';aiAdvanceKey='';
+   render();
+ }catch(e){
+   if(isCancelled(e))return;
+   aiAdvanceError=String(e?.message||'Не удалось получить ход AI-персонажа.');
+   aiAdvanceKey=key;
+   if(!menuMode)render();
+ }finally{
+   clearInterval(timer);
+   aiAdvanceInFlight=false;
+ }
 }
 async function rawDataUrl(file){
  return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=reject;r.readAsDataURL(file)});
