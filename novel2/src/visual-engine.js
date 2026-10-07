@@ -130,6 +130,55 @@ export async function generateCalibration({identity,role}) {
   return {...result,prompt};
 }
 
+const CHARACTER_LOOKS={
+  field:{
+    title:'Рабочий образ',
+    direction:'practical story-specific field or investigative look, functional layers and accessories appropriate to the character profession and plot; composed, observant body language'
+  },
+  evening:{
+    title:'Вечерний образ',
+    direction:'refined evening look appropriate to the novel world and character status; elegant but believable, never generic red-carpet glamour; cinematic hotel, restaurant or social-scene energy'
+  },
+  tension:{
+    title:'Напряжённая сцена',
+    direction:'high-tension narrative look for a consequential scene; story-plausible outerwear or protective layers, purposeful posture, restrained dramatic lighting, no costume fantasy'
+  }
+};
+
+export function characterLookDefinition(key=''){
+  const clean=String(key||'').trim();
+  return CHARACTER_LOOKS[clean]?{key:clean,...CHARACTER_LOOKS[clean]}:null;
+}
+
+export async function generateCharacterLook({identity,role,lookKey,storyContext={}}) {
+  if(!identity?.identity_lock) throw new Error('NOVEL2_IDENTITY_NOT_FOUND');
+  const look=characterLookDefinition(lookKey);
+  if(!look) throw new Error('NOVEL2_CHARACTER_LOOK_INVALID');
+  const card=identity.character_card||{};
+  const p=card.passport||{},v=card.visual||{},dna=card.visual_dna||{};
+  const story=[
+    String(storyContext?.title||'').trim(),
+    String(storyContext?.logline||'').trim(),
+    String(storyContext?.scene||'').trim()
+  ].filter(Boolean).join(' · ').slice(0,2200);
+  const prompt=[
+    `Create a vertical 4:5 cinematic editorial character portrait for ${p.fiction_name||role}, the SAME adult fictional person from the supplied identity reference.`,
+    `LOOK: ${look.title}. ${look.direction}.`,
+    story?`STORY CONTEXT: ${story}`:'',
+    `CHARACTER ROLE: ${p.story_role||''}`,
+    `VISUAL DNA: ${dna.short_visual_summary||v.general_impression||''}`,
+    `WARDROBE BASELINE: ${dna.wardrobe_anchor||v.wardrobe_style||''}`,
+    identity.identity_lock,
+    'IDENTITY CONSISTENCY IS ABSOLUTE: preserve exact face geometry, age, freckles/skin details, hairline, hair color, eye spacing, nose, jaw, body build and proportions from the reference.',
+    'Change only wardrobe, styling, pose, environment, expression and light to match this specific narrative look.',
+    'Single character only. Full or three-quarter body with enough environment to communicate the story situation.',
+    'Premium cinematic realism, European editorial restraint, tactile materials, natural skin, no beauty filter, no fashion-catalogue sterility.',
+    'No text, no logo, no watermark, no duplicate person, no identity drift.'
+  ].filter(Boolean).join('\n');
+  const result=await imageCompletion({prompt,inputReferences:refsOf(identity)});
+  return {...result,prompt,look};
+}
+
 export async function generateSyntheticReference({identity,role}) {
   if(!identity?.identity_lock) throw new Error('NOVEL2_IDENTITY_NOT_FOUND');
   const card=identity.character_card||{};
