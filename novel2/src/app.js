@@ -10,12 +10,13 @@ import {
   upsertAiCharacter,listAiCharacters,getAiCharacter,saveAiCharacterReference,
   createStoryDraft,getStoryDraft,listStoryDrafts,deleteStoryDraft,markStoryDraftUsed,
   saveBookCast,getBookCast,claimBookCastControl,updateBookCastReference,
+  listCharacterLooks,saveCharacterLook,ensureCanonicalCharacterLook,selectCharacterLook,
   getVisual,previousVisual,saveVisual,db
 } from './db.js';
 import {createStoryBlueprint,createStoryBible,continueStory,generateAiCharacterReply} from './prose-engine.js';
 import {analyzeIdentity,buildLock} from './identity-engine.js';
 import {buildCharacterCard,buildSyntheticCharacter} from './character-builder.js';
-import {generateVisual,generateCalibration,generateSyntheticReference} from './visual-engine.js';
+import {generateVisual,generateCalibration,generateSyntheticReference,generateCharacterLook,characterLookDefinition} from './visual-engine.js';
 import {fetchRelationshipContext,sliceRelationshipContext,explicitGenderForRole} from './relationship-context.js';
 import {PRESET_AI_CHARACTERS} from './ai-character-library.js';
 
@@ -119,6 +120,20 @@ function characterSummary(identity){
     avatar:String(Array.isArray(identity?.reference_images)&&identity.reference_images[0]||''),
     character_card:card
   };
+}
+function characterLookPayload(row){
+  return{
+    key:String(row?.look_key||''),
+    title:String(row?.title||''),
+    image:row?.image_base64?'data:image/jpeg;base64,'+row.image_base64:'',
+    is_primary:Boolean(row?.is_primary),
+    model:String(row?.model||'')
+  };
+}
+async function characterLooksForRole(role,identity){
+  if(identity)await ensureCanonicalCharacterLook(role,identity);
+  const rows=await listCharacterLooks(role);
+  return rows.map(characterLookPayload);
 }
 function isAiControlled(ids,role,bookCast=[]){
   const castEntry=bookCastRole(bookCast,role);
@@ -453,6 +468,60 @@ async function main(){
         book=await driveAiTurns(book,ids,bookCast);
         bookCast=await getBookCast(book.id);
         return send(res,200,{ok:true,state:publicState(book,auth,ids,bookCast)});
+      }
+
+      if(url.pathname==='/novel2/api/character/looks'){
+        const targetRole=String(input.role||auth.role).toUpperCase();
+        if(!['A','B'].includes(targetRole))return send(res,400,{ok:false,error:'NOVEL2_CHARACTER_ROLE_INVALID'});
+        const identity=ids[targetRole];
+        if(!identity?.character_card?.passport)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_NOT_GENERATED'});
+        const looks=await characterLooksForRole(targetRole,identity);
+        return send(res,200,{ok:true,role:targetRole,looks});
+      }
+
+      if(url.pathname==='/novel2/api/character/look/generate'){
+        const targetRole=String(input.role||auth.role).toUpperCase();
+        const lookKey=String(input.look_key||'').trim();
+        if(!['A','B'].includes(targetRole))return send(res,400,{ok:false,error:'NOVEL2_CHARACTER_ROLE_INVALID'});
+        const def=characterLookDefinition(lookKey);
+        if(!def)return send(res,400,{ok:false,error:'NOVEL2_CHARACTER_LOOK_INVALID'});
+        const identity=ids[targetRole];
+        if(!identity?.character_card?.passport||!identity?.identity_lock)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_NOT_GENERATED'});
+        await ensureCanonicalCharacterLook(targetRole,identity);
+        const storyContext=book?{
+          title:book.title||'',
+          logline:String(book.story_bible?.logline||''),
+          scene:String(book.current_scene?.prose||'').slice(0,1400)
+        }:{};
+        const generated=await generateCharacterLook({
+          identity,
+          role:targetRole,
+          lookKey,
+          storyContext
+        });
+        await saveCharacterLook({
+          role:targetRole,
+          lookKey,
+          title:def.title,
+          prompt:generated.prompt,
+          model:generated.model,
+          imageBase64:generated.base64,
+          isPrimary:false
+        });
+        const looks=await characterLooksForRole(targetRole,identity);
+        return send(res,200,{ok:true,role:targetRole,look:looks.find(x=>x.key===lookKey)||null,looks});
+      }
+
+      if(url.pathname==='/novel2/api/character/look/select'){
+        const targetRole=String(input.role||auth.role).toUpperCase();
+        const lookKey=String(input.look_key||'').trim();
+        if(!['A','B'].includes(targetRole))return send(res,400,{ok:false,error:'NOVEL2_CHARACTER_ROLE_INVALID'});
+        if(!ids[targetRole]?.character_card?.passport)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_NOT_GENERATED'});
+        await ensureCanonicalCharacterLook(targetRole,ids[targetRole]);
+        await selectCharacterLook(targetRole,lookKey);
+        ids=await identities();
+        const looks=await characterLooksForRole(targetRole,ids[targetRole]);
+        return send(res,200,{ok:true,role:targetRole,looks,state:publicState(book,auth,ids,bookCast)});
       }
 
       if(url.pathname==='/novel2/api/character/save'){
