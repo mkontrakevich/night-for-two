@@ -161,3 +161,9 @@ assert(app.includes("source_type:'story_ai'"),'support cast must be generated fr
 assert(index.includes('id="menuBuildAiPartner"'),'main menu must expose temporary AI partner generation');
 assert(index.includes('Пересоздать AI-персонажа'),'temporary AI partner must be regenerable before a real partner is present');
 assert(index.includes('menuBuildAiPartner.onclick=buildRandomCharacter'),'main-menu AI partner action must use the guarded partner generator');
+assert(index.includes('id="cancelToMenu"'),'long operations must offer a main-menu escape');
+assert(index.includes('cancelRequestsToMenu'),'main-menu escape must cancel active client waits');
+assert(index.includes('Время ожидания'),'long operations must show real elapsed wait time');
+assert(index.includes('600000'),'ordinary client waits must be bounded');
+assert(index.includes('900000'),'story launch must have an explicit upper wait bound');
+assert(index.includes('isCancelled(e)'),'cancelled requests must not surface stale errors');
