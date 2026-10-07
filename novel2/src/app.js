@@ -100,7 +100,8 @@ function castCharacterSummary(entry){
     source_id:String(entry?.source_id||''),
     interactive_role:entry?.interactive_role||null,
     control_mode:String(entry?.control_mode||'ai'),
-    avatar:String(Array.isArray(entry?.reference_images)&&entry.reference_images[0]||'')
+    avatar:String(Array.isArray(entry?.reference_images)&&entry.reference_images[0]||''),
+    character_card:card
   };
 }
 function characterSummary(identity){
@@ -115,7 +116,8 @@ function characterSummary(identity){
     synthetic:Boolean(meta?.synthetic),
     control_mode:String(meta?.control_mode||'human'),
     relationship_grounded:Boolean(card?.behavioral_baseline?.relationship_grounded),
-    avatar:String(Array.isArray(identity?.reference_images)&&identity.reference_images[0]||'')
+    avatar:String(Array.isArray(identity?.reference_images)&&identity.reference_images[0]||''),
+    character_card:card
   };
 }
 function isAiControlled(ids,role,bookCast=[]){
@@ -444,6 +446,20 @@ async function main(){
         return send(res,200,{ok:true,state:publicState(book,auth,ids,bookCast)});
       }
 
+      if(url.pathname==='/novel2/api/character/save'){
+        if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_SAVE_ONLY_BEFORE_START'});
+        const targetRole=String(input.role||auth.role).toUpperCase();
+        if(!['A','B'].includes(targetRole))return send(res,400,{ok:false,error:'NOVEL2_CHARACTER_ROLE_INVALID'});
+        const identity=ids[targetRole];
+        if(!identity?.character_card?.passport)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_NOT_GENERATED'});
+        if(targetRole!==auth.role&&!identity?.builder_meta?.synthetic){
+          return send(res,403,{ok:false,error:'NOVEL2_CHARACTER_SAVE_FORBIDDEN'});
+        }
+        await approveIdentity(targetRole);
+        ids=await identities();
+        return send(res,200,{ok:true,role:targetRole,state:publicState(null,auth,ids,[])});
+      }
+
       if(url.pathname==='/novel2/api/character/random'){
         if(book)return send(res,409,{ok:false,error:'NOVEL2_RANDOM_CHARACTER_ONLY_BEFORE_START'});
         const targetRole=auth.role==='A'?'B':'A';
@@ -468,6 +484,7 @@ async function main(){
         };
         const reference=await generateSyntheticReference({identity:identityDraft,role:targetRole});
         const referenceData='data:image/jpeg;base64,'+reference.base64;
+        const preview=Boolean(input.preview);
         const builderMeta={
           synthetic:true,
           control_mode:'ai',
@@ -475,7 +492,8 @@ async function main(){
           generated_reference:true,
           created_by_role:auth.role,
           created_at:new Date().toISOString(),
-          version:'synthetic-character-1'
+          version:'synthetic-character-2',
+          preview
         };
         const saved=await saveIdentity(targetRole,{
           profile:synthetic.visualProfile,
@@ -483,7 +501,7 @@ async function main(){
           builderMeta,
           identityLock,
           referenceImages:[referenceData],
-          approved:true
+          approved:!preview
         });
         ids=await identities();
         return send(res,200,{
@@ -491,6 +509,7 @@ async function main(){
           target_role:targetRole,
           character:saved.character_card,
           reference_image:referenceData,
+          preview:Boolean(input.preview),
           state:publicState(null,auth,ids,[])
         });
       }
