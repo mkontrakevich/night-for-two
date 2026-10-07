@@ -44,6 +44,10 @@ const CHARACTER_BUILDER_SYSTEM=`
 — Не сравнивай с реальными знаменитостями.
 — Все персонажи строго 21+.
 — Не копируй конкретного автора, роман или узнаваемые фразы.
+— Character Card описывает ИДЕНТИЧНОСТЬ героя, а не его связь с техническими ролями приложения.
+— Никогда не пиши в biography, story_role, archetype, story_hook, literary_portrait или других полях «Игрок A», «Игрок B», «Player A», «Player B».
+— Если нужна романтическая или конфликтная функция, используй нейтральные формулировки вроде «потенциальный романтический интерес другого главного героя», но не привязывай её к A/B.
+— Поле story_role должно прежде всего отвечать на вопрос «кто этот человек в мире истории»: профессия, социальная функция, секрет, драматургический ресурс. Конкретные отношения между героями задаёт Story Bible после выбора состава.
 
 ЛИТЕРАТУРНАЯ ФУНКЦИЯ
 Персонаж должен быть пригоден для современной коммерческой dark erotic romance:
@@ -67,6 +71,12 @@ function arr(v,max=8){
   return (Array.isArray(v)?v:[]).map(x=>String(x||'').trim()).filter(Boolean).slice(0,max);
 }
 function text(v,max=1200){return String(v||'').trim().slice(0,max);}
+function neutralizeRuntimeRoleRefs(v,max=1200){
+  return text(v,max)
+    .replace(/\bигрок(?:а|у|ом|е)?\s*[AА]\b/giu,'другого главного героя')
+    .replace(/\bигрок(?:а|у|ом|е)?\s*[BВ]\b/giu,'другого главного героя')
+    .replace(/\bplayer\s*[AB]\b/giu,'the other lead');
+}
 function confidence(v){const n=Number(v);return Number.isFinite(n)?Math.max(0,Math.min(1,n)):0;}
 
 function normalizeBehavior(raw={}){
@@ -100,10 +110,10 @@ export function normalizeCharacterCard(raw={},role='A'){
       fiction_name:text(passport.fiction_name||passport.name||`Герой ${role}`,80),
       age,
       gender:text(passport.gender,50),
-      story_role:text(passport.story_role||passport.role,160),
-      archetype:text(passport.archetype,160),
-      biography:text(passport.biography,1200),
-      story_hook:text(passport.story_hook,500)
+      story_role:neutralizeRuntimeRoleRefs(passport.story_role||passport.role,160),
+      archetype:neutralizeRuntimeRoleRefs(passport.archetype,160),
+      biography:neutralizeRuntimeRoleRefs(passport.biography,1200),
+      story_hook:neutralizeRuntimeRoleRefs(passport.story_hook,500)
     },
     visual:{
       general_impression:text(visual.general_impression,600),
@@ -135,7 +145,7 @@ export function normalizeCharacterCard(raw={},role='A'){
       emotional_triggers:arr(romance.emotional_triggers,8),
       tension_mechanics:arr(romance.tension_mechanics,8)
     },
-    literary_portrait:text(raw.literary_portrait,1800),
+    literary_portrait:neutralizeRuntimeRoleRefs(raw.literary_portrait,1800),
     visual_dna:{
       short_visual_summary:text(dna.short_visual_summary,800),
       stable_core_traits:arr(dna.stable_core_traits,12),
@@ -147,10 +157,10 @@ export function normalizeCharacterCard(raw={},role='A'){
       do_not_change:arr(dna.do_not_change,14)
     },
     story_start:{
-      best_first_scene:text(story.best_first_scene,700),
-      best_counterpart_contrast:text(story.best_counterpart_contrast,700),
-      first_spark:text(story.first_spark,700),
-      hidden_danger:text(story.hidden_danger,700)
+      best_first_scene:neutralizeRuntimeRoleRefs(story.best_first_scene,700),
+      best_counterpart_contrast:neutralizeRuntimeRoleRefs(story.best_counterpart_contrast,700),
+      first_spark:neutralizeRuntimeRoleRefs(story.first_spark,700),
+      hidden_danger:neutralizeRuntimeRoleRefs(story.hidden_danger,700)
     },
     builder_notes:{
       fictionalized:true,
@@ -226,7 +236,8 @@ export async function buildCharacterCard({role,visualProfile={},userFacts={},ref
         'Не цитируй исходные сообщения пары и не пытайся их реконструировать.',
         'Если на фото не видно тело целиком, не выдумывай точные пропорции: перенеси это в unknown_traits.',
         'Если пользователь дал пожелания, они имеют приоритет над автоматически созданной художественной биографией.',
-        'Карточка должна быть пригодна одновременно для prose engine и visual engine.'
+        'Карточка должна быть пригодна одновременно для prose engine и visual engine.',
+        'Character Card не должна содержать ссылки на технические роли Игрок A / Игрок B / Player A / Player B. Отношения между героями назначаются позже Story Bible.'
       ]
     }
   });
