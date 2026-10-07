@@ -287,11 +287,20 @@ async function main(){
       }
 
       if(url.pathname==='/novel2/api/state'){
-        if(book){
-          book=await driveAiTurns(book,ids,bookCast);
-          bookCast=await getBookCast(book.id);
-        }
+        // State reads must stay fast and side-effect free. Never block app opening
+        // on prose generation; AI-controlled turns advance through a separate
+        // endpoint after the reader has rendered.
         return send(res,200,{ok:true,state:publicState(book,auth,ids,bookCast)});
+      }
+
+      if(url.pathname==='/novel2/api/ai/advance'){
+        if(!book)return send(res,400,{ok:false,error:'NOVEL2_BOOK_REQUIRED'});
+        if(!isAiControlled(ids,book.active_role,bookCast)){
+          return send(res,200,{ok:true,state:publicState(book,auth,ids,bookCast),advanced:false});
+        }
+        book=await driveAiTurns(book,ids,bookCast);
+        bookCast=await getBookCast(book.id);
+        return send(res,200,{ok:true,state:publicState(book,auth,ids,bookCast),advanced:true});
       }
 
       if(url.pathname==='/novel2/api/story/draft/launch'){
