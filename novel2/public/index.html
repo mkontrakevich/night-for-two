@@ -99,24 +99,30 @@ function cancelRequestsToMenu(){
  navigationEpoch++;
  for(const controller of activeRequestControllers){try{controller.abort()}catch{}}
  activeRequestControllers.clear();
- clearInterval(processTimer);
+ stopLoading();
  busy=false;storyDraft=null;menuMode=true;
  renderMainMenu();
  void loadLibrary();
 }
 function esc(v=''){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-let processTimer=null;
+let processTimer=null,loadingEpoch=0;
+function stopLoading(){
+ loadingEpoch++;
+ if(processTimer){clearInterval(processTimer);processTimer=null}
+}
 function formatWait(seconds=0){
  const s=Math.max(0,Math.floor(seconds)),m=Math.floor(s/60),r=s%60;
  return String(m).padStart(2,'0')+':'+String(r).padStart(2,'0');
 }
 function loading(text='Продолжаем историю…',kind='generic',maxSeconds=600){
- clearInterval(processTimer);
- const started=Date.now();
+ stopLoading();
+ const epoch=loadingEpoch,started=Date.now();
  const label=({story:'Создание истории',character:'Создание персонажа',partner:'Создание AI-партнёра',image:'Создание изображения',generic:'Обработка'})[kind]||'Обработка';
  const paint=()=>{
+   if(epoch!==loadingEpoch)return;
    const elapsed=Math.floor((Date.now()-started)/1000);
-   app.innerHTML='<section class="loading"><div class="processCard"><div class="kicker">'+esc(label)+'</div><h2 class="processTitle">'+esc(text)+'</h2><div class="processStatus">Время ожидания · '+formatWait(elapsed)+' / '+formatWait(maxSeconds)+'</div><div class="processTrack" aria-label="Операция выполняется"><b></b></div><p class="processMeta">Операция ещё выполняется. Таймер показывает реальное время ожидания; экран больше не зависает бессрочно.</p><button class="processCancel" id="cancelToMenu" type="button">В главное меню</button></div></section>';
+   const exceeded=elapsed>=maxSeconds;
+   app.innerHTML='<section class="loading"><div class="processCard"><div class="kicker">'+esc(label)+'</div><h2 class="processTitle">'+esc(text)+'</h2><div class="processStatus">Время ожидания · '+formatWait(Math.min(elapsed,maxSeconds))+' / '+formatWait(maxSeconds)+'</div><div class="processTrack" aria-label="Операция выполняется"><b></b></div><p class="processMeta">'+(exceeded?'Лимит ожидания достигнут. Запрос завершается или будет отменён автоматически.':'Операция выполняется. Таймер показывает реальное время ожидания.')+'</p><button class="processCancel" id="cancelToMenu" type="button">В главное меню</button></div></section>';
    const cancel=document.getElementById('cancelToMenu');if(cancel)cancel.onclick=cancelRequestsToMenu;
  };
  paint();processTimer=setInterval(paint,1000);
@@ -139,6 +145,7 @@ async function refresh(){
    render();
  }catch(e){
    if(isCancelled(e))return;
+   stopLoading();
    const missing=e.message==='NOVEL2_ACCESS_DENIED'&&!telegramInitData();
    app.innerHTML='<section class="loading"><div>'+esc(missing?'Telegram не передал данные входа. Закройте окно и откройте 18+ ещё раз.':e.message)+'</div><button class="processCancel" id="retryOpen" type="button">Повторить</button></section>';
    const retry=document.getElementById('retryOpen');if(retry)retry.onclick=refresh;
@@ -269,6 +276,7 @@ function bindCharacterLooks(role,active){
  document.querySelectorAll('[data-look-select]').forEach(el=>el.onclick=()=>selectCharacterLookFromDetail(role,el.dataset.lookSelect));
 }
 function renderCharacterDetail(role){
+ stopLoading();
  role=String(role||'').toUpperCase();
  if(!['A','B'].includes(role)){renderMainMenu();return}
  characterDetailRole=role;
@@ -387,6 +395,7 @@ async function saveCharacterFromDetail(role){
  }catch(e){if(isCancelled(e))return;alert(e.message);renderCharacterDetail(role)}finally{busy=false}
 }
 function renderMainMenu(){
+ stopLoading();
  const active=state?.mode==='reader'&&state?.book;
  const cast=Array.isArray(state?.cast)?state.cast:[];
  const activeRole=role=>cast.find(x=>String(x?.interactive_role||'')===role)||null;
@@ -520,6 +529,7 @@ function storyAiCastPreviewHtml(role,slot={}){
  return '<div class="castPreview"><div class="avatarFallback">AI</div><div><small>Интерактивная роль '+esc(role)+' · создастся при запуске</small><b>'+esc(title)+'</b><small>'+esc(description)+'</small></div></div>';
 }
 function renderStoryDraft(){
+ stopLoading();
  if(!storyDraft){menuMode=true;renderMainMenu();return}
  const bp=storyDraft.blueprint||{},slots=Array.isArray(bp.cast_slots)?bp.cast_slots:[],interactive=slots.filter(x=>x.interactive).slice(0,2),support=slots.filter(x=>!x.interactive);
  const runtime=['A','B'],ownRole=String(state?.role||'A'),ownSummary=state?.characters?.[ownRole]||{};
@@ -574,6 +584,7 @@ async function launchStoryDraft(){
  }catch(e){if(isCancelled(e))return;alert(e.message);renderStoryDraft()}finally{busy=false}
 }
 function render(){
+ stopLoading();
  if(storyDraft){renderStoryDraft();return}
  if(menuMode){renderMainMenu();return}
  if(calibrationImage&&characterDraft){
