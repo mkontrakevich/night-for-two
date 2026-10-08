@@ -246,32 +246,44 @@ export async function buildCharacterCard({role,visualProfile={},userFacts={},ref
   return card;
 }
 
-export async function buildSyntheticCharacter({role,counterpartCard={},relationshipContext={},genderHint=''}){
-  if(!['A','B'].includes(role))throw new Error('NOVEL2_CHARACTER_ROLE_INVALID');
+export async function buildSyntheticCharacter({role,counterpartCard={},relationshipContext={},genderHint='',storyContext={},roleBrief={}}){
+  const roleKey=String(role||'').trim();
+  if(!roleKey)throw new Error('NOVEL2_CHARACTER_ROLE_INVALID');
   const grounded=Array.isArray(relationshipContext?.observations)&&relationshipContext.observations.length>0;
+  const storyGrounding={
+    title:text(storyContext?.title,180),
+    logline:text(storyContext?.logline,900),
+    genre_tone:text(storyContext?.genre_tone,600),
+    premise:text(storyContext?.premise,1400),
+    narrative_function:text(roleBrief?.narrative_function,500),
+    role_description:text(roleBrief?.description,1200),
+    relationship_to_leads:text(roleBrief?.relationship_to_leads,800),
+    visual_direction:text(roleBrief?.visual_direction,800)
+  };
   const output=await jsonCompletion({
     system:CHARACTER_BUILDER_SYSTEM,
-    temperature:.90,
+    temperature:.88,
     maxTokens:6400,
     user:{
-      task:'Создай временного взрослого персонажа для отсутствующего второго игрока. ВНЕШНОСТЬ должна быть полностью вымышленной и случайной, но ПОВЕДЕНЧЕСКИЙ BASELINE должен опираться на sanitized_pair_communication этого участника, если такие наблюдения уже существуют.',
-      player_role:role,
+      task:'Создай взрослого AI-персонажа ДЛЯ КОНКРЕТНОЙ ИСТОРИИ. Его биография, профессия, характер, конфликт, визуальный образ и драматургическая функция должны вытекать из story_context и role_brief. Это не универсальный персонаж и не случайный партнёр вне сюжета.',
+      story_context:storyGrounding,
+      story_role_key:roleKey,
       counterpart_character:counterpartCard||{},
       sanitized_pair_communication:relationshipContext,
       relationship_context_available:grounded,
       explicit_gender_hint:['female','male','nonbinary'].includes(String(genderHint))?String(genderHint):'',
       randomization_rules:[
+        'Сначала выполни требования narrative_function и role_description; случайность допустима только внутри этих рамок.',
+        'Профессия, социальный статус, манера поведения и гардероб должны быть правдоподобны для мира и атмосферы этой истории.',
         'Выбери конкретное лицо, волосы, телосложение, осанку и 4–6 отличительных визуальных маркеров.',
         'Не используй знаменитостей и не описывай персонажа как копию реального человека.',
         'Возраст строго 21+.',
-        'Если explicit_gender_hint задан, используй именно его как гендер персонажа. Этот hint считается явной метаданной, а не выводом из переписки.',
-        'Если explicit_gender_hint пуст, гендер выбери случайно из female, male, nonbinary.',
-        'Внешность является случайной художественной оболочкой и не должна выводиться из переписки.',
-        'Если коммуникационный профиль отсутствующего участника есть, сохрани его наблюдаемый стиль общения, инициативу, темп, поддержку и ритм как behavioral baseline.',
+        'Если explicit_gender_hint задан, используй именно его. Если пуст — выбери гендер только если он не задан role_brief и не противоречит истории.',
+        'Если коммуникационный профиль отсутствующего реального участника передан, используй только его наблюдаемый стиль общения как behavioral baseline; внешность и сюжетная биография остаются художественными.',
         'Не выводи из переписки интимные, медицинские, религиозные, политические или другие чувствительные свойства.',
-        'Создай визуальный контраст с уже существующим персонажем, но не превращай его в карикатуру.',
-        'Не оставляй unknown_traits для базовых визуальных признаков: это полностью вымышленная внешность.',
-        'После создания внешность считается неизменным каноном.'
+        'Создай визуальный и психологический контраст с уже существующим главным героем только там, где это усиливает story_context.',
+        'Не оставляй unknown_traits для базовых визуальных признаков: внешность полностью вымышленная и после создания становится каноном ЭТОГО романа.',
+        'Никогда не описывай героя как «AI-персонажа», «Игрока A/B» или техническую сущность приложения.'
       ],
       output_schema:{
         visual_profile:{
@@ -291,12 +303,13 @@ export async function buildSyntheticCharacter({role,counterpartCard={},relations
     }
   });
   const visualProfile=output?.visual_profile&&typeof output.visual_profile==='object'?output.visual_profile:{};
-  const characterCard=normalizeCharacterCard(output?.character_card||{},role);
+  const characterCard=normalizeCharacterCard(output?.character_card||{},roleKey);
   characterCard.builder_notes={
     fictionalized:true,
     based_on_user_references:false,
     relationship_grounded:Boolean(characterCard.behavioral_baseline?.relationship_grounded),
-    synthetic_standin:true,
+    story_scoped_ai:true,
+    story_role_key:roleKey,
     adult_only:true
   };
   if(!visualProfile?.face||!visualProfile?.hair||!visualProfile?.body)throw new Error('NOVEL2_SYNTHETIC_VISUAL_INVALID');
