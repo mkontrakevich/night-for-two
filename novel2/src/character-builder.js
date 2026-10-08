@@ -211,7 +211,7 @@ function outputSchema(){
   };
 }
 
-export async function buildCharacterCard({role,visualProfile={},userFacts={},referenceCount=1,relationshipContext={}}){
+export async function buildCharacterCard({role,visualProfile={},userFacts={},referenceCount=1,relationshipContext={},storyContext={},roleBrief={}}){
   if(!['A','B'].includes(role))throw new Error('NOVEL2_CHARACTER_ROLE_INVALID');
   const grounded=Array.isArray(relationshipContext?.observations)&&relationshipContext.observations.length>0;
   const output=await jsonCompletion({
@@ -219,13 +219,17 @@ export async function buildCharacterCard({role,visualProfile={},userFacts={},ref
     temperature:.68,
     maxTokens:5600,
     user:{
-      task:'Создай полную карточку художественного персонажа. Если есть sanitized_pair_communication, используй его как базовый behavioral baseline героя. Внешность бери из Visual Identity Profile. Остальную драматургию создавай как художественную фикцию.',
+      task:storyContext&&Object.keys(storyContext).length
+        ?'Создай сюжетную карточку персонажа для УЖЕ ВЫБРАННОЙ истории. Внешность не придумывай: она уже зафиксирована Visual Identity Profile. Характер, профессия, биография, конфликт и роль должны обслуживать конкретный story context и role brief.'
+        :'Создай полную карточку художественного персонажа. Если есть sanitized_pair_communication, используй его как базовый behavioral baseline героя. Внешность бери из Visual Identity Profile. Остальную драматургию создавай как художественную фикцию.',
       player_role:role,
       reference_count:referenceCount,
       visual_identity_profile:visualProfile,
       sanitized_pair_communication:relationshipContext,
       relationship_context_available:grounded,
       user_preferences:userFacts,
+      story_context:storyContext,
+      role_brief:roleBrief,
       output_schema:outputSchema(),
       hard_rules:[
         'Возраст персонажа не меньше 21 года.',
@@ -237,7 +241,8 @@ export async function buildCharacterCard({role,visualProfile={},userFacts={},ref
         'Если на фото не видно тело целиком, не выдумывай точные пропорции: перенеси это в unknown_traits.',
         'Если пользователь дал пожелания, они имеют приоритет над автоматически созданной художественной биографией.',
         'Карточка должна быть пригодна одновременно для prose engine и visual engine.',
-        'Character Card не должна содержать ссылки на технические роли Игрок A / Игрок B / Player A / Player B. Отношения между героями назначаются позже Story Bible.'
+        'Character Card не должна содержать ссылки на технические роли Игрок A / Игрок B / Player A / Player B. Отношения между героями назначаются позже Story Bible.',
+        'Если story_context и role_brief переданы, не создавай произвольную роль в отрыве от них: персонаж должен точно занять указанную функцию в этой истории.'
       ]
     }
   });
