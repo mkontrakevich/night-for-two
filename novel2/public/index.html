@@ -156,11 +156,7 @@ function characterCardHtml(card){
  const source=base.relationship_grounded?'Основа характера · реальный стиль общения пары':'Основа характера · художественная модель';
  return '<div class="cardPreview"><div class="kicker">CHARACTER CARD</div><h2>'+esc(p.fiction_name||'Ваш персонаж')+'</h2><div class="meta">'+esc((p.age?p.age+' · ':'')+(p.archetype||p.story_role||''))+'</div><div class="hint">'+esc(source)+'</div><p>'+esc(card?.literary_portrait||p.story_hook||'')+'</p><dl><dt>Роль</dt><dd>'+esc(p.story_role||'—')+'</dd><dt>Характер</dt><dd>'+esc(psy.temperament||'—')+'</dd><dt>Стиль общения</dt><dd>'+esc(base.communication_style||psy.speech_style||'—')+'</dd><dt>Инициатива</dt><dd>'+esc(base.initiative_pattern||'—')+'</dd><dt>Динамика</dt><dd>'+esc(rom.dynamic||'—')+'</dd><dt>Крючок</dt><dd>'+esc(p.story_hook||'—')+'</dd></dl></div>';
 }
-function actorIdentityHtml(card){
- const actor=card?.actor_identity||{},v=card?.visual||{};
- const traits=Array.isArray(v.immutable_traits)?v.immutable_traits.filter(Boolean).slice(0,6):[];
- return '<div class="cardPreview"><div class="kicker">BASE ACTOR IDENTITY</div><h2>Нейтральная актёрская база</h2><div class="meta">Внешность по фотографиям · без сюжетной роли</div><p>'+esc(v.general_impression||'Зафиксированы устойчивые внешние признаки игрока. Характер, профессия, биография и отношения будут определяться только конкретной историей.')+'</p><dl><dt>Источник</dt><dd>Фотографии игрока'+(actor.source_photo_count?' · '+esc(actor.source_photo_count):'')+'</dd><dt>Представление</dt><dd>Нейтральная casting card</dd><dt>Одежда</dt><dd>Непрозрачное матовое трико телесного цвета</dd><dt>Сюжетная роль</dt><dd>Не назначена</dd>'+(traits.length?'<dt>Identity markers</dt><dd>'+esc(traits.join(' · '))+'</dd>':'')+'</dl></div>';
-}
+function actorIdentityHtml(){return ''}
 function isBaseActorCard(card){return Boolean(card?.kind==='base_actor_identity'||card?.builder_notes?.identity_only)}
 
 async function loadAiCharacters(){
@@ -200,9 +196,10 @@ function bindMainMenu(){
 }
 function roleCardHtml(role,character={}){
  const identityOnly=Boolean(character?.identity_only||isBaseActorCard(character?.character_card));
- const name=String(identityOnly?('Игрок '+role):(character?.name||character?.character_card?.passport?.fiction_name||'Персонаж не выбран'));
- const extra=identityOnly?'внешность зафиксирована':character?.source_type==='ai_library'?'готовый персонаж':character?.synthetic?'AI-персонаж':character?.ready===false?'не создан':'ваш персонаж';
- const sub=identityOnly?'Нейтральная актёрская база':(character?.story_role||character?.archetype||character?.character_card?.passport?.story_role||'');
+ const empty=!character?.ready&&!character?.character_card;
+ const name=String(identityOnly||empty?'Карточка актёра':(character?.name||character?.character_card?.passport?.fiction_name||'Персонаж'));
+ const extra=identityOnly?'готова':empty?'не создана':character?.source_type==='ai_library'?'готовый персонаж':character?.synthetic?'AI-персонаж':'ваш персонаж';
+ const sub=identityOnly?'По фотографиям':empty?'Создать по фото':(character?.story_role||character?.archetype||character?.character_card?.passport?.story_role||'');
  return '<button type="button" class="playerCard" data-character-role="'+esc(role)+'">'+avatarHtml(character?.avatar||'',name)+'<div><small>Игрок '+esc(role)+' · '+esc(extra)+'</small><b>'+esc(name)+'</b><small>'+esc(sub)+'</small></div></button>';
 }
 function characterForRole(role){
@@ -293,34 +290,36 @@ function renderCharacterDetail(role){
  const active=Boolean(state?.mode==='reader'&&state?.book);
  const character=characterForRole(role);
  const card=character?.character_card||(role===state?.role?state?.my_character:null)||{};
- const passport=card?.passport||{};
- const name=String(character?.name||passport.fiction_name||'Новый персонаж');
  const mine=role===String(state?.role||'A');
+ const hasIdentity=Boolean(character?.ready||isBaseActorCard(card)||Object.keys(card||{}).length);
+ const identityOnly=Boolean(character?.identity_only||isBaseActorCard(card));
+
+ if(mine&&!active){
+   const status=character?.ready?'ГОТОВА':hasIdentity?'НУЖНА ACTOR SHEET':'НЕ СОЗДАНА';
+   const looks=characterLooksHtml(role,hasIdentity,false,true);
+   const photoPanel='<div class="photoIdentityPanel"><div class="kicker">ACTOR CARD</div><h3>'+(hasIdentity?'Пересоздать карточку актёра':'Создать карточку актёра')+'</h3><div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Загрузите портреты и, по возможности, фото в полный рост. На выходе — только нейтральная actor sheet.</div></div><button class="photoBuild" id="characterPhotoBuild" type="button">'+(hasIdentity?'Пересоздать по фото':'Создать по фото')+'</button>'+(!character?.ready&&hasIdentity?'<button class="photoResume" id="characterResumeCalibration" type="button">Продолжить actor sheet</button>':'')+'</div>';
+   app.innerHTML='<section class="characterDetail"><div class="characterDetailNav"><button class="characterBack" id="characterBack">← Назад</button><div class="characterStatus">'+esc(status)+'</div></div><div class="characterHeroCard">'+avatarHtml(character?.avatar||'','Карточка актёра','characterHeroAvatar')+'<div><div class="kicker">ИГРОК '+esc(role)+'</div><h1>Карточка актёра</h1></div></div>'+looks+photoPanel+'</section>';
+   document.getElementById('characterBack').onclick=()=>{characterDetailRole='';menuMode=true;renderMainMenu()};
+   const hero=document.querySelector('.characterHeroAvatar');if(hero)hero.onclick=()=>openCharacterViewer(role,(characterLooks[role]||[]).find(x=>x.is_primary)?.key||'canonical');
+   const photoBuild=document.getElementById('characterPhotoBuild');if(photoBuild)photoBuild.onclick=()=>buildCharacterFromDetail(role);
+   const resume=document.getElementById('characterResumeCalibration');if(resume)resume.onclick=()=>continueCalibrationFromDetail(role);
+   bindCharacterLooks(role,false);
+   if(hasIdentity&&!characterLooksLoaded[role])void loadCharacterLooks(role);
+   return;
+ }
+
+ const passport=card?.passport||{};
+ const name=String(character?.name||passport.fiction_name||'Персонаж');
  const synthetic=Boolean(character?.synthetic||character?.source_type==='story_ai');
  const hasCard=Boolean(passport.fiction_name||passport.story_role||Object.keys(card||{}).length);
- const identityOnly=Boolean(character?.identity_only||isBaseActorCard(card));
  const saved=active||Boolean(character?.ready);
- const canGenerateAi=!active&&!mine&&(synthetic||!character?.ready);
- const status=active?'В истории':saved?'Сохранён':hasCard?'Черновик · нужна калибровка':'Не создан';
- const details=hasCard
-   ?(identityOnly?actorIdentityHtml(card):characterCardHtml(card))
-   :'<div class="characterEmpty">'+(mine?'Загрузите свои фотографии, чтобы зафиксировать внешность. Сюжетная характеристика здесь не создаётся.':'AI-персонаж ещё не создан.')+'</div>';
+ const status=active?'В истории':saved?'Сохранён':hasCard?'Черновик':'Не создан';
+ const details=hasCard?(identityOnly?'':characterCardHtml(card)):'';
  const looks=characterLooksHtml(role,hasCard,active,identityOnly);
- const photoPanel=mine&&!active
-   ?'<div class="photoIdentityPanel"><div class="kicker">PHOTO IDENTITY</div><h3>'+(hasCard?'Пересобрать базовую внешность':'Создать базовую внешность')+'</h3><p>Загрузите 1–6 фотографий. На этом этапе мы фиксируем только лицо, волосы, телосложение, пропорции и устойчивые внешние признаки — без характера, профессии и биографии.</p><div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Портрет, селфи, профиль и полный рост можно смешивать. Результат — нейтральная actor sheet в непрозрачном трико телесного цвета.</div></div><button class="photoBuild" id="characterPhotoBuild" type="button">'+(hasCard?'Пересобрать по фото':'Создать по фото')+'</button>'+(!saved&&hasCard?'<button class="photoResume" id="characterResumeCalibration" type="button">Продолжить actor sheet</button>':'')+'</div>'
-   :'';
- const aiActions='';
- const generateHint=active
-   ?'Персонаж текущего романа зафиксирован. Сюжетные образы можно создавать для отдельных сцен без изменения его личности.'
-   :mine
-     ?'Здесь хранится только ваша внешность. Имя героя, характер, профессия, биография и отношения создаются позже — уже под выбранную историю.'
-     :'AI-персонаж создаётся как отдельная вымышленная личность. После сохранения его Visual Identity становится постоянным.';
- app.innerHTML='<section class="characterDetail"><div class="characterDetailNav"><button class="characterBack" id="characterBack">← Персонажи</button><div class="characterStatus">'+esc(status)+'</div></div><div class="characterHeroCard">'+avatarHtml(character?.avatar||'',name,'characterHeroAvatar')+'<div><div class="kicker">ИГРОК '+esc(role)+'</div><h1>'+esc(name)+'</h1><p>'+esc(identityOnly?'Нейтральная внешность для будущих ролей':(passport.story_role||character?.story_role||character?.archetype||'Персонаж будущего романа'))+'</p></div></div>'+photoPanel+looks+details+aiActions+'<p class="characterLockNote">'+esc(generateHint)+'</p></section>';
+ const generateHint=active?'Сюжетные образы меняются от сцены к сцене, identity остаётся неизменной.':'';
+ app.innerHTML='<section class="characterDetail"><div class="characterDetailNav"><button class="characterBack" id="characterBack">← Персонажи</button><div class="characterStatus">'+esc(status)+'</div></div><div class="characterHeroCard">'+avatarHtml(character?.avatar||'',name,'characterHeroAvatar')+'<div><div class="kicker">ИГРОК '+esc(role)+'</div><h1>'+esc(name)+'</h1><p>'+esc(passport.story_role||character?.story_role||'')+'</p></div></div>'+looks+details+(generateHint?'<p class="characterLockNote">'+esc(generateHint)+'</p>':'')+'</section>';
  document.getElementById('characterBack').onclick=()=>{characterDetailRole='';menuMode=true;renderMainMenu()};
  const hero=document.querySelector('.characterHeroAvatar');if(hero)hero.onclick=()=>openCharacterViewer(role,(characterLooks[role]||[]).find(x=>x.is_primary)?.key||'canonical');
- const photoBuild=document.getElementById('characterPhotoBuild');if(photoBuild)photoBuild.onclick=()=>buildCharacterFromDetail(role);
- const resume=document.getElementById('characterResumeCalibration');if(resume)resume.onclick=()=>continueCalibrationFromDetail(role);
- const save=document.getElementById('characterSave');if(save)save.onclick=()=>saveCharacterFromDetail(role);
  bindCharacterLooks(role,active);
  if(hasCard&&!characterLooksLoaded[role])void loadCharacterLooks(role);
 }
@@ -597,7 +596,7 @@ function render(){
  if(storyDraft){renderStoryDraft();return}
  if(menuMode){renderMainMenu();return}
  if(calibrationImage&&characterDraft){
-   app.innerHTML='<section class="calibration"><div class="kicker">BASE ACTOR IDENTITY</div><h1>Нейтральная карточка актёра</h1><p>Это не персонаж романа и не его характеристика. Мы фиксируем только вашу внешность: один и тот же человек в нейтральной студии, в непрозрачном трико телесного цвета. Сюжетная роль появится позже.</p>'+actorIdentityHtml(characterDraft)+'<img src="'+calibrationImage+'" alt="Нейтральная actor sheet"><div class="actions"><button class="primary" id="approveIdentity">Зафиксировать внешность</button><button class="secondary" id="regenIdentity">Пересобрать actor sheet</button><button class="secondary" id="rebuildCharacter">Загрузить другие фото</button></div></section>';
+   app.innerHTML='<section class="calibration"><div class="kicker">ACTOR CARD</div><h1>Карточка актёра</h1><img src="'+calibrationImage+'" alt="Карточка актёра"><div class="actions"><button class="primary" id="approveIdentity">Сохранить карточку</button><button class="secondary" id="regenIdentity">Пересоздать</button><button class="secondary" id="rebuildCharacter">Другие фото</button></div></section>';
    document.getElementById('approveIdentity').onclick=approveIdentity;
    document.getElementById('regenIdentity').onclick=regenerateCalibration;
    document.getElementById('rebuildCharacter').onclick=()=>{calibrationImage='';characterDraft=null;render()};
@@ -609,13 +608,13 @@ function render(){
    const mySynthetic=Boolean(mineSummary.ready&&mineSummary.synthetic);
    const hasDraft=Boolean(card?.passport)&&!mine&&!mySynthetic;
    const builderHtml='<div class="builder"><h2>Создайте нейтральную базу по фото</h2><p>Загрузите 1–6 фотографий. Мы зафиксируем только внешность и создадим actor sheet в непрозрачном телесном трико. Характер, профессия и биография здесь не создаются.</p><div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Портрет, селфи, профиль и полный рост можно смешивать. Несколько ракурсов повышают точность identity lock.</div></div><button class="primary" id="buildCharacter">Создать actor sheet</button></div>';
-   const draftHtml='<div class="builder"><h2>Внешность уже проанализирована</h2><p>Осталось построить нейтральную actor sheet и подтвердить identity. Если генерация изображения прервётся, повторный анализ фотографий не потребуется.</p>'+actorIdentityHtml(card)+'<div class="actions"><button class="primary" id="continueCalibration">Продолжить actor sheet</button><button class="secondary" id="showBuilder">Загрузить другие фото</button></div></div>';
+   const draftHtml='<div class="builder"><h2>Карточка актёра</h2><div class="actions"><button class="primary" id="continueCalibration">Создать actor sheet</button><button class="secondary" id="showBuilder">Другие фото</button></div></div>';
    const setup=forceBuilder
      ? builderHtml
      : mine
-       ? '<div class="readyCard"><div class="kicker">BASE ACTOR IDENTITY</div><h3>Внешность зафиксирована</h3><div class="meta">Нейтральная актёрская база</div><p>Сюжетной характеристики пока нет. Она будет создана только после выбора конкретной истории и роли.</p></div>'
+       ? '<div class="readyCard"><div class="kicker">ACTOR CARD</div><h3>Карточка актёра сохранена</h3></div>'
        : (hasDraft?draftHtml:builderHtml);
-   app.innerHTML='<section class="cover"><div class="kicker">Interactive Novel 2.0</div><h1>Сначала ваш герой</h1><p>Ваш персонаж создаётся и фиксируется по фотографиям. AI-персонажей заранее нет: сначала создаётся Story Blueprint, затем система строит необходимый каст специально под этот роман.</p>'+setup+'<div class="actions">'+(mine?'<button class="primary" id="start">Перейти к созданию истории</button>':'<button class="secondary" disabled>Сначала завершите своего персонажа</button>')+'</div></section>';
+   app.innerHTML='<section class="cover"><div class="kicker">Interactive Novel 2.0</div><h1>Карточка актёра</h1>'+setup+'<div class="actions">'+(mine?'<button class="primary" id="start">Перейти к созданию истории</button>':'<button class="secondary" disabled>Сначала создайте карточку актёра</button>')+'</div></section>';
    if(document.getElementById('start'))document.getElementById('start').onclick=start;
    if(document.getElementById('buildCharacter'))document.getElementById('buildCharacter').onclick=buildCharacter;
    if(document.getElementById('continueCalibration'))document.getElementById('continueCalibration').onclick=continueCalibration;
