@@ -118,13 +118,17 @@ export async function generateVisual({scene, identities={}, cast=[], previousVis
 export async function generateCalibration({identity,role}) {
   if(!identity?.identity_lock) throw new Error('NOVEL2_IDENTITY_NOT_FOUND');
   const prompt=[
-    `Create a neutral visual calibration sheet for PLAYER_${role}, one adult fictionalized character based only on the supplied reference images.`,
-    'Six clean panels in one vertical editorial contact sheet: frontal portrait, three-quarter portrait, profile portrait, standing full body, seated natural pose, neutral close portrait.',
-    'Simple warm gray studio background, neutral soft light, restrained plain clothing, no dramatic makeup, no costume, no stylization, no beauty filter.',
-    'Use 65–85 mm portrait perspective and natural full-body perspective.',
+    `Create a neutral casting identity sheet for PLAYER_${role}, the SAME adult person reconstructed only from the supplied reference images.`,
+    'Purpose: establish visual identity only. Do NOT invent biography, profession, social status, personality, role, costume or story context.',
+    'Six clean panels in one vertical casting contact sheet: frontal head-and-shoulders portrait, three-quarter portrait, profile portrait, standing full body front, standing full body three-quarter, neutral close portrait.',
+    'WARDROBE: one simple OPAQUE MATTE FLESH-TONE FULL-BODY UNITARD / ACTOR BODYSUIT. It must clearly read as clothing, not nudity. No underwear styling, no transparency, no cleavage emphasis, no erotic posing.',
+    'Barefoot or neutral studio footwear only. No jewelry, accessories, props, costume, makeup styling, profession cues or fashion styling.',
+    'Simple warm gray studio background, even neutral soft light, natural skin texture, no dramatic lighting, no beauty filter, no glamour retouching.',
+    'Use 65–85 mm portrait perspective for face views and distortion-free natural perspective for full body.',
     identity.identity_lock,
-    'The SAME person must remain consistent in all six panels. Preserve nose geometry, jaw, eye spacing, hairline, build and body proportions.',
-    'No text labels, no logos, no extra people.'
+    'The SAME person must remain consistent in all six panels. Preserve face geometry, hairline, apparent age, build, limb proportions and posture from the references. Do not slim, enlarge, beautify or idealize the body.',
+    'If a body trait is not supported by the references, keep it visually conservative and non-specific rather than inventing an extreme feature.',
+    'No text labels, no logos, no extra people, no narrative environment.'
   ].join('\n');
   const result=await imageCompletion({prompt,inputReferences:refsOf(identity)});
   return {...result,prompt};
