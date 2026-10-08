@@ -98,6 +98,10 @@ CREATE TABLE IF NOT EXISTS novel2_book_cast(
   PRIMARY KEY(book_id,slot_key)
 );
 CREATE INDEX IF NOT EXISTS novel2_book_cast_book_idx ON novel2_book_cast(book_id);
+ALTER TABLE novel2_book_cast DROP CONSTRAINT IF EXISTS novel2_book_cast_source_type_check;
+ALTER TABLE novel2_book_cast
+  ADD CONSTRAINT novel2_book_cast_source_type_check
+  CHECK(source_type IN ('player','story_ai','ai_library'));
 
 CREATE TABLE IF NOT EXISTS novel2_character_looks(
   pair_key text NOT NULL,
