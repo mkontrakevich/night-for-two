@@ -212,4 +212,76 @@ export async function analyzeIdentity({role, referenceImages=[], userFacts={}}) 
   return {profile,identityLock:buildLock(role,profile)};
 }
 
+
+export function buildBaseActorCard({role,profile={},sourcePhotoCount=0}={}) {
+  const face=profile.face||{},hair=profile.hair||{},body=profile.body||{};
+  const stable=[
+    ...(Array.isArray(profile.stable_core_traits)?profile.stable_core_traits:[]),
+    ...(Array.isArray(profile.distinctive_geometry)?profile.distinctive_geometry:[])
+  ].map(x=>String(x||'').trim()).filter(Boolean).slice(0,14);
+  const visualSummary=[
+    face.overall_shape?('лицо: '+face.overall_shape):'',
+    hair.color?('волосы: '+[hair.color,hair.length,hair.texture].filter(Boolean).join(', ')):'',
+    body.build?('телосложение: '+body.build):'',
+    body.posture?('осанка: '+body.posture):''
+  ].filter(Boolean).join('; ');
+  return {
+    kind:'base_actor_identity',
+    role,
+    passport:{
+      fiction_name:'Игрок '+role,
+      age:null,
+      gender:'',
+      story_role:'',
+      archetype:'',
+      biography:'',
+      story_hook:''
+    },
+    actor_identity:{
+      neutral:true,
+      source:'user_photos',
+      source_photo_count:Number(sourcePhotoCount)||0,
+      presentation:'neutral casting reference',
+      wardrobe:'opaque matte flesh-tone full-body unitard',
+      story_role_assigned:false
+    },
+    visual:{
+      general_impression:visualSummary,
+      face:Object.values(face).filter(Boolean).join('; '),
+      hair:Object.values(hair).filter(Boolean).join('; '),
+      eyes:String(face.eyes_visual||''),
+      build:Object.values(body).filter(Boolean).join('; '),
+      posture_motion:String(body.posture||''),
+      wardrobe_style:'neutral opaque matte flesh-tone full-body unitard',
+      signature_markers:stable.slice(0,6),
+      immutable_traits:stable,
+      variable_traits:Array.isArray(profile.variable_traits)?profile.variable_traits:[],
+      unknown_traits:Array.isArray(profile.unknown_traits)?profile.unknown_traits:[]
+    },
+    behavioral_baseline:{relationship_grounded:false},
+    psychology:{},
+    romance:{},
+    literary_portrait:'',
+    visual_dna:{
+      short_visual_summary:visualSummary,
+      stable_core_traits:stable,
+      appearance_anchor_prompt:'',
+      wardrobe_anchor:'opaque matte flesh-tone full-body unitard for neutral identity reference only',
+      mood_anchor:'neutral casting reference; no narrative emotion',
+      negative_prompt:'costume, profession, glamour, dramatic character styling, identity drift',
+      consistency_rules:['same person in every view','preserve observed face geometry','preserve observed body proportions'],
+      do_not_change:stable
+    },
+    story_start:{},
+    builder_notes:{
+      fictionalized:false,
+      based_on_user_references:true,
+      relationship_grounded:false,
+      adult_only:true,
+      identity_only:true,
+      no_story_characterization:true
+    }
+  };
+}
+
 export {buildLock};
