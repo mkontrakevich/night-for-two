@@ -13,7 +13,7 @@ import {
   getVisual,previousVisual,saveVisual,db
 } from './db.js';
 import {createStoryBlueprint,createStoryBible,continueStory,generateAiCharacterReply} from './prose-engine.js';
-import {analyzeIdentity,buildLock} from './identity-engine.js';
+import {analyzeIdentity,buildLock,buildBaseActorCard} from './identity-engine.js';
 import {buildCharacterCard,buildSyntheticCharacter,normalizeCharacterCard} from './character-builder.js';
 import {generateVisual,generateCalibration,generateSyntheticReference,generateCharacterLook,characterLookDefinition} from './visual-engine.js';
 import {fetchRelationshipContext,sliceRelationshipContext,explicitGenderForRole} from './relationship-context.js';
@@ -35,7 +35,8 @@ async function bodyJson(req){
 function hasPersistentHumanIdentity(identity){
   return Boolean(
     identity?.approved &&
-    identity?.character_card?.passport &&
+    identity?.profile &&
+    identity?.identity_lock &&
     !identity?.builder_meta?.synthetic
   );
 }
@@ -110,17 +111,20 @@ function castCharacterSummary(entry){
   };
 }
 function characterSummary(identity,role='A'){
-  const card=normalizeCharacterCard(identity?.character_card||{},role);
   const meta=identity?.builder_meta||{};
+  const identityOnly=Boolean(meta?.identity_only||identity?.character_card?.kind==='base_actor_identity');
+  const raw=identity?.character_card||{};
+  const card=identityOnly?raw:normalizeCharacterCard(raw,role);
   return{
-    ready:Boolean(identity?.approved&&card?.passport&&!meta?.synthetic),
-    name:String(card?.passport?.fiction_name||''),
-    archetype:String(card?.passport?.archetype||''),
-    story_role:String(card?.passport?.story_role||''),
-    gender:String(card?.passport?.gender||''),
+    ready:Boolean(identity?.approved&&identity?.profile&&identity?.identity_lock&&!meta?.synthetic),
+    name:String(identityOnly?(card?.passport?.fiction_name||('Игрок '+role)):(card?.passport?.fiction_name||'')),
+    archetype:String(identityOnly?'Нейтральная актёрская база':(card?.passport?.archetype||'')),
+    story_role:String(identityOnly?'':(card?.passport?.story_role||'')),
+    gender:String(identityOnly?'':(card?.passport?.gender||'')),
     synthetic:Boolean(meta?.synthetic),
+    identity_only:identityOnly,
     control_mode:String(meta?.control_mode||'human'),
-    relationship_grounded:Boolean(card?.behavioral_baseline?.relationship_grounded),
+    relationship_grounded:Boolean(!identityOnly&&card?.behavioral_baseline?.relationship_grounded),
     avatar:String(Array.isArray(identity?.reference_images)&&identity.reference_images[0]||''),
     character_card:card
   };
@@ -150,7 +154,11 @@ function publicState(book,auth,ids={},bookCast=[]){
     role:auth.role,
     identity:{A:Boolean(summaries.A.ready),B:Boolean(summaries.B.ready)},
     characters:summaries,
-    my_character:ids[auth.role]?.character_card?normalizeCharacterCard(ids[auth.role].character_card,auth.role):null
+    my_character:ids[auth.role]?.character_card
+      ?((ids[auth.role]?.builder_meta?.identity_only||ids[auth.role]?.character_card?.kind==='base_actor_identity')
+        ?ids[auth.role].character_card
+        :normalizeCharacterCard(ids[auth.role].character_card,auth.role))
+      :null
   };
   if(!book)return{mode:'home',...base};
   const scene=book.current_scene||{};
@@ -318,35 +326,46 @@ async function main(){
           const humanReady=hasPersistentHumanIdentity(identity);
           let entry;
 
-          if(runtimeRole===auth.role){
-            if(!humanReady)return send(res,409,{ok:false,error:'NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED'});
-            entry={
-              slot_key:runtimeRole,
-              narrative_function:String(slot.narrative_function||slot.description||'').slice(0,500),
-              source_type:'player',
-              source_id:runtimeRole,
-              interactive_role:runtimeRole,
-              display_name:identity.character_card.passport.fiction_name||runtimeRole,
-              character_card:normalizeCharacterCard(identity.character_card,runtimeRole),
-              visual_profile:identity.profile||{},
-              identity_lock:identity.identity_lock||'',
-              reference_images:identity.reference_images||[],
-              control_mode:'human'
-            };
-          }else if(humanReady){
-            entry={
-              slot_key:runtimeRole,
-              narrative_function:String(slot.narrative_function||slot.description||'').slice(0,500),
-              source_type:'player',
-              source_id:runtimeRole,
-              interactive_role:runtimeRole,
-              display_name:identity.character_card.passport.fiction_name||runtimeRole,
-              character_card:normalizeCharacterCard(identity.character_card,runtimeRole),
-              visual_profile:identity.profile||{},
-              identity_lock:identity.identity_lock||'',
-              reference_images:identity.reference_images||[],
-              control_mode:'human'
-            };
+          if(runtimeRole===auth.role||humanReady){
+            if(runtimeRole===auth.role&&!humanReady)return send(res,409,{ok:false,error:'NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED'});
+            if(!humanReady){
+              entry=await createStoryAiCastEntry({
+                runtimeRole,
+                slot,
+                draft,
+                blueprint,
+                counterpartCard:playerCards[auth.role]||{},
+                relationshipContext:sliceRelationshipContext(relationship,runtimeRole),
+                genderHint:explicitGenderForRole(relationship,runtimeRole),
+                generateReference:true
+              });
+            }else{
+              const identityOnly=Boolean(identity?.builder_meta?.identity_only||identity?.character_card?.kind==='base_actor_identity');
+              const storyCard=identityOnly
+                ?await buildCharacterCard({
+                    role:runtimeRole,
+                    visualProfile:identity.profile||{},
+                    userFacts:{},
+                    referenceCount:Array.isArray(identity.reference_images)?identity.reference_images.length:1,
+                    relationshipContext:sliceRelationshipContext(relationship,runtimeRole),
+                    storyContext:storyContextForCast(draft,blueprint),
+                    roleBrief:slot
+                  })
+                :normalizeCharacterCard(identity.character_card,runtimeRole);
+              entry={
+                slot_key:runtimeRole,
+                narrative_function:String(slot.narrative_function||slot.description||'').slice(0,500),
+                source_type:'player',
+                source_id:runtimeRole,
+                interactive_role:runtimeRole,
+                display_name:storyCard?.passport?.fiction_name||('Игрок '+runtimeRole),
+                character_card:storyCard,
+                visual_profile:identity.profile||{},
+                identity_lock:identity.identity_lock||'',
+                reference_images:identity.reference_images||[],
+                control_mode:'human'
+              };
+            }
           }else{
             entry=await createStoryAiCastEntry({
               runtimeRole,
@@ -498,7 +517,7 @@ async function main(){
         const targetRole=String(input.role||auth.role).toUpperCase();
         if(targetRole!==auth.role)return send(res,403,{ok:false,error:'NOVEL2_ONLY_OWN_PHOTO_CHARACTER_CAN_BE_SAVED'});
         const identity=ids[targetRole];
-        if(!identity?.character_card?.passport||identity?.builder_meta?.synthetic){
+        if(!identity?.profile||!identity?.identity_lock||identity?.builder_meta?.synthetic){
           return send(res,409,{ok:false,error:'NOVEL2_PHOTO_CHARACTER_REQUIRED'});
         }
         await approveIdentity(targetRole);
@@ -515,39 +534,30 @@ async function main(){
         const role=auth.role;
         const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,6):[];
         if(refs.length<1)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
-        const userFacts=input.user_facts&&typeof input.user_facts==='object'?input.user_facts:{};
-        const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts});
-        const relationship=await fetchRelationshipContext();
-        const characterCard=await buildCharacterCard({
-          role,
-          visualProfile:analyzed.profile,
-          userFacts,
-          referenceCount:refs.length,
-          relationshipContext:sliceRelationshipContext(relationship,role)
-        });
+        const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts:{}});
+        const baseActorCard=buildBaseActorCard({role,profile:analyzed.profile,sourcePhotoCount:refs.length});
         const builderMeta={
           synthetic:false,
+          identity_only:true,
+          no_story_characterization:true,
           control_mode:'human',
           reference_count:refs.length,
           coverage:analyzed.profile?.reference_coverage||{},
           created_at:new Date().toISOString(),
-          version:'character-builder-1'
+          version:'base-actor-identity-1'
         };
         const saved=await saveIdentity(role,{
           profile:analyzed.profile,
-          characterCard,
+          characterCard:baseActorCard,
           builderMeta,
           identityLock:analyzed.identityLock,
           referenceImages:refs,
           approved:false
         });
-        // Persist the expensive analysis/card before image calibration.
-        // Calibration runs as a separate request so a slow or interrupted image
-        // provider never forces the user to re-upload and re-analyse photos.
         return send(res,200,{
           ok:true,
-          character:characterCard,
-          identity:{role,approved:false,version:saved.version,coverage:builderMeta.coverage},
+          character:baseActorCard,
+          identity:{role,approved:false,version:saved.version,coverage:builderMeta.coverage,identity_only:true},
           calibration_required:true
         });
       }
@@ -557,24 +567,25 @@ async function main(){
         const role=auth.role;
         const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,6):[];
         if(refs.length<1)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
-        const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts:input.user_facts||{}});
-        const relationship=await fetchRelationshipContext();
-        const characterCard=await buildCharacterCard({role,visualProfile:analyzed.profile,userFacts:input.user_facts||{},referenceCount:refs.length,relationshipContext:sliceRelationshipContext(relationship,role)});
+        const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts:{}});
+        const baseActorCard=buildBaseActorCard({role,profile:analyzed.profile,sourcePhotoCount:refs.length});
         const saved=await saveIdentity(role,{
           profile:analyzed.profile,
-          characterCard,
+          characterCard:baseActorCard,
           builderMeta:{
             synthetic:false,
+            identity_only:true,
+            no_story_characterization:true,
             control_mode:'human',
             reference_count:refs.length,
             coverage:analyzed.profile?.reference_coverage||{},
-            version:'character-builder-1'
+            version:'base-actor-identity-1'
           },
           identityLock:analyzed.identityLock,
           referenceImages:refs,
           approved:false
         });
-        return send(res,200,{ok:true,identity:{role,approved:false,version:saved.version,profile:saved.profile},calibration_required:true});
+        return send(res,200,{ok:true,identity:{role,approved:false,version:saved.version,profile:saved.profile,identity_only:true},calibration_required:true});
       }
 
       if(url.pathname==='/novel2/api/identity/register'){
@@ -608,7 +619,16 @@ async function main(){
         const identity=ids[auth.role];
         if(!identity)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_NOT_FOUND'});
         const calibration=await generateCalibration({identity,role:auth.role});
-        return send(res,200,{ok:true,calibration:'data:image/jpeg;base64,'+calibration.base64});
+        await saveCharacterLook({
+          role:auth.role,
+          lookKey:'canonical',
+          title:'Нейтральная карточка актёра',
+          prompt:calibration.prompt,
+          model:calibration.model,
+          imageBase64:calibration.base64,
+          isPrimary:true
+        });
+        return send(res,200,{ok:true,calibration:'data:image/jpeg;base64,'+calibration.base64,identity_only:true});
       }
 
       if(url.pathname==='/novel2/api/visual'){
