@@ -33,13 +33,22 @@ async function requestJson(url,options,{attempts=3,timeoutMs=120000,label='NOVEL
       let json={};
       try{json=raw?JSON.parse(raw):{};}catch{json={error:{message:raw.slice(0,500)}};}
       if(response.ok)return{response,json};
-      const message=String(json?.error?.message||raw||'failed');
+      const message=String(
+        typeof json?.error==='string'?json.error:
+        json?.error?.message||json?.message||raw||'failed'
+      );
+      // A provider-edge 403 is distinct from a model refusal or a JSON error.
+      // Do not retry blocked requests or substitute another restricted model.
+      if(response.status===403&&/access denied by security policy|unsupported_country_region_territory/i.test(message)){
+        throw new Error(label+'_PROVIDER_ACCESS_BLOCKED');
+      }
       if(!transientStatus(response.status)||attempt===attempts){
         return{response,json};
       }
       lastError=new Error(label+'_'+response.status+':'+message);
     }catch(error){
       lastError=error;
+      if(String(error?.message||'').endsWith('_PROVIDER_ACCESS_BLOCKED'))throw error;
       if(attempt===attempts||!transientMessage(error?.message||error))throw new Error(label+'_TRANSPORT_FAILED');
     }finally{
       clearTimeout(timer);
@@ -69,7 +78,7 @@ async function chat(payload) {
       label:'NOVEL2_AI'
     }
   );
-  if (!response.ok) throw new Error('NOVEL2_AI_'+response.status+':'+String(json?.error?.message||'failed'));
+  if (!response.ok) throw new Error('NOVEL2_AI_'+response.status+':'+String(typeof json?.error==='string'?json.error:json?.error?.message||json?.message||'failed'));
   return String(json?.choices?.[0]?.message?.content || '');
 }
 
@@ -157,7 +166,7 @@ export async function imageCompletion({prompt,inputReferences=[]}) {
     ({response,json}=await requestImage(retryPayload));
   }
 
-  if(!response.ok) throw new Error('NOVEL2_IMAGE_'+response.status+':'+String(json?.error?.message||'failed'));
+  if(!response.ok) throw new Error('NOVEL2_IMAGE_'+response.status+':'+String(typeof json?.error==='string'?json.error:json?.error?.message||json?.message||'failed'));
   const first=json?.data?.[0];
   if(!first?.b64_json) throw new Error('NOVEL2_IMAGE_EMPTY');
   return {base64:first.b64_json,model:config.imageModel};
