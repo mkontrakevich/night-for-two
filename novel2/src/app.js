@@ -112,23 +112,27 @@ function castCharacterSummary(entry){
 }
 function characterSummary(identity,role='A'){
   const meta=identity?.builder_meta||{};
-  const identityOnly=Boolean(meta?.identity_only||identity?.character_card?.kind==='base_actor_identity');
-  const raw=identity?.character_card||{};
-  const card=identityOnly?raw:normalizeCharacterCard(raw,role);
-  return{
-    ready:Boolean(identity?.approved&&identity?.profile&&identity?.identity_lock&&!meta?.synthetic),
-    name:String(identityOnly?(card?.passport?.fiction_name||('Игрок '+role)):(card?.passport?.fiction_name||'')),
-    archetype:String(identityOnly?'Нейтральная актёрская база':(card?.passport?.archetype||'')),
-    story_role:String(identityOnly?'':(card?.passport?.story_role||'')),
-    gender:String(identityOnly?'':(card?.passport?.gender||'')),
-    synthetic:Boolean(meta?.synthetic),
-    identity_only:identityOnly,
-    control_mode:String(meta?.control_mode||'human'),
-    relationship_grounded:Boolean(!identityOnly&&card?.behavioral_baseline?.relationship_grounded),
+  const human=Boolean(identity?.profile&&identity?.identity_lock&&!meta.synthetic);
+  // Legacy identities can contain an old fictional biography. Never expose
+  // it as a player profile; identity onboarding displays only observed appearance.
+  const card=human
+    ?buildBaseActorCard({role,profile:identity.profile,sourcePhotoCount:meta.reference_count||identity.reference_images?.length||0})
+    :normalizeCharacterCard(identity?.character_card||{},role);
+  return {
+    ready:Boolean(identity?.approved&&human),
+    name:human?'Карточка актёра':String(card?.passport?.fiction_name||''),
+    archetype:'',
+    story_role:human?'':String(card?.passport?.story_role||''),
+    gender:human?'':String(card?.passport?.gender||''),
+    synthetic:Boolean(meta.synthetic),
+    identity_only:human,
+    control_mode:String(meta.control_mode||'human'),
+    relationship_grounded:false,
     avatar:String(Array.isArray(identity?.reference_images)&&identity.reference_images[0]||''),
     character_card:card
   };
 }
+
 function characterLookPayload(row){
   return{
     key:String(row?.look_key||''),
@@ -154,10 +158,8 @@ function publicState(book,auth,ids={},bookCast=[]){
     role:auth.role,
     identity:{A:Boolean(summaries.A.ready),B:Boolean(summaries.B.ready)},
     characters:summaries,
-    my_character:ids[auth.role]?.character_card
-      ?((ids[auth.role]?.builder_meta?.identity_only||ids[auth.role]?.character_card?.kind==='base_actor_identity')
-        ?ids[auth.role].character_card
-        :normalizeCharacterCard(ids[auth.role].character_card,auth.role))
+    my_character:ids[auth.role]?.profile
+      ?buildBaseActorCard({role:auth.role,profile:ids[auth.role].profile,sourcePhotoCount:ids[auth.role]?.reference_images?.length||0})
       :null
   };
   if(!book)return{mode:'home',...base};
@@ -340,7 +342,7 @@ async function main(){
                 generateReference:true
               });
             }else{
-              const identityOnly=Boolean(identity?.builder_meta?.identity_only||identity?.character_card?.kind==='base_actor_identity');
+              const identityOnly=Boolean(identity?.profile&&identity?.identity_lock&&!identity?.builder_meta?.synthetic);
               const storyCard=identityOnly
                 ?await buildCharacterCard({
                     role:runtimeRole,
