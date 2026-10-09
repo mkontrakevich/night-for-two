@@ -79,6 +79,9 @@ async function api(path,body={},timeoutMs=600000){
    catch{throw new Error(r.ok?'Сервис вернул повреждённый ответ. Повторите операцию.':'Не удалось получить корректный ответ сервера.')}
    if(!r.ok||!j.ok){
      const technical=String(j.error||'');
+     if(/NOVEL2_(AI|IMAGE)_PROVIDER_ACCESS_BLOCKED|Access denied by security policy|unsupported_country_region_territory/i.test(technical)){
+       throw new Error('Сервис AI недоступен с текущего сервера: провайдер ограничил доступ. Данные сохранены; генерация станет доступна после подключения разрешённого AI-провайдера.');
+     }
      if(/JSON|array element|position \d+|NOVEL2_AI_JSON_INVALID|Unexpected token|Expected ['"]/i.test(technical)){
        throw new Error('Не удалось собрать корректную структуру истории. Повторите создание — исходные данные не потеряны.');
      }
