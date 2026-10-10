@@ -67,7 +67,9 @@ function launchActorSheetJob(role,identity,{force=false}={}){
     }catch(error){
       if(actorSheetJobs.get(role)!==job||job.status!=='working')return;
       const message=String(error?.message||'');
-      job.errorCode=/TIMEOUT|Abort/i.test(message)?'GENERATION_TIMEOUT':
+      job.errorCode=/ACTOR_SHEET_REFERENCES_REQUIRED|IMAGE_REFERENCES_MISSING/i.test(message)
+        ?'GENERATION_REFERENCES_MISSING':
+        /TIMEOUT|Abort/i.test(message)?'GENERATION_TIMEOUT':
         /TRANSPORT|fetch failed|ECONNRESET/i.test(message)?'GENERATION_CONNECTION_INTERRUPTED':
         /EDGE_IMAGE|IMAGE_5\d\d|EMPTY_IMAGE/i.test(message)?'GENERATION_PROVIDER_FAILED':
         'GENERATION_FAILED';
