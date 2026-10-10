@@ -72,6 +72,12 @@ jobs:
         run: |
           set -euo pipefail
           base='https://novel2-preview.kontrakevich.workers.dev'
+          service_key="$(printf 'novel2-ai-v1:%s' "$NOVEL2_SERVICE_SECRET" | sha256sum | awk '{print $1}')"
+          probe_code=$(curl --silent --show-error --max-time 12 -o /tmp/novel2-vpc-probe.json -w '%{http_code}' \
+            -X POST -H "x-novel2-service-key: $service_key" "$base/novel2-ai/vpc-probe")
+          echo "NOVEL2_VPC_PROBE_HTTP=$probe_code"
+          cat /tmp/novel2-vpc-probe.json
+          echo
           for attempt in $(seq 1 20); do
             if curl --fail --silent --show-error --max-time 15 "$base/novel2/health" -o /tmp/novel2-health.json; then
               if jq -e '.ok == true and .product == "interactive_novel_2"' /tmp/novel2-health.json >/dev/null; then
@@ -83,7 +89,6 @@ jobs:
           jq -e '.ok == true and .product == "interactive_novel_2"' /tmp/novel2-health.json >/dev/null
           code=$(curl --silent --show-error --max-time 20 -o /tmp/novel2.html -w '%{http_code}' "$base/novel2/")
           test "$code" = 200
-          service_key="$(printf 'novel2-ai-v1:%s' "$NOVEL2_SERVICE_SECRET" | sha256sum | awk '{print $1}')"
           text_payload='{"messages":[{"role":"user","content":"Reply with exactly OK."}],"temperature":0,"max_tokens":24}'
           text_code=$(curl --silent --show-error --max-time 45 -o /tmp/novel2-ai-text.json -w '%{http_code}' \
             -H 'content-type: application/json' \
