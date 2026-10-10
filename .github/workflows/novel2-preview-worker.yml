@@ -67,12 +67,6 @@ jobs:
           PY
       - name: Deploy preview Worker
         run: npx --yes wrangler@4 deploy --config wrangler.deploy.json
-      - name: Bind Novel 2 service secret
-        shell: bash
-        run: |
-          set -euo pipefail
-          service_key="$(printf 'novel2-ai-v1:%s' "$NOVEL2_SERVICE_SECRET" | sha256sum | awk '{print $1}')"
-          printf '%s' "$service_key" | npx --yes wrangler@4 secret put NOVEL2_SERVICE_SECRET --config wrangler.deploy.json
       - name: Verify stable preview
         shell: bash
         run: |
