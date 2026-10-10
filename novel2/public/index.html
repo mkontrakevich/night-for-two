@@ -88,6 +88,7 @@
 .mainMenu .actorCardProgressTrack{margin-top:12px;height:3px}
 .mainMenu .actorCardStage{margin-top:10px}
 .characterDetail .photoIdentityPanel,.characterDetail .photoBuild,.characterDetail .photoResume{border-radius:0}
+.mainMenu .actorCardProgressNote{display:block;margin-top:9px;font-size:10px;line-height:1.35;color:#968482;letter-spacing:0}
 </style>
 </head>
 <body><main id="app"></main>
@@ -171,7 +172,9 @@ function formatWait(seconds=0){
  return String(m).padStart(2,'0')+':'+String(r).padStart(2,'0');
 }
 function actorTaskPhaseLabel(){
- return actorSheetTask.phase==='analysis'?'Анализируем фотографии':'Создаём actor sheet';
+ if(actorSheetTask.phase==='analysis')return 'Анализируем фотографии';
+ if(actorSheetTask.phase==='saving')return 'Сохраняем карточку';
+ return 'Создаём actor sheet';
 }
 function actorTaskStart(role,phase='analysis',maxSeconds=180){
  actorSheetTask={active:true,status:'working',role:String(role||state?.role||'A'),phase,startedAt:Date.now(),phaseStartedAt:Date.now(),maxSeconds,detached:false,error:''};
@@ -312,7 +315,7 @@ function roleCardHtml(role,character={}){
  const name=String(identityOnly||empty||working||readyPending?'Карточка актёра':(character?.name||character?.character_card?.passport?.fiction_name||'Персонаж'));
  const extra=working?'создаётся':failed?'ошибка генерации':readyPending?'готова к проверке':identityOnly?'ожидает карточку':empty?'не создана':character?.source_type==='ai_library'?'готовый персонаж':character?.synthetic?'AI-персонаж':'ваш персонаж';
  const sub=working?actorTaskPhaseLabel():failed?'Повторить без загрузки фото':readyPending?'Открыть и сохранить':identityOnly?'По сохранённым фото':empty?'Создать по фото':(character?.story_role||character?.archetype||character?.character_card?.passport?.story_role||'');
- const progress=working?'<div class="actorCardProgress"><div class="actorCardProgressMeta"><span data-actor-task-phase>'+esc(actorTaskPhaseLabel())+'</span><span data-actor-task-time>'+formatWait(actorTaskSeconds())+'</span></div><div class="actorCardProgressTrack"><b></b></div><div class="actorCardStage"><i class="'+(actorSheetTask.phase==='analysis'?'now':'done')+'"></i><i class="'+(actorSheetTask.phase==='actor_sheet'?'now':'')+'"></i></div></div>':'';
+ const progress=working?'<div class="actorCardProgress"><div class="actorCardProgressMeta"><span data-actor-task-phase>'+esc(actorTaskPhaseLabel())+'</span><span data-actor-task-time>'+formatWait(actorTaskSeconds())+'</span></div><div class="actorCardProgressTrack" aria-label="Идёт обработка. Процент выполнения пока неизвестен"><b></b></div><small class="actorCardProgressNote">Ожидаем сервер · процент не рассчитывается</small></div>':'';
  return '<button type="button" class="playerCard'+(working?' isWorking':'')+(readyPending?' actorReadyPending':'')+(failed?' actorFailed':'')+'" data-character-role="'+esc(role)+'">'+avatarHtml(character?.avatar||'',name)+'<div><small>Игрок '+esc(role)+' · '+esc(extra)+'</small><b>'+esc(name)+'</b><small>'+esc(sub)+'</small></div>'+progress+'</button>';
 }
 function characterForRole(role){
@@ -486,9 +489,11 @@ async function buildCharacterFromDetail(role){
  }finally{if(!actorPollActive)busy=false}
 }
 function actorJobErrorText(code=''){
- if(code==='GENERATION_CONNECTION_INTERRUPTED')return 'Ответ генератора не получен. Проверьте подключение.';
+ if(code==='GENERATION_TIMEOUT')return 'Генератор превысил лимит времени. Повторить можно по сохранённым фотографиям.';
+ if(code==='GENERATION_CONNECTION_INTERRUPTED')return 'Соединение с генератором прервалось. Фотографии сохранены.';
  if(code==='GENERATION_PROVIDER_FAILED')return 'Сервис изображений не смог завершить генерацию.';
- return 'Генерация не завершилась.';
+ if(code==='GENERATION_RESULT_MISSING')return 'Изображение не дошло до приложения. Повторите проверку.';
+ return 'Генерация не завершилась. Фотографии сохранены.';
 }
 async function watchActorSheet(role){
  if(actorPollActive)return;
@@ -503,6 +508,11 @@ async function watchActorSheet(role){
      const task=j?.job||{};
      if(task.status==='working'){
        if(!actorSheetTask.active){actorTaskStart(role,'actor_sheet',600);actorSheetTask.detached=true;if(menuMode)renderMainMenu()}
+       if(task.phase&&task.phase!==actorSheetTask.phase){
+         actorSheetTask.phase=task.phase;
+         updateActorProgressUi();
+         if(menuMode)renderMainMenu();
+       }
        continue;
      }
      if(task.status==='ready'){
