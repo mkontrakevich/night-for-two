@@ -57,8 +57,7 @@ async function handleAi(request,env,incoming){
     const input={
       messages,
       temperature:Number.isFinite(Number(body.temperature))?Math.max(0,Math.min(2,Number(body.temperature))):0.7,
-      max_completion_tokens:Math.max(32,Math.min(8000,Number(body.max_tokens||body.max_completion_tokens||5000))),
-      reasoning_effort:'none'
+      max_completion_tokens:Math.max(32,Math.min(8000,Number(body.max_tokens||body.max_completion_tokens||5000)))
     };
     if(body.json_mode)input.response_format={type:'json_object'};
     try{
