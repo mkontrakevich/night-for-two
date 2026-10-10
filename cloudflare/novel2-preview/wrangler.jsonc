@@ -15,5 +15,12 @@
   },
   "ai": {
     "binding": "AI"
-  }
+  },
+  "workflows": [
+    {
+      "name": "novel2-actor-sheet",
+      "binding": "ACTOR_SHEET_WORKFLOW",
+      "class_name": "ActorSheetWorkflow"
+    }
+  ]
 }
