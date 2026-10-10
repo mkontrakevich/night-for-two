@@ -26,6 +26,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_TUNNEL_ID: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
+      NOVEL2_SERVICE_SECRET: ${{ secrets.TELEGRAM_BOT_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -35,7 +36,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for key in CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN CLOUDFLARE_TUNNEL_ID; do
+          for key in CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN CLOUDFLARE_TUNNEL_ID NOVEL2_SERVICE_SECRET; do
             test -n "${!key}" || { echo "::error::MISSING_$key"; exit 1; }
           done
           python - <<'PY'
@@ -66,6 +67,11 @@ jobs:
           PY
       - name: Deploy preview Worker
         run: npx --yes wrangler@4 deploy --config wrangler.deploy.json
+      - name: Bind Novel 2 service secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$NOVEL2_SERVICE_SECRET" | npx --yes wrangler@4 secret put NOVEL2_SERVICE_SECRET --config wrangler.deploy.json
       - name: Verify stable preview
         shell: bash
         run: |
@@ -82,4 +88,21 @@ jobs:
           jq -e '.ok == true and .product == "interactive_novel_2"' /tmp/novel2-health.json >/dev/null
           code=$(curl --silent --show-error --max-time 20 -o /tmp/novel2.html -w '%{http_code}' "$base/novel2/")
           test "$code" = 200
-          echo "NOVEL2_PREVIEW_READY=$base/novel2/"
+          service_key="$(printf 'novel2-ai-v1:%s' "$NOVEL2_SERVICE_SECRET" | sha256sum | awk '{print $1}')"
+          text_payload='{"messages":[{"role":"user","content":"Reply with exactly OK."}],"temperature":0,"max_tokens":24}'
+          curl --fail --silent --show-error --max-time 45 \
+            -H 'content-type: application/json' \
+            -H "x-novel2-service-key: $service_key" \
+            --data "$text_payload" \
+            "$base/novel2-ai/text" | tee /tmp/novel2-ai-text.json
+          jq -e '.ok == true and (.content | type == "string") and (.content | length > 0)' /tmp/novel2-ai-text.json >/dev/null
+
+          image_payload='{"prompt":"A plain neutral warm gray studio color swatch, no text, no people","width":256,"height":256}'
+          curl --fail --silent --show-error --max-time 90 \
+            -H 'content-type: application/json' \
+            -H "x-novel2-service-key: $service_key" \
+            --data "$image_payload" \
+            "$base/novel2-ai/image" | tee /tmp/novel2-ai-image.json >/dev/null
+          jq -e '.ok == true and (.image | type == "string") and (.image | length > 100)' /tmp/novel2-ai-image.json >/dev/null
+          echo "NOVEL2_WORKERS_AI_READY=true"
+                    echo "NOVEL2_PREVIEW_READY=$base/novel2/"
