@@ -117,6 +117,8 @@ export async function generateVisual({scene, identities={}, cast=[], previousVis
 
 export async function generateCalibration({identity,role}) {
   if(!identity?.identity_lock) throw new Error('NOVEL2_IDENTITY_NOT_FOUND');
+  const references=refsOf(identity);
+  if(!references.length)throw new Error('NOVEL2_ACTOR_SHEET_REFERENCES_REQUIRED');
   const prompt=[
     `Create a neutral casting identity sheet for PLAYER_${role}, the SAME adult person reconstructed only from the supplied reference images.`,
     'Purpose: establish visual identity only. Do NOT invent biography, profession, social status, personality, role, costume or story context.',
@@ -126,16 +128,16 @@ export async function generateCalibration({identity,role}) {
     'Simple warm gray studio background, even neutral soft light, natural skin texture, no dramatic lighting, no beauty filter, no glamour retouching.',
     'Use 65–85 mm portrait perspective for face views and distortion-free natural perspective for full body.',
     identity.identity_lock,
-    'The SAME person must remain consistent in all six panels. Preserve face geometry, hairline, apparent age, build, limb proportions and posture from the references. Do not slim, enlarge, beautify or idealize the body.',
+    'The SAME person must remain consistent in all FOUR panels. Preserve face geometry, hairline, apparent age, build, limb proportions and posture from the references. Do not slim, enlarge, beautify or idealize the body.',
     'If a body trait is not supported by the references, keep it visually conservative and non-specific rather than inventing an extreme feature.',
     'No text labels, no logos, no extra people, no narrative environment.'
   ].join('\n');
-  // A six-panel actor contact sheet stays legible at this resolution, while
+  // A four-panel actor contact sheet stays legible at this resolution, while
   // halving inference pixels compared with the former 1024x1792 render.
   // This override applies only to onboarding; cinematic scene images retain
   // their own production settings.
   const result=await imageCompletion({
-    prompt,inputReferences:refsOf(identity),width:832,height:1344,timeoutMs:180000
+    prompt,inputReferences:references,width:832,height:1344,timeoutMs:180000
   });
   return {...result,prompt};
 }
