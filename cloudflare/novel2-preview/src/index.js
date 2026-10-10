@@ -1,3 +1,75 @@
+import {WorkflowEntrypoint} from 'cloudflare:workers';
+
+export class ActorSheetWorkflow extends WorkflowEntrypoint {
+  async run(event,step){
+    const role=String(event?.payload?.role||'');
+    const jobId=String(event?.payload?.job_id||'');
+    if(!['A','B'].includes(role)||!jobId)return{status:'invalid'};
+    return await step.do('create and persist actor sheet',{
+      // A chargeable AI render is never repeated automatically.
+      retries:{limit:0,delay:'5 seconds',backoff:'constant'},
+      timeout:'5 minutes'
+    },async()=>{
+      const env=this.env;
+      const origin='http://'+env.NOVEL2_ORIGIN_HOST+':'+(env.NOVEL2_ORIGIN_PORT||'5690');
+      const key=String(env.NOVEL2_SERVICE_SECRET||'');
+      const call=async(route,payload)=>{
+        const res=await env.NOVEL2_VPC.fetch(new Request(origin+route,{
+          method:'POST',headers:{'content-type':'application/json','x-novel2-service-key':key},
+          body:JSON.stringify(payload)
+        }));
+        const json=await res.json();
+        if(!res.ok||!json?.ok)throw new Error('NOVEL2_ACTOR_VPC_'+res.status);
+        return json;
+      };
+      let success=false;
+      try{
+        const prepared=await call('/novel2/api/identity/calibrate/work',{role,job_id:jobId});
+        const work=prepared.work||{};
+        const refs=Array.isArray(work.refs)?work.refs.slice(0,4):[];
+        if(!refs.length)throw new Error('NOVEL2_ACTOR_NO_REFERENCES');
+        const form=new FormData();
+        form.append('prompt',String(work.prompt||''));
+        form.append('width',String(work.width||832));
+        form.append('height',String(work.height||1344));
+        for(let i=0;i<refs.length;i++){
+          const blob=dataUrlBlob(refs[i]);
+          if(!blob)throw new Error('NOVEL2_ACTOR_REFERENCE_INVALID');
+          form.append('input_image_'+i,blob,'reference-'+i+'.jpg');
+        }
+        const encoded=new Response(form);
+        const ai=await env.AI.run(AI_IMAGE_MODEL,{
+          multipart:{body:encoded.body,contentType:encoded.headers.get('content-type')||'multipart/form-data'}
+        });
+        const image=String(ai?.image||'');
+        if(image.length<1000)throw new Error('NOVEL2_ACTOR_IMAGE_EMPTY');
+        const payload={role,job_id:jobId,status:'ready',
+          image,model:AI_IMAGE_MODEL,prompt:String(work.prompt||'')};
+        // Transient origin failures do not cause repeat AI inference.
+        for(let attempt=0;attempt<4;attempt++){
+          try{
+            await call('/novel2/api/identity/calibrate/complete',payload);
+            success=true;
+            break;
+          }catch(error){
+            if(attempt===3)throw error;
+            await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
+          }
+        }
+        return{status:success?'ready':'failed'};
+      }catch(error){
+        if(!success){
+          try{await call('/novel2/api/identity/calibrate/complete',
+            {role,job_id:jobId,status:'failed'})}catch{}
+        }
+        // Do not log source photos, prompts, provider responses or keys.
+        console.error('NOVEL2_ACTOR_WORKFLOW_FAILED',String(error?.message||'FAILED').slice(0,80));
+        return{status:'failed'};
+      }
+    });
+  }
+}
+
 function json(status,payload,extraHeaders={}){
   return Response.json(payload,{status,headers:{'cache-control':'no-store','x-novel2-preview':'1',...extraHeaders}});
 }
@@ -288,6 +360,25 @@ async function beginActorSheetAtEdge(request,env,host,port){
   }catch(error){return json(502,{ok:false,error:'NOVEL2_ACTOR_PREPARE_TRANSPORT_FAILED'});}
   const work=prepared.work;
   if(!work)return json(200,{ok:true,job:prepared.job});
+  if(env.ACTOR_SHEET_WORKFLOW){
+    try{
+      await env.ACTOR_SHEET_WORKFLOW.create({
+        id:String(work.job_id),params:{role:String(work.role),job_id:String(work.job_id)}
+      });
+      // No long-lived browser or Windows HTTP connection. Status is polled
+      // from the origin after durable Cloudflare execution and persistence.
+      return json(200,{ok:true,job:prepared.job});
+    }catch(error){
+      try{
+        await env.NOVEL2_VPC.fetch(new Request(origin+'complete',{
+          method:'POST',headers:{'content-type':'application/json',
+            'x-novel2-service-key':String(env.NOVEL2_SERVICE_SECRET)},
+          body:JSON.stringify({role:work.role,job_id:work.job_id,status:'failed'})
+        }));
+      }catch{}
+      return json(503,{ok:false,error:'NOVEL2_ACTOR_WORKFLOW_START_FAILED'});
+    }
+  }
   const submitResult=async(payload)=>{
     const response=await env.NOVEL2_VPC.fetch(new Request(origin+'complete',{
       method:'POST',
