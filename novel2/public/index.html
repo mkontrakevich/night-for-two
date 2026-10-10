@@ -474,7 +474,7 @@ async function buildCharacterFromDetail(role){
    actorTaskPhase('actor_sheet',600);
    if(actorSheetTask.detached){menuMode=true;renderMainMenu()}else{menuMode=false;loading('Создаём нейтральную actor sheet…','image',600,true)}
    try{
-     const started=await api('identity/calibrate/start',{},20000);
+     const started=await api('identity/calibrate/start',{},180000);
      const job=started?.job||{};
      if(job.status==='working'&&job.started_at)actorSheetTask.phaseStartedAt=Number(job.started_at);
      actorSheetTask.maxSeconds=600;
@@ -578,7 +578,7 @@ async function continueCalibrationFromDetail(role){
  busy=true;characterDraft=state?.my_character||characterDraft;menuMode=false;characterDetailRole='';
  loading('Создаём нейтральную actor sheet…','image',600,true);
  try{
-   const j=await api('identity/calibrate/start',{},20000);
+   const j=await api('identity/calibrate/start',{},180000);
    const job=j?.job||{};
    if(job.status==='working'&&job.started_at)actorSheetTask.phaseStartedAt=Number(job.started_at);
    void watchActorSheet(role);
