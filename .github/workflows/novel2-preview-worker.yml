@@ -71,7 +71,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s' "$NOVEL2_SERVICE_SECRET" | npx --yes wrangler@4 secret put NOVEL2_SERVICE_SECRET --config wrangler.deploy.json
+          service_key="$(printf 'novel2-ai-v1:%s' "$NOVEL2_SERVICE_SECRET" | sha256sum | awk '{print $1}')"
+          printf '%s' "$service_key" | npx --yes wrangler@4 secret put NOVEL2_SERVICE_SECRET --config wrangler.deploy.json
       - name: Verify stable preview
         shell: bash
         run: |
