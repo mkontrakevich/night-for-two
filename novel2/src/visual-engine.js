@@ -120,7 +120,7 @@ export async function generateCalibration({identity,role}) {
   const prompt=[
     `Create a neutral casting identity sheet for PLAYER_${role}, the SAME adult person reconstructed only from the supplied reference images.`,
     'Purpose: establish visual identity only. Do NOT invent biography, profession, social status, personality, role, costume or story context.',
-    'Six clean panels in one vertical casting contact sheet: frontal head-and-shoulders portrait, three-quarter portrait, profile portrait, standing full body front, standing full body three-quarter, neutral close portrait.',
+    'Exactly FOUR clean panels on one vertical contact sheet: top row two LARGE matching-scale facial portraits (frontal and strict side profile); bottom row two full-height views of the same actor (front and back). Keep the entire head and feet visible; do not crop any panel. Equal lighting, same person and physical proportions across all views.',
     'WARDROBE: one simple OPAQUE MATTE FLESH-TONE FULL-BODY UNITARD / ACTOR BODYSUIT. It must clearly read as clothing, not nudity. No underwear styling, no transparency, no cleavage emphasis, no erotic posing.',
     'Barefoot or neutral studio footwear only. No jewelry, accessories, props, costume, makeup styling, profession cues or fashion styling.',
     'Simple warm gray studio background, even neutral soft light, natural skin texture, no dramatic lighting, no beauty filter, no glamour retouching.',
