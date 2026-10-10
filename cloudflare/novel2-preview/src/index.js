@@ -3,7 +3,7 @@ function json(status,payload,extraHeaders={}){
 }
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const AI_TEXT_MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
-const AI_VISION_MODEL='@cf/google/gemma-4-26b-a4b-it';
+const AI_VISION_MODEL='@cf/meta/llama-4-scout-17b-16e-instruct';
 const AI_IMAGE_MODEL='@cf/black-forest-labs/flux-2-klein-4b';
 
 function bytesToHex(bytes){
@@ -89,7 +89,7 @@ async function handleAi(request,env,incoming){
           {role:'user',content}
         ],
         temperature:Number.isFinite(Number(body.temperature))?Math.max(0,Math.min(2,Number(body.temperature))):0.1,
-        max_completion_tokens:Math.max(64,Math.min(5000,Number(body.max_tokens||2600)))
+        max_tokens:Math.max(64,Math.min(5000,Number(body.max_tokens||2600)))
       });
       const output=workerTextContent(result);
       if(!output)return json(502,{ok:false,error:'NOVEL2_AI_EDGE_EMPTY_VISION',model:AI_VISION_MODEL});
