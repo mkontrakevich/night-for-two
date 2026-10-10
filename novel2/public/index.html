@@ -89,6 +89,7 @@
 .mainMenu .actorCardStage{margin-top:10px}
 .characterDetail .photoIdentityPanel,.characterDetail .photoBuild,.characterDetail .photoResume{border-radius:0}
 .mainMenu .actorCardProgressNote{display:block;margin-top:9px;font-size:10px;line-height:1.35;color:#968482;letter-spacing:0}
+.actorFailure .actorDiag{display:block;margin-top:10px;color:#bca7a3;font-size:10px;letter-spacing:.07em}
 </style>
 </head>
 <body><main id="app"></main>
@@ -419,7 +420,9 @@ function renderCharacterDetail(role){
    const status=actorSheetReady&&character?.ready?'ГОТОВА':actorSheetTask.status==='failed'&&String(actorSheetTask.role)===role?'ОШИБКА ГЕНЕРАЦИИ':hasIdentity?'НУЖНА КАРТОЧКА':'НЕ СОЗДАНА';
    const looks=characterLooksHtml(role,actorSheetReady,false,true);
    const uploadFields='<div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Портреты и, по возможности, полный рост. Фотографии используются только как источник внешности.</div></div><button class="photoBuild" id="characterPhotoBuild" type="button">'+(hasIdentity?'Заменить фото и пересобрать':'Создать карточку актёра')+'</button>';
-   const failedNotice=actorSheetTask.status==='failed'&&String(actorSheetTask.role)===role?'<div class="actorFailure" role="alert"><strong>Карточка актёра не создана</strong><p>Внешность по фотографиям сохранена. Можно повторить генерацию без повторной загрузки файлов.</p></div>':'';
+   const failedNotice=actorSheetTask.status==='failed'&&String(actorSheetTask.role)===role
+     ?'<div class="actorFailure" role="alert"><strong>Карточка актёра не создана</strong><p>'+esc(actorSheetTask.error||'Генерация прервана.')+'</p><p>Внешность сохранена. Повторно загружать фотографии не нужно.</p>'+(actorSheetTask.errorCode?'<small class="actorDiag">Код: '+esc(actorSheetTask.errorCode)+'</small>':'')+'</div>'
+     :'';
    let photoPanel='';
    if(!hasIdentity){
      photoPanel='<div class="photoIdentityPanel"><div class="kicker">ACTOR CARD</div><h3>Создать карточку актёра</h3>'+uploadFields+'</div>';
@@ -526,7 +529,9 @@ async function watchActorSheet(role){
        if(actorSheetTask.detached||menuMode){menuMode=true;renderMainMenu()}else{menuMode=false;render()}
        return;
      }
-     actorTaskFinish('failed',actorJobErrorText(task.error_code));
+     const code=String(task.error_code||'GENERATION_FAILED').replace(/[^A-Z0-9_]/g,'').slice(0,64);
+     actorTaskFinish('failed',actorJobErrorText(code));
+     actorSheetTask.errorCode=code;
      try{state=(await api('state',{},15000)).state||state}catch{}
      menuMode=true;characterDetailRole=role;renderCharacterDetail(role);window.scrollTo(0,0);
      return;
@@ -553,6 +558,10 @@ async function restoreActorSheetJob(){
      calibrationImage=String(job.calibration);
      characterDraft=state?.my_character||characterDraft;
      actorSheetTask.role=role;actorTaskFinish('ready');
+     if(menuMode)renderMainMenu();
+   }else if(job.status==='failed'){
+     const code=String(job.error_code||'GENERATION_FAILED').replace(/[^A-Z0-9_]/g,'').slice(0,64);
+     actorSheetTask.role=role;actorTaskFinish('failed',actorJobErrorText(code));actorSheetTask.errorCode=code;
      if(menuMode)renderMainMenu();
    }
  }catch(error){if(!isCancelled(error))console.warn('Actor status unavailable')}
