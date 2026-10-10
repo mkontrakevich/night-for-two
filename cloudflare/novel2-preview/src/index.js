@@ -45,6 +45,27 @@ async function handleAi(request,env,incoming){
   if(request.method!=='POST')return json(405,{ok:false,error:'METHOD_NOT_ALLOWED'});
   if(!await aiAuthorized(request,env))return json(401,{ok:false,error:'NOVEL2_AI_EDGE_UNAUTHORIZED'});
   if(!env.AI||typeof env.AI.run!=='function')return json(503,{ok:false,error:'NOVEL2_AI_BINDING_MISSING'});
+  if(incoming.pathname==='/novel2-ai/vpc-probe'){
+    if(!env.NOVEL2_VPC||typeof env.NOVEL2_VPC.fetch!=='function')return json(503,{ok:false,error:'NOVEL2_VPC_BINDING_MISSING'});
+    const host=env.NOVEL2_ORIGIN_HOST;
+    if(!host)return json(503,{ok:false,error:'NOVEL2_ORIGIN_HOST_MISSING'});
+    async function probe(port,path){
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort('probe timeout'),4000);
+      try{
+        const response=await env.NOVEL2_VPC.fetch(new Request(`http://${host}:${port}${path}`,{signal:controller.signal}));
+        return{ok:response.ok,status:response.status};
+      }catch(error){
+        return{ok:false,status:0,error:String(error?.message||error||'failed').slice(0,100)};
+      }finally{clearTimeout(timer)}
+    }
+    const [night,novel2]=await Promise.all([
+      probe('5683','/night/health'),
+      probe(env.NOVEL2_ORIGIN_PORT||'5690','/novel2/health')
+    ]);
+    return json(200,{ok:true,night,novel2});
+  }
+
 
   if(incoming.pathname==='/novel2-ai/text'){
     let body={};
