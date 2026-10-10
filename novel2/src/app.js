@@ -69,10 +69,16 @@ function launchActorSheetJob(role,identity,{force=false}={}){
       const message=String(error?.message||'');
       job.errorCode=/ACTOR_SHEET_REFERENCES_REQUIRED|IMAGE_REFERENCES_MISSING/i.test(message)
         ?'GENERATION_REFERENCES_MISSING':
+        /NOVEL2_IMAGE_402|insufficient.credits|payment.required/i.test(message)
+        ?'GENERATION_CREDITS_EXHAUSTED':
+        /NOVEL2_IMAGE_429|rate.limit/i.test(message)
+        ?'GENERATION_RATE_LIMIT':
+        /NOVEL2_IMAGE_403|PROVIDER_ACCESS_BLOCKED/i.test(message)
+        ?'GENERATION_PROVIDER_ACCESS_BLOCKED':
         /TIMEOUT|Abort/i.test(message)?'GENERATION_TIMEOUT':
         /TRANSPORT|fetch failed|ECONNRESET/i.test(message)?'GENERATION_CONNECTION_INTERRUPTED':
-        /EDGE_IMAGE|IMAGE_5\d\d|EMPTY_IMAGE/i.test(message)?'GENERATION_PROVIDER_FAILED':
-        'GENERATION_FAILED';
+        /EDGE_IMAGE|NOVEL2_IMAGE_[45][0-9][0-9]|EMPTY_IMAGE|IMAGE_EMPTY/i.test(message)
+        ?'GENERATION_PROVIDER_FAILED':'GENERATION_FAILED';
       job.status='failed';
       console.error('NOVEL2_ACTOR_SHEET_FAILED',{
         error_code:job.errorCode,duration_ms:Date.now()-job.startedAt
