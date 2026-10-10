@@ -145,7 +145,7 @@ async function handleAi(request,env,incoming){
       return json(422,{ok:false,error:'NOVEL2_AI_EDGE_REFERENCE_INVALID',accepted:refIndex,expected:refs.length});
     }
     const encoded=new Response(form);
-    try{
+    const infer=async()=>{
       const result=await env.AI.run(AI_IMAGE_MODEL,{
         multipart:{
           body:encoded.body,
@@ -153,10 +153,49 @@ async function handleAi(request,env,incoming){
         }
       });
       const image=String(result?.image||'');
-      if(!image)return json(502,{ok:false,error:'NOVEL2_AI_EDGE_EMPTY_IMAGE',model:AI_IMAGE_MODEL});
-      return json(200,{ok:true,image,model:AI_IMAGE_MODEL});
+      if(!image)throw new Error('NOVEL2_AI_EDGE_EMPTY_IMAGE');
+      return{ok:true,image,model:AI_IMAGE_MODEL};
+    };
+    if(body.keepalive===true){
+      // Edge-to-origin image generation previously terminated idle connections
+      // after ~22s. Heartbeat whitespace is legal before a JSON document and
+      // keeps the HTTP body active while AI inference executes. No second render.
+      const encoder=new TextEncoder();
+      const stream=new ReadableStream({
+        start(controller){
+          let finished=false;
+          const heartbeat=()=>{
+            if(finished)return;
+            try{controller.enqueue(encoder.encode(' '.repeat(2048)))}catch{}
+          };
+          heartbeat();
+          const timer=setInterval(heartbeat,4000);
+          (async()=>{
+            try{
+              const result=await infer();
+              if(!finished)controller.enqueue(encoder.encode(JSON.stringify(result)));
+            }catch(error){
+              const result={ok:false,error:'NOVEL2_AI_EDGE_IMAGE_FAILED',model:AI_IMAGE_MODEL};
+              try{if(!finished)controller.enqueue(encoder.encode(JSON.stringify(result)))}catch{}
+            }finally{
+              finished=true;clearInterval(timer);
+              try{controller.close()}catch{}
+            }
+          })();
+        }
+      });
+      return new Response(stream,{status:200,headers:{
+        'content-type':'application/json; charset=utf-8',
+        'cache-control':'no-store','x-novel2-image-keepalive':'1',
+        'x-accel-buffering':'no'
+      }});
+    }
+    try{
+      const result=await infer();
+      return json(200,result);
     }catch(error){
-      return json(502,{ok:false,error:'NOVEL2_AI_EDGE_IMAGE_FAILED',detail:String(error?.message||error).slice(0,220),model:AI_IMAGE_MODEL});
+      return json(502,{ok:false,error:'NOVEL2_AI_EDGE_IMAGE_FAILED',
+        detail:String(error?.message||error).slice(0,220),model:AI_IMAGE_MODEL});
     }
   }
 
