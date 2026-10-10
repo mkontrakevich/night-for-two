@@ -130,7 +130,13 @@ export async function generateCalibration({identity,role}) {
     'If a body trait is not supported by the references, keep it visually conservative and non-specific rather than inventing an extreme feature.',
     'No text labels, no logos, no extra people, no narrative environment.'
   ].join('\n');
-  const result=await imageCompletion({prompt,inputReferences:refsOf(identity)});
+  // A six-panel actor contact sheet stays legible at this resolution, while
+  // halving inference pixels compared with the former 1024x1792 render.
+  // This override applies only to onboarding; cinematic scene images retain
+  // their own production settings.
+  const result=await imageCompletion({
+    prompt,inputReferences:refsOf(identity),width:832,height:1344,timeoutMs:180000
+  });
   return {...result,prompt};
 }
 
