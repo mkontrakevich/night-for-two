@@ -197,7 +197,7 @@ export async function visionJsonCompletion({system,text,images=[],temperature=.1
 
 export async function imageCompletion({prompt,inputReferences=[]}) {
   if(config.edgeAiUrl){
-    const refs=await resizeReferences(inputReferences,512,4);
+    const refs=await resizeReferences(inputReferences,480,4);
     const json=await edgeJson('image',{
       prompt:String(prompt||''),
       input_references:refs,
