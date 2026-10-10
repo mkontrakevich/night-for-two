@@ -81,6 +81,13 @@
 .actorFailure{margin:12px 0 16px;padding:16px 17px;border-left:2px solid #bf6875;background:linear-gradient(110deg,rgba(129,31,49,.22),rgba(255,255,255,.03));color:#eee5e0}
 .actorFailure strong{font:500 18px/1.2 Georgia,serif}
 .actorFailure p{margin:7px 0 0;color:#c3afaa;font-size:13px;line-height:1.5}
+.mainMenu .playerCard.isWorking:after{display:none}
+.mainMenu .playerCard.actorFailed:after{content:"Повторить →";color:#dcb2b6}
+.mainMenu .actorCardProgress{position:relative;padding:12px 0 6px;margin-top:10px}
+.mainMenu .actorCardProgressMeta{font-size:10px;line-height:1.4}
+.mainMenu .actorCardProgressTrack{margin-top:12px;height:3px}
+.mainMenu .actorCardStage{margin-top:10px}
+.characterDetail .photoIdentityPanel,.characterDetail .photoBuild,.characterDetail .photoResume{border-radius:0}
 </style>
 </head>
 <body><main id="app"></main>
@@ -216,7 +223,7 @@ function loading(text='Продолжаем историю…',kind='generic',ma
    const elapsed=Math.floor((Date.now()-started)/1000);
    const exceeded=elapsed>=maxSeconds;
    const background=backgroundActor&&actorSheetTask.active;
-   app.innerHTML='<section class="loading"><div class="processCard"><div class="kicker">'+esc(label)+'</div><h2 class="processTitle">'+esc(text)+'</h2><div class="processStatus">Время ожидания · '+formatWait(Math.min(elapsed,maxSeconds))+' / '+formatWait(maxSeconds)+'</div><div class="processTrack" aria-label="Операция выполняется"><b></b></div><p class="processMeta">'+(exceeded?'Лимит ожидания достигнут. Запрос завершается автоматически.':background?'Можно выйти в меню — создание карточки продолжится в фоне.':'Операция выполняется. Таймер показывает реальное время ожидания.')+'</p><button class="processCancel" id="cancelToMenu" type="button">'+(background?'В главное меню · продолжить в фоне':'В главное меню')+'</button></div></section>';
+   app.innerHTML='<section class="loading"><div class="processCard"><div class="kicker">'+esc(label)+'</div><h2 class="processTitle">'+esc(text)+'</h2><div class="processStatus">Прошло времени · '+formatWait(elapsed)+'</div><div class="processTrack" aria-label="Операция выполняется"><b></b></div><p class="processMeta">'+(exceeded?'Обработка длится дольше ожидаемого. Проверяем статус сервера.':background?'Можно вернуться в меню, пока сервер создаёт карточку.':'Операция выполняется. Индикатор не показывает процент готовности.')+'</p><button class="processCancel" id="cancelToMenu" type="button">'+(background?'В главное меню · продолжить в фоне':'В главное меню')+'</button></div></section>';
    const cancel=document.getElementById('cancelToMenu');if(cancel)cancel.onclick=background?actorTaskToMenu:cancelRequestsToMenu;
  };
  paint();processTimer=setInterval(paint,1000);
@@ -298,13 +305,14 @@ function roleCardHtml(role,character={}){
  const taskForRole=String(actorSheetTask.role||'')===String(role);
  const working=Boolean(taskForRole&&actorSheetTask.active);
  const readyPending=Boolean(taskForRole&&actorSheetTask.status==='ready'&&calibrationImage);
+ const failed=Boolean(taskForRole&&actorSheetTask.status==='failed');
  const identityOnly=Boolean(character?.identity_only||isBaseActorCard(character?.character_card));
  const empty=!character?.ready&&!character?.character_card;
  const name=String(identityOnly||empty||working||readyPending?'Карточка актёра':(character?.name||character?.character_card?.passport?.fiction_name||'Персонаж'));
- const extra=working?'создаётся':readyPending?'готова к проверке':identityOnly?'готова':empty?'не создана':character?.source_type==='ai_library'?'готовый персонаж':character?.synthetic?'AI-персонаж':'ваш персонаж';
- const sub=working?actorTaskPhaseLabel():readyPending?'Открыть и сохранить':identityOnly?'По фотографиям':empty?'Создать по фото':(character?.story_role||character?.archetype||character?.character_card?.passport?.story_role||'');
+ const extra=working?'создаётся':failed?'ошибка генерации':readyPending?'готова к проверке':identityOnly?'ожидает карточку':empty?'не создана':character?.source_type==='ai_library'?'готовый персонаж':character?.synthetic?'AI-персонаж':'ваш персонаж';
+ const sub=working?actorTaskPhaseLabel():failed?'Повторить без загрузки фото':readyPending?'Открыть и сохранить':identityOnly?'По сохранённым фото':empty?'Создать по фото':(character?.story_role||character?.archetype||character?.character_card?.passport?.story_role||'');
  const progress=working?'<div class="actorCardProgress"><div class="actorCardProgressMeta"><span data-actor-task-phase>'+esc(actorTaskPhaseLabel())+'</span><span data-actor-task-time>'+formatWait(actorTaskSeconds())+'</span></div><div class="actorCardProgressTrack"><b></b></div><div class="actorCardStage"><i class="'+(actorSheetTask.phase==='analysis'?'now':'done')+'"></i><i class="'+(actorSheetTask.phase==='actor_sheet'?'now':'')+'"></i></div></div>':'';
- return '<button type="button" class="playerCard'+(working?' isWorking':'')+(readyPending?' actorReadyPending':'')+'" data-character-role="'+esc(role)+'">'+avatarHtml(character?.avatar||'',name)+'<div><small>Игрок '+esc(role)+' · '+esc(extra)+'</small><b>'+esc(name)+'</b><small>'+esc(sub)+'</small></div>'+progress+'</button>';
+ return '<button type="button" class="playerCard'+(working?' isWorking':'')+(readyPending?' actorReadyPending':'')+(failed?' actorFailed':'')+'" data-character-role="'+esc(role)+'">'+avatarHtml(character?.avatar||'',name)+'<div><small>Игрок '+esc(role)+' · '+esc(extra)+'</small><b>'+esc(name)+'</b><small>'+esc(sub)+'</small></div>'+progress+'</button>';
 }
 function characterForRole(role){
  const active=state?.mode==='reader'&&state?.book;
@@ -456,8 +464,8 @@ async function buildCharacterFromDetail(role){
    characterDraft=j.character||null;
    characterLooks[role]=[];characterLooksLoaded[role]=false;
    forceBuilder=false;characterDetailRole='';
-   actorTaskPhase('actor_sheet',180);
-   if(actorSheetTask.detached){menuMode=true;renderMainMenu()}else{menuMode=false;loading('Создаём нейтральную actor sheet…','image',180,true)}
+   actorTaskPhase('actor_sheet',600);
+   if(actorSheetTask.detached){menuMode=true;renderMainMenu()}else{menuMode=false;loading('Создаём нейтральную actor sheet…','image',600,true)}
    try{
      const started=await api('identity/calibrate/start',{},20000);
      const job=started?.job||{};
