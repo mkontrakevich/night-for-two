@@ -207,6 +207,18 @@ export async function visionJsonCompletion({system,text,images=[],temperature=.1
   return parseJson(raw);
 }
 
+export async function buildOpenRouterImagePayload({prompt,inputReferences=[],model=config.imageModel}={}){
+  const payload={model,prompt:String(prompt||''),aspect_ratio:'9:16',output_format:'jpeg'};
+  if(inputReferences.length){
+    const prepared=await resizeReferences(inputReferences,768,4);
+    if(prepared.length!==inputReferences.length)
+      throw new Error('NOVEL2_IMAGE_REFERENCES_MISSING');
+    payload.input_references=prepared.map(url=>({type:'image_url',image_url:{url}}));
+  }
+  if(model.includes('seedream'))payload.resolution='2K';
+  return payload;
+}
+
 export async function imageCompletion({prompt,inputReferences=[],width=null,height=null,timeoutMs=null,provider='auto'}) {
   // The casting sheet uses an explicitly selected provider. Never silently
   // generate via Cloudflare first and bill again via the alternative route.
@@ -235,16 +247,7 @@ export async function imageCompletion({prompt,inputReferences=[],width=null,heig
   }
 
   if (!config.openRouterKey) throw new Error('NOVEL2_OPENROUTER_KEY_MISSING');
-  const payload={model:config.imageModel,prompt,aspect_ratio:'9:16',output_format:'jpeg'};
-  if(inputReferences.length){
-    // OpenRouter Images API accepts typed image_url parts, not raw strings.
-    // Downscale to reduce body size and prevent upload transport resets.
-    const prepared=await resizeReferences(inputReferences,768,4);
-    if(prepared.length!==inputReferences.length)
-      throw new Error('NOVEL2_IMAGE_REFERENCES_MISSING');
-    payload.input_references=prepared.map(url=>({type:'image_url',image_url:{url}}));
-  }
-  if (config.imageModel.includes('seedream')) payload.resolution=useOpenRouter?'2K':(process.env.NOVEL2_IMAGE_RESOLUTION||'2K');
+  const payload=await buildOpenRouterImagePayload({prompt,inputReferences});
 
   const requestImage=async body=>requestJson(
     'https://openrouter.ai/api/v1/images',
