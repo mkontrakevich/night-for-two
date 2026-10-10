@@ -115,7 +115,7 @@ export async function generateVisual({scene, identities={}, cast=[], previousVis
   return {...result,prompt};
 }
 
-export async function generateCalibration({identity,role}) {
+export function calibrationSpec({identity,role}) {
   if(!identity?.identity_lock) throw new Error('NOVEL2_IDENTITY_NOT_FOUND');
   const references=refsOf(identity);
   if(!references.length)throw new Error('NOVEL2_ACTOR_SHEET_REFERENCES_REQUIRED');
@@ -136,6 +136,11 @@ export async function generateCalibration({identity,role}) {
   // halving inference pixels compared with the former 1024x1792 render.
   // This override applies only to onboarding; cinematic scene images retain
   // their own production settings.
+  return{prompt,references};
+}
+
+export async function generateCalibration({identity,role}) {
+  const {prompt,references}=calibrationSpec({identity,role});
   const result=await imageCompletion({
     prompt,inputReferences:references,width:832,height:1344,timeoutMs:180000,
     provider:'edge-stream'
