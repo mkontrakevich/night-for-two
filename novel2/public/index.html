@@ -489,6 +489,7 @@ async function buildCharacterFromDetail(role){
  }finally{if(!actorPollActive)busy=false}
 }
 function actorJobErrorText(code=''){
+ if(code==='GENERATION_REFERENCES_MISSING')return 'Исходные фотографии не дошли до генератора. Запрос остановлен, чтобы не создавать постороннего человека.';
  if(code==='GENERATION_TIMEOUT')return 'Генератор превысил лимит времени. Повторить можно по сохранённым фотографиям.';
  if(code==='GENERATION_CONNECTION_INTERRUPTED')return 'Соединение с генератором прервалось. Фотографии сохранены.';
  if(code==='GENERATION_PROVIDER_FAILED')return 'Сервис изображений не смог завершить генерацию.';
