@@ -606,6 +606,7 @@ async function main(){
           referenceImages:refs,
           approved:false
         });
+        actorSheetJobs.delete(role);
         return send(res,200,{
           ok:true,
           character:baseActorCard,
@@ -662,6 +663,7 @@ async function main(){
       if(url.pathname==='/novel2/api/identity/approve'){
         if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
         const saved=await approveIdentity(auth.role);
+        actorSheetJobs.delete(auth.role);
         return send(res,200,{ok:true,identity:{role:auth.role,approved:true,version:saved.version}});
       }
 
@@ -675,7 +677,7 @@ async function main(){
       }
 
       if(url.pathname==='/novel2/api/identity/calibrate/status'){
-        const job=actorSheetJobs.get(auth.role);
+        const job=ids[auth.role]?.approved?null:actorSheetJobs.get(auth.role);
         return send(res,200,{ok:true,job:actorSheetJobView(job,true)});
       }
 
