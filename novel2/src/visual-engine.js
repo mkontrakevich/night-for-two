@@ -137,7 +137,8 @@ export async function generateCalibration({identity,role}) {
   // This override applies only to onboarding; cinematic scene images retain
   // their own production settings.
   const result=await imageCompletion({
-    prompt,inputReferences:references,width:832,height:1344,timeoutMs:180000
+    prompt,inputReferences:references,width:832,height:1344,timeoutMs:180000,
+    provider:'openrouter'
   });
   return {...result,prompt};
 }
