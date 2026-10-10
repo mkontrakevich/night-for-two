@@ -85,8 +85,17 @@ function parseDataUrl(value=''){
   if(!m)return null;
   return{mime:m[1],buffer:Buffer.from(m[2],'base64')};
 }
+function inputReferenceUrl(value){
+  if(typeof value==='string')return value;
+  if(value&&typeof value==='object'){
+    if(typeof value.image_url==='string')return value.image_url;
+    if(typeof value.image_url?.url==='string')return value.image_url.url;
+    if(typeof value.url==='string')return value.url;
+  }
+  return '';
+}
 async function resizeReference(value,maxPx=512){
-  const parsed=parseDataUrl(value);
+  const parsed=parseDataUrl(inputReferenceUrl(value));
   if(!parsed)return'';
   try{
     const out=await sharp(parsed.buffer,{failOn:'warning',limitInputPixels:40_000_000})
@@ -99,7 +108,7 @@ async function resizeReference(value,maxPx=512){
     throw new Error('NOVEL2_REFERENCE_RESIZE_FAILED:'+String(error?.message||error).slice(0,120));
   }
 }
-async function resizeReferences(values=[],maxPx=512,limit=4){
+export async function resizeReferences(values=[],maxPx=512,limit=4){
   const out=[];
   for(const value of values.slice(0,limit)){
     const resized=await resizeReference(value,maxPx);
@@ -200,7 +209,11 @@ export async function visionJsonCompletion({system,text,images=[],temperature=.1
 
 export async function imageCompletion({prompt,inputReferences=[],width=null,height=null,timeoutMs=null}) {
   if(config.edgeAiUrl){
+    // Image URL message objects are normalized to data URLs, then resized
+    // below 512px as required by FLUX.2 klein. Never launch a personal actor
+    // render with zero usable reference photographs.
     const refs=await resizeReferences(inputReferences,480,4);
+    if(inputReferences.length&&!refs.length)throw new Error('NOVEL2_IMAGE_REFERENCES_MISSING');
     const json=await edgeJson('image',{
       prompt:String(prompt||''),
       input_references:refs,
@@ -236,8 +249,8 @@ export async function imageCompletion({prompt,inputReferences=[],width=null,heig
       body:JSON.stringify(body)
     },
     {
-      attempts:Number(process.env.NOVEL2_IMAGE_RETRIES||3),
-      timeoutMs:Number(process.env.NOVEL2_IMAGE_TIMEOUT_MS||240000),
+      attempts:1,
+      timeoutMs:Math.min(180000,Number(timeoutMs||process.env.NOVEL2_IMAGE_TIMEOUT_MS||180000)),
       label:'NOVEL2_IMAGE'
     }
   );
