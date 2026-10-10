@@ -74,9 +74,11 @@ async function edgeJson(route,body,{timeoutMs=180000,label='NOVEL2_EDGE_AI',atte
     },
     {attempts,timeoutMs,label}
   );
-  if(!response.ok){
+  if(!response.ok||json?.ok===false){
+    // Streamed inference sends HTTP 200 heartbeats before it can know whether
+    // the model will succeed. Handle its terminal JSON error explicitly.
     const detail=String(json?.detail||json?.error||json?.message||'failed').slice(0,220);
-    throw new Error(label+'_'+response.status+':'+detail);
+    throw new Error(label+'_'+(response.ok?502:response.status)+':'+detail);
   }
   return json;
 }
@@ -232,6 +234,7 @@ export async function imageCompletion({prompt,inputReferences=[],width=null,heig
     const json=await edgeJson('image',{
       prompt:String(prompt||''),
       input_references:refs,
+      keepalive:provider==='edge-stream',
       width:Number(width||process.env.NOVEL2_EDGE_IMAGE_WIDTH||1024),
       height:Number(height||process.env.NOVEL2_EDGE_IMAGE_HEIGHT||1792)
     },{
