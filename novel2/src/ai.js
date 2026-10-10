@@ -47,6 +47,9 @@ async function requestJson(url,options,{attempts=3,timeoutMs=120000,label='NOVEL
     }catch(error){
       lastError=error;
       if(String(error?.message||'').endsWith('_PROVIDER_ACCESS_BLOCKED'))throw error;
+      // Keep the actual timeout distinct from transient transport failures.
+      // User-visible actor job status relies on this distinction.
+      if(controller.signal.aborted)throw new Error(label+'_TIMEOUT');
       if(attempt===attempts||!transientMessage(error?.message||error))throw new Error(label+'_TRANSPORT_FAILED');
     }finally{clearTimeout(timer);}
     await sleep(Math.min(4500,500*Math.pow(2,attempt-1)));
