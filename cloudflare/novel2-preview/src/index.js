@@ -22,7 +22,7 @@ function equalString(a='',b=''){
 async function aiAuthorized(request,env){
   if(!env.NOVEL2_SERVICE_SECRET)return false;
   const got=request.headers.get('x-novel2-service-key')||'';
-  return equalString(got,await expectedServiceKey(env.NOVEL2_SERVICE_SECRET));
+  return equalString(got,String(env.NOVEL2_SERVICE_SECRET||''));
 }
 function dataUrlBlob(value=''){
   const m=String(value||'').match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/);
