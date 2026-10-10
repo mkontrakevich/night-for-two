@@ -143,9 +143,16 @@ function characterLookPayload(row){
   };
 }
 async function characterLooksForRole(role,identity){
-  if(identity)await ensureCanonicalCharacterLook(role,identity);
+  const identityOnly=Boolean(identity?.profile&&identity?.identity_lock&&!identity?.builder_meta?.synthetic);
+  // A source photo is an input reference, not an actor card. Older builds
+  // seeded the first uploaded photo as the canonical look; hide that legacy
+  // row for human base identities until a generated actor sheet exists.
+  if(identity&&!identityOnly)await ensureCanonicalCharacterLook(role,identity);
   const rows=await listCharacterLooks(role);
-  return rows.map(characterLookPayload);
+  const visible=identityOnly
+    ?rows.filter(x=>!(x.look_key==='canonical'&&x.model==='existing'&&x.prompt==='Existing canonical identity reference'))
+    :rows;
+  return visible.map(characterLookPayload);
 }
 function isAiControlled(ids,role,bookCast=[]){
   const castEntry=bookCastRole(bookCast,role);
