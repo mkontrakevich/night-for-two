@@ -82,6 +82,9 @@ async function api(path,body={},timeoutMs=600000){
      if(/NOVEL2_(AI|IMAGE)_PROVIDER_ACCESS_BLOCKED|Access denied by security policy|unsupported_country_region_territory/i.test(technical)){
        throw new Error('Сервис AI недоступен с текущего сервера: провайдер ограничил доступ. Данные сохранены; генерация станет доступна после подключения разрешённого AI-провайдера.');
      }
+     if(/NOVEL2_EDGE_(TEXT|VISION|IMAGE)|NOVEL2_AI_EDGE_/i.test(technical)){
+       throw new Error('AI-сервис временно не завершил генерацию. Загруженные фотографии и внешность сохранены — повторно выбирать файлы не нужно.');
+     }
      if(/JSON|array element|position \d+|NOVEL2_AI_JSON_INVALID|Unexpected token|Expected ['"]/i.test(technical)){
        throw new Error('Не удалось собрать корректную структуру истории. Повторите создание — исходные данные не потеряны.');
      }
@@ -253,10 +256,13 @@ async function loadCharacterLooks(role){
  }
 }
 function characterViewerItems(role){
- const items=(Array.isArray(characterLooks[role])?characterLooks[role]:[]).filter(x=>x?.image);
+ const character=characterForRole(role);
+ const identityOnly=Boolean(character?.identity_only||isBaseActorCard(character?.character_card));
+ let items=(Array.isArray(characterLooks[role])?characterLooks[role]:[]).filter(x=>x?.image);
+ if(identityOnly&&state?.mode!=='reader')items=items.filter(x=>x.key==='canonical'&&x.model!=='existing');
  if(items.length)return items;
- const character=characterForRole(role),src=String(character?.avatar||'');
- return src?[{key:'fallback',title:character?.name||'Персонаж',image:src,is_primary:true}]:[];
+ const src=String(character?.avatar||'');
+ return src?[{key:'source',title:'Исходное фото',image:src,is_primary:false}]:[];
 }
 function openCharacterViewer(role,key=''){
  const items=characterViewerItems(role);if(!items.length)return;
@@ -298,14 +304,25 @@ function renderCharacterDetail(role){
  const identityOnly=Boolean(character?.identity_only||isBaseActorCard(card));
 
  if(mine&&!active){
-   const status=character?.ready?'ГОТОВА':hasIdentity?'НУЖНА ACTOR SHEET':'НЕ СОЗДАНА';
-   const looks=characterLooksHtml(role,hasIdentity,false,true);
-   const photoPanel='<div class="photoIdentityPanel"><div class="kicker">ACTOR CARD</div><h3>'+(hasIdentity?'Пересоздать карточку актёра':'Создать карточку актёра')+'</h3><div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Загрузите портреты и, по возможности, фото в полный рост. На выходе — только нейтральная actor sheet.</div></div><button class="photoBuild" id="characterPhotoBuild" type="button">'+(hasIdentity?'Пересоздать по фото':'Создать по фото')+'</button>'+(!character?.ready&&hasIdentity?'<button class="photoResume" id="characterResumeCalibration" type="button">Продолжить actor sheet</button>':'')+'</div>';
+   const rows=Array.isArray(characterLooks[role])?characterLooks[role]:[];
+   const actorSheetReady=rows.some(x=>x?.key==='canonical'&&x?.image&&x?.model!=='existing');
+   const status=actorSheetReady&&character?.ready?'ГОТОВА':hasIdentity?'НУЖНА КАРТОЧКА':'НЕ СОЗДАНА';
+   const looks=characterLooksHtml(role,actorSheetReady,false,true);
+   const uploadFields='<div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Портреты и, по возможности, полный рост. Фотографии используются только как источник внешности.</div></div><button class="photoBuild" id="characterPhotoBuild" type="button">'+(hasIdentity?'Заменить фото и пересобрать':'Создать карточку актёра')+'</button>';
+   let photoPanel='';
+   if(!hasIdentity){
+     photoPanel='<div class="photoIdentityPanel"><div class="kicker">ACTOR CARD</div><h3>Создать карточку актёра</h3>'+uploadFields+'</div>';
+   }else if(!actorSheetReady){
+     photoPanel='<div class="photoIdentityPanel"><div class="kicker">ACTOR CARD</div><h3>Фото уже сохранены</h3><p>Повторно выбирать фотографии не нужно. Создайте нейтральную карточку актёра из уже сохранённой внешности.</p><button class="photoBuild" id="characterResumeCalibration" type="button">Создать карточку актёра</button><button class="photoResume" id="showOtherPhotos" type="button">Использовать другие фото</button><div id="otherPhotosPanel" hidden style="margin-top:14px">'+uploadFields+'</div></div>';
+   }else{
+     photoPanel='<div class="photoIdentityPanel"><div class="kicker">ACTOR CARD</div><h3>Карточка актёра готова</h3><button class="photoBuild" id="characterResumeCalibration" type="button">Пересоздать карточку</button><button class="photoResume" id="showOtherPhotos" type="button">Использовать другие фото</button><div id="otherPhotosPanel" hidden style="margin-top:14px">'+uploadFields+'</div></div>';
+   }
    app.innerHTML='<section class="characterDetail"><div class="characterDetailNav"><button class="characterBack" id="characterBack">← Назад</button><div class="characterStatus">'+esc(status)+'</div></div><div class="characterHeroCard">'+avatarHtml(character?.avatar||'','Карточка актёра','characterHeroAvatar')+'<div><div class="kicker">ИГРОК '+esc(role)+'</div><h1>Карточка актёра</h1></div></div>'+looks+photoPanel+'</section>';
    document.getElementById('characterBack').onclick=()=>{characterDetailRole='';menuMode=true;renderMainMenu()};
-   const hero=document.querySelector('.characterHeroAvatar');if(hero)hero.onclick=()=>openCharacterViewer(role,(characterLooks[role]||[]).find(x=>x.is_primary)?.key||'canonical');
+   const hero=document.querySelector('.characterHeroAvatar');if(hero)hero.onclick=()=>openCharacterViewer(role,actorSheetReady?'canonical':'source');
    const photoBuild=document.getElementById('characterPhotoBuild');if(photoBuild)photoBuild.onclick=()=>buildCharacterFromDetail(role);
    const resume=document.getElementById('characterResumeCalibration');if(resume)resume.onclick=()=>continueCalibrationFromDetail(role);
+   const showOther=document.getElementById('showOtherPhotos');if(showOther)showOther.onclick=()=>{const p=document.getElementById('otherPhotosPanel');if(p){p.hidden=!p.hidden;showOther.textContent=p.hidden?'Использовать другие фото':'Скрыть выбор фото'}};
    bindCharacterLooks(role,false);
    if(hasIdentity&&!characterLooksLoaded[role])void loadCharacterLooks(role);
    return;
