@@ -343,6 +343,25 @@ async function main(){
       if(req.method==='GET'&&(url.pathname==='/novel2'||url.pathname==='/novel2/'))return send(res,200,html,'text/html; charset=utf-8');
 
       if(!url.pathname.startsWith('/novel2/api/'))return send(res,404,{ok:false,error:'NOT_FOUND'});
+      if(url.pathname==='/novel2/api/identity/calibrate/work'){
+        if(req.method!=='POST'||!serviceAuthenticated(req))
+          return send(res,403,{ok:false,error:'NOVEL2_ACTOR_WORK_DENIED'});
+        const input=await bodyJson(req);
+        const role=String(input.role||''),jobId=String(input.job_id||'');
+        if(!['A','B'].includes(role))return send(res,400,{ok:false,error:'NOVEL2_ACTOR_ROLE_INVALID'});
+        const job=actorSheetJobs.get(role);
+        markActorJobTimedOut(job);
+        if(!job||job.jobId!==jobId||job.status!=='working')
+          return send(res,409,{ok:false,error:'NOVEL2_ACTOR_JOB_STALE'});
+        const ids=await identities();
+        const identity=ids[role];
+        if(!identity?.identity_lock)return send(res,409,{ok:false,error:'NOVEL2_ACTOR_IDENTITY_MISSING'});
+        const {prompt,references}=calibrationSpec({identity,role});
+        const refs=await resizeReferences(references,480,4);
+        if(!refs.length||refs.length!==references.length)
+          return send(res,422,{ok:false,error:'NOVEL2_ACTOR_REFERENCES_INVALID'});
+        return send(res,200,{ok:true,work:{job_id:jobId,role,prompt,refs,width:832,height:1344}});
+      }
       if(url.pathname==='/novel2/api/identity/calibrate/complete'){
         if(req.method!=='POST'||!serviceAuthenticated(req))
           return send(res,403,{ok:false,error:'NOVEL2_EDGE_CALLBACK_DENIED'});
