@@ -2,6 +2,112 @@ function json(status,payload,extraHeaders={}){
   return Response.json(payload,{status,headers:{'cache-control':'no-store','x-novel2-preview':'1',...extraHeaders}});
 }
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const AI_TEXT_MODEL='@cf/zai-org/glm-4.7-flash';
+const AI_IMAGE_MODEL='@cf/black-forest-labs/flux-2-klein-4b';
+
+function bytesToHex(bytes){
+  return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+async function expectedServiceKey(secret=''){
+  const raw=new TextEncoder().encode('novel2-ai-v1:'+String(secret||''));
+  return bytesToHex(await crypto.subtle.digest('SHA-256',raw));
+}
+function equalString(a='',b=''){
+  a=String(a);b=String(b);
+  if(a.length!==b.length)return false;
+  let diff=0;
+  for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);
+  return diff===0;
+}
+async function aiAuthorized(request,env){
+  if(!env.NOVEL2_SERVICE_SECRET)return false;
+  const got=request.headers.get('x-novel2-service-key')||'';
+  return equalString(got,await expectedServiceKey(env.NOVEL2_SERVICE_SECRET));
+}
+function dataUrlBlob(value=''){
+  const m=String(value||'').match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/);
+  if(!m)return null;
+  const binary=atob(m[2]);
+  const bytes=new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+  return new Blob([bytes],{type:m[1]});
+}
+function workerTextContent(result){
+  return String(
+    result?.choices?.[0]?.message?.content ??
+    result?.response ??
+    result?.result?.response ??
+    ''
+  );
+}
+async function handleAi(request,env,incoming){
+  if(request.method!=='POST')return json(405,{ok:false,error:'METHOD_NOT_ALLOWED'});
+  if(!await aiAuthorized(request,env))return json(401,{ok:false,error:'NOVEL2_AI_EDGE_UNAUTHORIZED'});
+  if(!env.AI||typeof env.AI.run!=='function')return json(503,{ok:false,error:'NOVEL2_AI_BINDING_MISSING'});
+
+  if(incoming.pathname==='/novel2-ai/text'){
+    let body={};
+    try{body=await request.json();}catch{return json(400,{ok:false,error:'NOVEL2_AI_EDGE_JSON_REQUIRED'});}
+    const messages=Array.isArray(body.messages)?body.messages.slice(0,20).map(x=>({
+      role:['system','user','assistant'].includes(String(x?.role))?String(x.role):'user',
+      content:typeof x?.content==='string'?x.content:JSON.stringify(x?.content??'')
+    })):[];
+    if(!messages.length)return json(400,{ok:false,error:'NOVEL2_AI_EDGE_MESSAGES_REQUIRED'});
+    const input={
+      messages,
+      temperature:Number.isFinite(Number(body.temperature))?Math.max(0,Math.min(2,Number(body.temperature))):0.7,
+      max_completion_tokens:Math.max(32,Math.min(8000,Number(body.max_tokens||body.max_completion_tokens||5000))),
+      reasoning_effort:'none'
+    };
+    if(body.json_mode)input.response_format={type:'json_object'};
+    try{
+      const result=await env.AI.run(AI_TEXT_MODEL,input);
+      const content=workerTextContent(result);
+      if(!content)return json(502,{ok:false,error:'NOVEL2_AI_EDGE_EMPTY_TEXT',model:AI_TEXT_MODEL});
+      return json(200,{ok:true,content,model:AI_TEXT_MODEL,usage:result?.usage||null});
+    }catch(error){
+      return json(502,{ok:false,error:'NOVEL2_AI_EDGE_TEXT_FAILED',detail:String(error?.message||error).slice(0,220),model:AI_TEXT_MODEL});
+    }
+  }
+
+  if(incoming.pathname==='/novel2-ai/image'){
+    let body={};
+    try{body=await request.json();}catch{return json(400,{ok:false,error:'NOVEL2_AI_EDGE_JSON_REQUIRED'});}
+    const prompt=String(body.prompt||'').trim().slice(0,12000);
+    if(!prompt)return json(400,{ok:false,error:'NOVEL2_AI_EDGE_PROMPT_REQUIRED'});
+    const width=Math.max(256,Math.min(1920,Number(body.width||1024)));
+    const height=Math.max(256,Math.min(1920,Number(body.height||1280)));
+    const form=new FormData();
+    form.append('prompt',prompt);
+    form.append('width',String(width));
+    form.append('height',String(height));
+    const refs=Array.isArray(body.input_references)?body.input_references.slice(0,4):[];
+    let refIndex=0;
+    for(const ref of refs){
+      const blob=dataUrlBlob(ref);
+      if(!blob)continue;
+      form.append('input_image_'+refIndex,blob,'reference-'+refIndex+'.jpg');
+      refIndex++;
+    }
+    const encoded=new Response(form);
+    try{
+      const result=await env.AI.run(AI_IMAGE_MODEL,{
+        multipart:{
+          body:encoded.body,
+          contentType:encoded.headers.get('content-type')||'multipart/form-data'
+        }
+      });
+      const image=String(result?.image||'');
+      if(!image)return json(502,{ok:false,error:'NOVEL2_AI_EDGE_EMPTY_IMAGE',model:AI_IMAGE_MODEL});
+      return json(200,{ok:true,image,model:AI_IMAGE_MODEL});
+    }catch(error){
+      return json(502,{ok:false,error:'NOVEL2_AI_EDGE_IMAGE_FAILED',detail:String(error?.message||error).slice(0,220),model:AI_IMAGE_MODEL});
+    }
+  }
+
+  return json(404,{ok:false,error:'NOVEL2_AI_EDGE_ROUTE_NOT_FOUND'});
+}
+
 
 function buildUpstream(target,request,incoming,attempt){
   const upstream=new Request(target.toString(),request);
@@ -54,6 +160,7 @@ export default{
   async fetch(request,env){
     const incoming=new URL(request.url);
     if(incoming.pathname==='/') return Response.redirect(new URL('/novel2/',incoming).toString(),302);
+    if(incoming.pathname.startsWith('/novel2-ai/'))return handleAi(request,env,incoming);
     if(!(incoming.pathname==='/novel2'||incoming.pathname.startsWith('/novel2/'))){
       return json(404,{ok:false,error:'NOVEL2_ROUTE_NOT_FOUND'});
     }
