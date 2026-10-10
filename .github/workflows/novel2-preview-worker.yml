@@ -111,6 +111,22 @@ jobs:
           jq -e '.ok == true and (.image | type == "string") and (.image | length > 100)' /tmp/novel2-ai-image.json >/dev/null
 
           image_b64=$(jq -r '.image' /tmp/novel2-ai-image.json)
+          ref_payload=$(jq -cn --arg img "data:image/jpeg;base64,$image_b64" '{
+            prompt:"Use image 0 as the visual reference. Recreate the same simple neutral gray studio swatch, no text, no people.",
+            input_references:[$img],
+            width:256,
+            height:256
+          }')
+          ref_code=$(curl --silent --show-error --max-time 90 -o /tmp/novel2-ai-ref.json -w '%{http_code}' \
+            -H 'content-type: application/json' \
+            -H "x-novel2-service-key: $service_key" \
+            --data "$ref_payload" \
+            "$base/novel2-ai/image")
+          echo "NOVEL2_WORKERS_AI_REFERENCE_IMAGE_HTTP=$ref_code"
+          if [ "$ref_code" != "200" ]; then cat /tmp/novel2-ai-ref.json; exit 1; fi
+          jq -e '.ok == true and (.image | type == "string") and (.image | length > 100)' /tmp/novel2-ai-ref.json >/dev/null
+
+          image_b64=$(jq -r '.image' /tmp/novel2-ai-image.json)
           vision_payload=$(jq -cn --arg img "data:image/jpeg;base64,$image_b64" '{
             system:"Inspect the supplied image. Return a very short plain text description.",
             text:"What is visible?",
