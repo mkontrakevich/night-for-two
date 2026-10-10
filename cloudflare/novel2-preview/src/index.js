@@ -263,6 +263,107 @@ function recoveryPage(){
   });
 }
 
+
+async function beginActorSheetAtEdge(request,env,host,port){
+  if(!env.NOVEL2_SERVICE_SECRET)
+    return json(503,{ok:false,error:'NOVEL2_ACTOR_EDGE_SECRET_MISSING'});
+  const origin='http://'+host+':'+port+'/novel2/api/identity/calibrate/';
+  const body=await request.clone().text();
+  if(body.length>10000)return json(413,{ok:false,error:'NOVEL2_ACTOR_START_BODY_TOO_LARGE'});
+  const prepare=new Request(origin+'prepare',{
+    method:'POST',
+    headers:{
+      'content-type':'application/json',
+      'x-novel2-service-key':String(env.NOVEL2_SERVICE_SECRET),
+      'x-telegram-init-data':request.headers.get('x-telegram-init-data')||''
+    },
+    body:body||'{}'
+  });
+  let prepared;
+  try{
+    const result=await env.NOVEL2_VPC.fetch(prepare);
+    prepared=await result.json();
+    if(!result.ok||!prepared?.ok)
+      return json(result.status,{ok:false,error:String(prepared?.error||'NOVEL2_ACTOR_PREPARE_FAILED').slice(0,100)});
+  }catch(error){return json(502,{ok:false,error:'NOVEL2_ACTOR_PREPARE_TRANSPORT_FAILED'});}
+  const work=prepared.work;
+  if(!work)return json(200,{ok:true,job:prepared.job});
+  const submitResult=async(payload)=>{
+    const response=await env.NOVEL2_VPC.fetch(new Request(origin+'complete',{
+      method:'POST',
+      headers:{
+        'content-type':'application/json',
+        'x-novel2-service-key':String(env.NOVEL2_SERVICE_SECRET)
+      },
+      body:JSON.stringify({job_id:work.job_id,role:work.role,...payload})
+    }));
+    const data=await response.json();
+    if(!response.ok||!data.ok)throw new Error('NOVEL2_ACTOR_RESULT_PERSIST_FAILED');
+    return data.job;
+  };
+  const inferAndCommit=async()=>{
+    const form=new FormData();
+    form.append('prompt',String(work.prompt||''));
+    form.append('width',String(work.width||832));
+    form.append('height',String(work.height||1344));
+    let n=0;
+    for(const ref of (Array.isArray(work.refs)?work.refs:[]).slice(0,4)){
+      const blob=dataUrlBlob(ref);
+      if(!blob)throw new Error('NOVEL2_ACTOR_EDGE_REFERENCE_INVALID');
+      form.append('input_image_'+n,blob,'reference-'+n+'.jpg');n++;
+    }
+    if(!n)throw new Error('NOVEL2_ACTOR_EDGE_REFERENCES_MISSING');
+    const encoded=new Response(form);
+    try{
+      const result=await env.AI.run(AI_IMAGE_MODEL,{
+        multipart:{
+          body:encoded.body,
+          contentType:encoded.headers.get('content-type')||'multipart/form-data'
+        }
+      });
+      const image=String(result?.image||'');
+      if(!image)throw new Error('NOVEL2_ACTOR_EDGE_EMPTY_IMAGE');
+      const job=await submitResult({
+        status:'ready',image,model:AI_IMAGE_MODEL,prompt:String(work.prompt||'')
+      });
+      return{ok:true,job};
+    }catch(error){
+      try{await submitResult({status:'failed'})}catch{}
+      return{ok:false,error:'NOVEL2_ACTOR_EDGE_GENERATION_FAILED'};
+    }
+  };
+  // Only the browser/Cloudflare request remains open during inference.
+  // The Windows origin receives one short VPC completion callback, rather
+  // than an outgoing long-lived request to the public image endpoint.
+  const stream=new ReadableStream({
+    start(controller){
+      const encoder=new TextEncoder();
+      let complete=false;
+      const pulse=()=>{
+        if(complete)return;
+        try{controller.enqueue(encoder.encode(' '.repeat(2048)))}catch{}
+      };
+      pulse();
+      const timer=setInterval(pulse,4000);
+      (async()=>{
+        try{
+          const result=await inferAndCommit();
+          if(!complete)controller.enqueue(encoder.encode(JSON.stringify(result)));
+        }catch(error){
+          try{if(!complete)controller.enqueue(encoder.encode(JSON.stringify({ok:false,error:'NOVEL2_ACTOR_EDGE_UNAVAILABLE'})))}catch{}
+        }finally{
+          complete=true;clearInterval(timer);
+          try{controller.close()}catch{}
+        }
+      })();
+    }
+  });
+  return new Response(stream,{status:200,headers:{
+    'content-type':'application/json; charset=utf-8',
+    'cache-control':'no-store','x-novel2-actor-engine':'cloudflare-vpc'
+  }});
+}
+
 export default{
   async fetch(request,env){
     const incoming=new URL(request.url);
@@ -274,6 +375,8 @@ export default{
     if(!env.NOVEL2_VPC||typeof env.NOVEL2_VPC.fetch!=='function') return json(503,{ok:false,error:'NOVEL2_VPC_BINDING_MISSING'});
     const host=env.NOVEL2_ORIGIN_HOST,port=env.NOVEL2_ORIGIN_PORT||'5690';
     if(!host) return json(503,{ok:false,error:'NOVEL2_ORIGIN_HOST_MISSING'});
+    if(request.method==='POST'&&incoming.pathname==='/novel2/api/identity/calibrate/start')
+      return beginActorSheetAtEdge(request,env,host,port);
 
     const target=new URL(incoming.pathname+incoming.search,`http://${host}:${port}`);
     // Document pages are small. Buffer them at the edge so VPC streaming and
