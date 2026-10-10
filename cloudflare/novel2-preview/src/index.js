@@ -3,6 +3,7 @@ function json(status,payload,extraHeaders={}){
 }
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const AI_TEXT_MODEL='@cf/zai-org/glm-4.7-flash';
+const AI_VISION_MODEL='@cf/google/gemma-4-26b-a4b-it';
 const AI_IMAGE_MODEL='@cf/black-forest-labs/flux-2-klein-4b';
 
 function bytesToHex(bytes){
@@ -67,6 +68,35 @@ async function handleAi(request,env,incoming){
       return json(200,{ok:true,content,model:AI_TEXT_MODEL,usage:result?.usage||null});
     }catch(error){
       return json(502,{ok:false,error:'NOVEL2_AI_EDGE_TEXT_FAILED',detail:String(error?.message||error).slice(0,220),model:AI_TEXT_MODEL});
+    }
+  }
+
+  if(incoming.pathname==='/novel2-ai/vision'){
+    let body={};
+    try{body=await request.json();}catch{return json(400,{ok:false,error:'NOVEL2_AI_EDGE_JSON_REQUIRED'});}
+    const system=String(body.system||'').slice(0,18000);
+    const text=String(body.text||'').slice(0,18000);
+    const content=[{type:'text',text}];
+    const images=Array.isArray(body.images)?body.images.slice(0,4):[];
+    for(const value of images){
+      const url=String(value||'');
+      if(/^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(url))content.push({type:'image_url',image_url:{url}});
+    }
+    if(content.length<2)return json(400,{ok:false,error:'NOVEL2_AI_EDGE_VISION_IMAGE_REQUIRED'});
+    try{
+      const result=await env.AI.run(AI_VISION_MODEL,{
+        messages:[
+          ...(system?[{role:'system',content:system}]:[]),
+          {role:'user',content}
+        ],
+        temperature:Number.isFinite(Number(body.temperature))?Math.max(0,Math.min(2,Number(body.temperature))):0.1,
+        max_completion_tokens:Math.max(64,Math.min(5000,Number(body.max_tokens||2600)))
+      });
+      const output=workerTextContent(result);
+      if(!output)return json(502,{ok:false,error:'NOVEL2_AI_EDGE_EMPTY_VISION',model:AI_VISION_MODEL});
+      return json(200,{ok:true,content:output,model:AI_VISION_MODEL,usage:result?.usage||null});
+    }catch(error){
+      return json(502,{ok:false,error:'NOVEL2_AI_EDGE_VISION_FAILED',detail:String(error?.message||error).slice(0,220),model:AI_VISION_MODEL});
     }
   }
 
