@@ -1,4 +1,6 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
+import sharp from 'sharp';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -137,7 +139,30 @@ async function createStoryAiCastEntry({
 function bookCastRole(bookCast=[],role){
   return (Array.isArray(bookCast)?bookCast:[]).find(x=>String(x?.interactive_role||'')===String(role))||null;
 }
-function castCharacterSummary(entry){
+// Keep full reference images in the persistent identity only. The public state
+// needs a small avatar, not a multi-megabyte reference image. Large Base64
+// state payloads previously caused Cloudflare VPC API reads to time out.
+const avatarThumbCache=new Map();
+async function compactAvatar(value=''){
+  const source=String(value||'');
+  if(!source)return'';
+  const match=source.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,([A-Za-z0-9+/=]+)$/);
+  if(!match)return/^https:\/\//i.test(source)?source:'';
+  const hash=crypto.createHash('sha256').update(source).digest('hex');
+  if(avatarThumbCache.has(hash))return avatarThumbCache.get(hash);
+  try{
+    const buffer=Buffer.from(match[1],'base64');
+    const thumbnail=await sharp(buffer,{limitInputPixels:40_000_000})
+      .rotate().resize({width:240,height:240,fit:'inside',withoutEnlargement:true})
+      .jpeg({quality:68}).toBuffer();
+    const uri='data:image/jpeg;base64,'+thumbnail.toString('base64');
+    if(avatarThumbCache.size>=24)avatarThumbCache.delete(avatarThumbCache.keys().next().value);
+    avatarThumbCache.set(hash,uri);
+    return uri;
+  }catch{return''}
+}
+
+async function castCharacterSummary(entry){
   const role=String(entry?.interactive_role||entry?.slot_key||'A');
   const card=normalizeCharacterCard(entry?.character_card||{},['A','B'].includes(role)?role:'A');
   return{
@@ -149,11 +174,11 @@ function castCharacterSummary(entry){
     source_id:String(entry?.source_id||''),
     interactive_role:entry?.interactive_role||null,
     control_mode:String(entry?.control_mode||'ai'),
-    avatar:String(Array.isArray(entry?.reference_images)&&entry.reference_images[0]||''),
+    avatar:await compactAvatar(Array.isArray(entry?.reference_images)?entry.reference_images[0]:''),
     character_card:card
   };
 }
-function characterSummary(identity,role='A'){
+async function characterSummary(identity,role='A'){
   const meta=identity?.builder_meta||{};
   const human=Boolean(identity?.profile&&identity?.identity_lock&&!meta.synthetic);
   // Legacy identities can contain an old fictional biography. Never expose
@@ -171,7 +196,7 @@ function characterSummary(identity,role='A'){
     identity_only:human,
     control_mode:String(meta.control_mode||'human'),
     relationship_grounded:false,
-    avatar:String(Array.isArray(identity?.reference_images)&&identity.reference_images[0]||''),
+    avatar:await compactAvatar(Array.isArray(identity?.reference_images)?identity.reference_images[0]:''),
     character_card:card
   };
 }
@@ -202,8 +227,9 @@ function isAiControlled(ids,role,bookCast=[]){
   if(castEntry)return castEntry.control_mode==='ai';
   return Boolean(ids?.[role]?.approved&&ids?.[role]?.builder_meta?.synthetic&&ids?.[role]?.builder_meta?.control_mode==='ai');
 }
-function publicState(book,auth,ids={},bookCast=[]){
-  const summaries={A:characterSummary(ids.A,'A'),B:characterSummary(ids.B,'B')};
+async function publicState(book,auth,ids={},bookCast=[]){
+  const [a,b]=await Promise.all([characterSummary(ids.A,'A'),characterSummary(ids.B,'B')]);
+  const summaries={A:a,B:b};
   const base={
     role:auth.role,
     identity:{A:Boolean(summaries.A.ready),B:Boolean(summaries.B.ready)},
@@ -221,7 +247,7 @@ function publicState(book,auth,ids={},bookCast=[]){
     scene,
     active_role:book.active_role,
     active_control_mode:isAiControlled(ids,book.active_role,bookCast)?'ai':'human',
-    cast:(Array.isArray(bookCast)?bookCast:[]).map(castCharacterSummary),
+    cast:await Promise.all((Array.isArray(bookCast)?bookCast:[]).map(castCharacterSummary)),
     can_reply:String(book.active_role)===String(auth.role)&&!isAiControlled(ids,book.active_role,bookCast)
   };
 }
@@ -312,7 +338,7 @@ async function main(){
         if(!deleted)return send(res,404,{ok:false,error:'NOVEL2_BOOK_NOT_FOUND'});
         book=await latestBook();
         bookCast=book?await getBookCast(book.id):[];
-        return send(res,200,{ok:true,deleted,state:publicState(book,auth,ids,bookCast)});
+        return send(res,200,{ok:true,deleted,state:await publicState(book,auth,ids,bookCast)});
       }
 
       if(url.pathname==='/novel2/api/book/open'){
@@ -320,7 +346,7 @@ async function main(){
         if(!opened)return send(res,404,{ok:false,error:'NOVEL2_BOOK_NOT_FOUND'});
         book=opened;
         bookCast=await getBookCast(book.id);
-        return send(res,200,{ok:true,state:publicState(book,auth,ids,bookCast)});
+        return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast)});
       }
 
       if(url.pathname==='/novel2/api/ai-characters'||url.pathname==='/novel2/api/ai-character/avatar'){
@@ -342,17 +368,17 @@ async function main(){
         // State reads must stay fast and side-effect free. Never block app opening
         // on prose generation; AI-controlled turns advance through a separate
         // endpoint after the reader has rendered.
-        return send(res,200,{ok:true,state:publicState(book,auth,ids,bookCast)});
+        return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast)});
       }
 
       if(url.pathname==='/novel2/api/ai/advance'){
         if(!book)return send(res,400,{ok:false,error:'NOVEL2_BOOK_REQUIRED'});
         if(!isAiControlled(ids,book.active_role,bookCast)){
-          return send(res,200,{ok:true,state:publicState(book,auth,ids,bookCast),advanced:false});
+          return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast),advanced:false});
         }
         book=await driveAiTurns(book,ids,bookCast);
         bookCast=await getBookCast(book.id);
-        return send(res,200,{ok:true,state:publicState(book,auth,ids,bookCast),advanced:true});
+        return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast),advanced:true});
       }
 
       if(url.pathname==='/novel2/api/story/draft/launch'){
@@ -473,7 +499,7 @@ async function main(){
         await saveBookCast(book.id,castEntries);
         await markStoryDraftUsed(draft.id,assignments);
         bookCast=await getBookCast(book.id);
-        return send(res,200,{ok:true,state:publicState(book,auth,ids,bookCast)});
+        return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast)});
       }
 
       if(url.pathname==='/novel2/api/book/new'){
@@ -483,10 +509,10 @@ async function main(){
       }
 
       if(url.pathname==='/novel2/api/book/exit'){
-        if(!book)return send(res,200,{ok:true,state:publicState(null,auth,ids,[])});
+        if(!book)return send(res,200,{ok:true,state:await publicState(null,auth,ids,[])});
         const archived=await archiveBook(book.id,'user_exit');
         if(!archived)return send(res,409,{ok:false,error:'NOVEL2_BOOK_EXIT_FAILED'});
-        return send(res,200,{ok:true,archived_book:{id:archived.id,title:archived.title},state:publicState(null,auth,ids,[])});
+        return send(res,200,{ok:true,archived_book:{id:archived.id,title:archived.title},state:await publicState(null,auth,ids,[])});
       }
 
       if(url.pathname==='/novel2/api/start'){
@@ -507,7 +533,7 @@ async function main(){
         ids=await identities();
         book=await driveAiTurns(book,ids,bookCast);
         bookCast=await getBookCast(book.id);
-        return send(res,200,{ok:true,state:publicState(book,auth,ids,bookCast)});
+        return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast)});
       }
 
       if(url.pathname==='/novel2/api/character/looks'){
@@ -561,7 +587,7 @@ async function main(){
         await selectCharacterLook(targetRole,lookKey);
         ids=await identities();
         const looks=await characterLooksForRole(targetRole,ids[targetRole]);
-        return send(res,200,{ok:true,role:targetRole,looks,state:publicState(book,auth,ids,bookCast)});
+        return send(res,200,{ok:true,role:targetRole,looks,state:await publicState(book,auth,ids,bookCast)});
       }
 
       if(url.pathname==='/novel2/api/character/save'){
@@ -574,7 +600,7 @@ async function main(){
         }
         await approveIdentity(targetRole);
         ids=await identities();
-        return send(res,200,{ok:true,role:targetRole,state:publicState(null,auth,ids,[])});
+        return send(res,200,{ok:true,role:targetRole,state:await publicState(null,auth,ids,[])});
       }
 
       if(url.pathname==='/novel2/api/character/random'){
