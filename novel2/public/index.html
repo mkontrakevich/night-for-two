@@ -42,18 +42,41 @@
 .processMeta{font-size:12px;line-height:1.45;color:#8f8782;margin:0 0 16px}.processCancel{width:100%;min-height:48px;border:1px solid #5a514d;background:transparent;color:#eee4dc;border-radius:0}
 @keyframes processMove{0%{left:-34%}55%{left:52%}100%{left:100%}}@keyframes r{to{transform:rotate(360deg)}}
 
-.editorialHero{position:relative;min-height:68vh;margin:-20px -18px 26px;padding:34px 22px 28px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;border-bottom:1px solid rgba(255,255,255,.18);background:radial-gradient(circle at 78% 42%,rgba(116,20,34,.5),transparent 34%),linear-gradient(118deg,#080808 0%,#10090a 48%,#2a0c12 100%)}
-.editorialHero:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.18),transparent 58%,rgba(0,0,0,.16));pointer-events:none}
-.editorialCopy{position:relative;z-index:1;max-width:620px}.editorialCopy h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:clamp(48px,11vw,92px);line-height:.88;letter-spacing:-.045em;margin:18px 0 20px}.editorialCopy p{max-width:480px;color:#c9c1be;font-size:15px;line-height:1.55}
-.editorialObjects{position:absolute;right:-5%;bottom:5%;width:58%;height:64%;opacity:.94;background:radial-gradient(ellipse at 58% 68%,#7e1726 0 14%,transparent 15%),radial-gradient(ellipse at 72% 55%,#171313 0 17%,transparent 18%),linear-gradient(155deg,transparent 35%,rgba(255,255,255,.08) 36%,transparent 38%);filter:contrast(1.1)}
-.editorialObjects:before{content:"MASK · SILK · LEATHER";position:absolute;right:9%;bottom:8%;font-size:10px;letter-spacing:.28em;color:rgba(255,255,255,.52);writing-mode:vertical-rl}
-.editorialCTA{margin-top:8px;width:max-content;max-width:100%;border:1px solid rgba(255,255,255,.72)!important;background:transparent!important;color:#fff!important;-webkit-text-fill-color:#fff!important;opacity:1!important;border-radius:0!important;padding:15px 28px!important;letter-spacing:.14em;text-transform:uppercase;font-weight:500}
-.editorialCTA:disabled{opacity:1!important;color:#e9ded8!important;-webkit-text-fill-color:#e9ded8!important;border-color:rgba(255,255,255,.46)!important;cursor:not-allowed}
-.editorialCTA:focus-visible{outline:2px solid #fff;outline-offset:4px}
-.mainMenu .menuActions button:disabled{opacity:1;color:#292421;-webkit-text-fill-color:#292421;background:#ccc5bf;cursor:not-allowed}
-.editorialRail{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,.16);margin:0 0 30px}.editorialTile{min-height:132px;padding:18px;background:#111;display:flex;flex-direction:column;justify-content:flex-end}.editorialTile b{font-size:13px;letter-spacing:.12em;text-transform:uppercase}.editorialTile small{color:#8e8581;margin-top:6px}
-.mainMenu{max-width:none!important}.mainMenu>.kicker,.mainMenu>h1,.mainMenu>p{display:none}.mainMenu .libraryTitle{margin-top:34px}
-@media(max-width:640px){.editorialHero{min-height:61vh;margin:-16px -14px 22px}.editorialObjects{width:72%;opacity:.6}.editorialRail{grid-template-columns:1fr 1fr}.editorialTile:last-child{grid-column:1/-1}.editorialCopy h1{font-size:54px}.editorialCopy p{max-width:78%}}
+/* Private Stories visual system: cinematic burgundy, ivory, restrained editorial typography */
+.mainMenu{padding:12px 18px calc(38px + var(--safe));background:radial-gradient(ellipse at 78% 0%,rgba(83,20,31,.24),transparent 44%),linear-gradient(170deg,#110b0c,#080707 70%);color:#f3eae4}
+.editorialHero{position:relative;min-height:clamp(420px,62dvh,580px);margin:-12px -18px 22px;padding:36px clamp(22px,5vw,42px) 30px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;isolation:isolate;border-bottom:1px solid rgba(234,197,193,.24);background:radial-gradient(ellipse at 88% 48%,rgba(130,26,43,.65),transparent 44%),radial-gradient(ellipse at 56% 94%,rgba(73,12,29,.5),transparent 58%),linear-gradient(132deg,#090708 3%,#19090e 60%,#2d0b16 100%)}
+.editorialHero:after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(100deg,rgba(0,0,0,.24) 0%,transparent 68%),linear-gradient(0deg,rgba(6,5,6,.36),transparent 66%)}
+.editorialObjects{position:absolute;z-index:-2;right:-16%;top:-11%;width:80%;height:115%;opacity:.72;pointer-events:none;transform:rotate(-14deg);background:radial-gradient(ellipse 43% 56% at 63% 49%,rgba(153,33,53,.42),transparent 75%),radial-gradient(ellipse 40% 60% at 86% 71%,rgba(11,5,9,.9),transparent 82%)}
+.editorialObjects:before{content:"";position:absolute;inset:15% 22% 9% 20%;border-radius:64% 30% 53% 44%/42% 50% 48% 59%;transform:rotate(-22deg);background:linear-gradient(126deg,rgba(255,213,203,.04),rgba(178,51,70,.13) 32%,rgba(20,5,10,.72) 58%,rgba(235,110,113,.11) 68%,transparent 87%);box-shadow:-26px 0 70px rgba(224,91,111,.075)}
+.editorialObjects:after{content:"";position:absolute;top:12%;left:39%;height:81%;width:16%;transform:rotate(28deg);border-radius:60%;background:linear-gradient(90deg,transparent,rgba(228,148,148,.11) 52%,transparent);filter:blur(18px)}
+.editorialCopy{position:relative;z-index:1;max-width:640px}
+.editorialCopy .kicker{color:#e0c0bd;opacity:.83;font-size:10px;letter-spacing:.22em;line-height:1.6}
+.editorialCopy h1{font:400 clamp(45px,10.5vw,86px)/.9 Georgia,"Times New Roman",serif;letter-spacing:-.048em;margin:20px 0 19px}
+.editorialCopy p{max-width:38ch;margin:0;color:#d0b9b5;font-size:clamp(14px,3.65vw,16px);line-height:1.5}
+.editorialCTA{display:block;min-height:56px;margin-top:27px;width:max-content;max-width:100%;border:1px solid #e8d8d2!important;background:#e8d8d2!important;color:#261116!important;-webkit-text-fill-color:#261116!important;opacity:1!important;border-radius:0!important;padding:15px 28px!important;letter-spacing:.12em;text-transform:uppercase;font-size:13px;font-weight:650;cursor:pointer}
+.editorialCTA:disabled{background:#a59a98!important;border-color:#a59a98!important;color:#3e3433!important;-webkit-text-fill-color:#3e3433!important;cursor:not-allowed}
+.editorialCTA:focus-visible,.mainMenu button:focus-visible{outline:2px solid #edb7b8;outline-offset:3px}
+.mainMenu .menuActions{margin:0 0 24px}
+.mainMenu .menuActions button{min-height:55px;border-radius:0;background:transparent;color:#f2e6df;border:1px solid rgba(242,222,215,.35);font-size:12px;font-weight:600;letter-spacing:.09em;text-transform:uppercase}
+.mainMenu .menuActions button:disabled{opacity:.5;color:#b7a8a1;-webkit-text-fill-color:#b7a8a1;cursor:not-allowed}
+.mainMenu .libraryTitle{margin:28px 0 12px;padding-top:17px;border-top:1px solid rgba(235,200,197,.16);font-size:10px;color:#c5a7a4;letter-spacing:.2em}
+.mainMenu .playerCards{display:grid;grid-template-columns:1fr;gap:10px;margin:0 0 10px}
+.mainMenu .playerCard{min-height:88px;border-radius:0;padding:14px;background:linear-gradient(120deg,rgba(108,35,48,.12),rgba(255,255,255,.025));border-color:rgba(235,201,192,.22)}
+.mainMenu .playerCard:after{content:"Открыть →";right:14px;bottom:10px;color:#c5a7a4}
+.mainMenu .playerCard.isWorking:after{content:"В процессе"}
+.mainMenu .playerCard.actorReadyPending:after{content:"Проверить →"}
+.mainMenu .playerCard b{font-size:17px}
+.mainMenu .playerCard small{color:#b4a19a}
+.mainMenu .playerAvatar,.mainMenu .avatarFallback{border-radius:0}
+.mainMenu .castNote{margin:0 0 15px;color:#95817d;font-size:12px;line-height:1.5}
+.mainMenu .libraryBook{border-color:rgba(235,200,197,.15)}
+.mainMenu .libraryBook strong{color:#f1e5e0}
+.mainMenu .miniBtn{border-radius:0;background:rgba(255,255,255,.035);border-color:rgba(235,200,197,.2);min-height:34px;color:#ecdcd6}
+.mainMenu .novelEdit input{border-radius:0;background:rgba(255,255,255,.04)}
+@media(min-width:641px){.mainMenu{padding-left:32px;padding-right:32px}.editorialHero{margin-left:-32px;margin-right:-32px}.mainMenu .playerCards.hasPair{grid-template-columns:1fr 1fr}}
+@media(max-width:640px){.editorialHero{min-height:clamp(420px,62dvh,540px)}.editorialCopy h1{font-size:clamp(44px,12vw,62px)}.editorialCTA{width:100%;padding:16px 20px!important}.editorialObjects{right:-35%;width:110%;opacity:.54}}
+@media(max-width:360px){.editorialCopy h1{font-size:43px}.editorialHero{padding:30px 20px 26px}.editorialCopy p{font-size:14px}}
+@media(prefers-reduced-motion:reduce){.mainMenu .playerCard:active{transform:none}}
 </style>
 </head>
 <body><main id="app"></main>
@@ -516,12 +539,11 @@ function renderMainMenu(){
  const otherHumanReady=Boolean(otherHuman.ready&&!otherHuman.synthetic);
  const characterStrip=active
    ?roleCardHtml('A',a)+roleCardHtml('B',b)
-   :roleCardHtml(role,own)+(otherHumanReady
-      ?roleCardHtml(other,otherHuman)
-      :'<div class="storyAiNotice"><div class="kicker">STORY CAST</div><b>AI-персонажи появятся после создания истории</b><small>Сначала определяем сюжет, роли и конфликт. Затем AI создаёт героев специально под эту историю.</small></div>');
+   :roleCardHtml(role,own)+(otherHumanReady?roleCardHtml(other,otherHuman):'');
+ const castNotice=!active&&!otherHumanReady?'<p class="castNote">AI-персонажи появятся после создания истории.</p>':'';
  const booksHtml=libraryBooks.length?libraryBooks.map(bookRowHtml).join(''):'<div class="hint">Готовых романов пока нет.</div>';
  const draftsHtml=libraryDrafts.length?libraryDrafts.map(draftRowHtml).join(''):'';
- app.innerHTML='<section class="mainMenu"><div class="editorialHero"><div class="editorialObjects"></div><div class="editorialCopy"><div class="kicker">INTERACTIVE NOVEL 2.0 · PRIVATE STORIES</div><h1>Фантазии<br>становятся<br>историями</h1><p>Сначала рождается история. Ваш герой сохраняет свою идентичность, а AI-персонажи создаются уже под конкретные роли, конфликт и атмосферу романа.</p><button class="editorialCTA" id="heroNewBook">Начать роман →</button></div></div><div class="editorialRail"><div class="editorialTile"><b>Ролевые сценарии</b><small>Новые грани истории</small></div><div class="editorialTile"><b>Аксессуары</b><small>Editorial-вдохновение</small></div><div class="editorialTile"><b>Атмосфера</b><small>Настроение сцены</small></div></div><div class="playerCards">'+characterStrip+'</div><div class="menuActions">'+(active?'<button class="primary" id="continueBook">Продолжить текущий роман</button>':'')+'<button class="'+(active?'secondary':'primary')+'" id="newBook">Создать новую историю</button></div>'+(draftsHtml?'<div class="libraryTitle">Черновики историй</div>'+draftsHtml:'')+'<div class="libraryTitle">Мои романы</div>'+booksHtml+'</section>';
+ app.innerHTML='<section class="mainMenu"><div class="editorialHero"><div class="editorialObjects" aria-hidden="true"></div><div class="editorialCopy"><div class="kicker">INTERACTIVE NOVEL 2.0 · PRIVATE STORIES</div><h1>Фантазии<br>становятся<br>историями</h1><p>Истории для двоих, в которых каждое решение меняет степень близости. Сначала сюжет — затем герои.</p><button type="button" class="editorialCTA" id="heroNewBook">Начать роман →</button></div></div>'+(active?'<div class="menuActions"><button type="button" class="secondary" id="continueBook">Продолжить роман →</button></div>':'')+'<div class="libraryTitle">'+(active?'Герои истории':'Карточка актёра')+'</div><div class="playerCards'+(active||otherHumanReady?' hasPair':'')+'">'+characterStrip+'</div>'+castNotice+(draftsHtml?'<div class="libraryTitle">Черновики историй</div>'+draftsHtml:'')+'<div class="libraryTitle">Мои романы</div>'+booksHtml+'</section>';
  bindMainMenu();
  const actorBlocked=actorSheetTask.active||(actorSheetTask.status==='ready'&&calibrationImage);
  const heroNewBook=document.getElementById('heroNewBook');if(heroNewBook){heroNewBook.disabled=actorBlocked;heroNewBook.onclick=actorBlocked?null:startNewBook}
