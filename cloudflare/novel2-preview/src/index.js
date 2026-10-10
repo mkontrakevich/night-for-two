@@ -139,6 +139,11 @@ async function handleAi(request,env,incoming){
       form.append('input_image_'+refIndex,blob,'reference-'+refIndex+'.jpg');
       refIndex++;
     }
+    // Never silently turn image-to-image into an unrelated text-to-image
+    // generation. The origin has already resized every reference <512px.
+    if(refs.length&&refIndex!==refs.length){
+      return json(422,{ok:false,error:'NOVEL2_AI_EDGE_REFERENCE_INVALID',accepted:refIndex,expected:refs.length});
+    }
     const encoded=new Response(form);
     try{
       const result=await env.AI.run(AI_IMAGE_MODEL,{
