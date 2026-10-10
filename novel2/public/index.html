@@ -299,6 +299,7 @@ function bindMainMenu(){
    if(actorSheetTask.active&&String(actorSheetTask.role)===role){showActorTaskScreen();return}
    if(actorSheetTask.status==='ready'&&String(actorSheetTask.role)===role&&calibrationImage&&characterDraft){menuMode=false;characterDetailRole='';render();return}
    renderCharacterDetail(role);
+   window.scrollTo(0,0);
  });
 }
 function roleCardHtml(role,character={}){
@@ -425,7 +426,7 @@ function renderCharacterDetail(role){
      photoPanel='<div class="photoIdentityPanel"><div class="kicker">ACTOR CARD</div><h3>Карточка актёра готова</h3><button class="photoBuild" id="characterResumeCalibration" type="button">Пересоздать карточку</button><button class="photoResume" id="showOtherPhotos" type="button">Использовать другие фото</button><div id="otherPhotosPanel" hidden style="margin-top:14px">'+uploadFields+'</div></div>';
    }
    app.innerHTML='<section class="characterDetail"><div class="characterDetailNav"><button class="characterBack" id="characterBack">← Назад</button><div class="characterStatus">'+esc(status)+'</div></div><div class="characterHeroCard">'+avatarHtml(character?.avatar||'','Карточка актёра','characterHeroAvatar')+'<div><div class="kicker">ИГРОК '+esc(role)+'</div><h1>Карточка актёра</h1></div></div>'+looks+failedNotice+photoPanel+'</section>';
-   document.getElementById('characterBack').onclick=()=>{characterDetailRole='';menuMode=true;renderMainMenu()};
+   document.getElementById('characterBack').onclick=()=>{characterDetailRole='';menuMode=true;renderMainMenu();window.scrollTo(0,0)};
    const hero=document.querySelector('.characterHeroAvatar');if(hero)hero.onclick=()=>openCharacterViewer(role,actorSheetReady?'canonical':'source');
    const photoBuild=document.getElementById('characterPhotoBuild');if(photoBuild)photoBuild.onclick=()=>buildCharacterFromDetail(role);
    const resume=document.getElementById('characterResumeCalibration');if(resume)resume.onclick=()=>continueCalibrationFromDetail(role);
@@ -445,7 +446,7 @@ function renderCharacterDetail(role){
  const looks=characterLooksHtml(role,hasCard,active,identityOnly);
  const generateHint=active?'Сюжетные образы меняются от сцены к сцене, identity остаётся неизменной.':'';
  app.innerHTML='<section class="characterDetail"><div class="characterDetailNav"><button class="characterBack" id="characterBack">← Персонажи</button><div class="characterStatus">'+esc(status)+'</div></div><div class="characterHeroCard">'+avatarHtml(character?.avatar||'',name,'characterHeroAvatar')+'<div><div class="kicker">ИГРОК '+esc(role)+'</div><h1>'+esc(name)+'</h1><p>'+esc(passport.story_role||character?.story_role||'')+'</p></div></div>'+looks+details+(generateHint?'<p class="characterLockNote">'+esc(generateHint)+'</p>':'')+'</section>';
- document.getElementById('characterBack').onclick=()=>{characterDetailRole='';menuMode=true;renderMainMenu()};
+ document.getElementById('characterBack').onclick=()=>{characterDetailRole='';menuMode=true;renderMainMenu();window.scrollTo(0,0)};
  const hero=document.querySelector('.characterHeroAvatar');if(hero)hero.onclick=()=>openCharacterViewer(role,(characterLooks[role]||[]).find(x=>x.is_primary)?.key||'canonical');
  bindCharacterLooks(role,active);
  if(hasCard&&!characterLooksLoaded[role])void loadCharacterLooks(role);
@@ -516,7 +517,7 @@ async function watchActorSheet(role){
      }
      actorTaskFinish('failed',actorJobErrorText(task.error_code));
      try{state=(await api('state',{},15000)).state||state}catch{}
-     menuMode=true;characterDetailRole=role;renderCharacterDetail(role);
+     menuMode=true;characterDetailRole=role;renderCharacterDetail(role);window.scrollTo(0,0);
      return;
    }
    throw new Error('GENERATION_CONNECTION_INTERRUPTED');
