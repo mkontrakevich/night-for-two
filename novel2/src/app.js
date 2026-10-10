@@ -21,6 +21,49 @@ import {fetchRelationshipContext,sliceRelationshipContext,explicitGenderForRole}
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const htmlPath=path.resolve(__dirname,'../public/index.html');
 
+// One active generation per authenticated player. The task runs on the origin
+// after the HTTP request ends; re-opening the Mini App can reconnect to it.
+// The canonical result is committed to PostgreSQL before reporting success.
+const actorSheetJobs=new Map();
+function actorSheetJobView(job,includeResult=false){
+  if(!job)return{status:'idle'};
+  const view={status:job.status,phase:'actor_sheet',started_at:job.startedAt,finished_at:job.finishedAt||null,
+    error_code:job.status==='failed'?job.errorCode:null};
+  if(includeResult&&job.status==='ready')view.calibration=job.calibration;
+  return view;
+}
+function launchActorSheetJob(role,identity){
+  const existing=actorSheetJobs.get(role);
+  if(existing?.status==='working')return existing;
+  const job={status:'working',startedAt:Date.now(),finishedAt:null,errorCode:null,calibration:''};
+  actorSheetJobs.set(role,job);
+  void (async()=>{
+    try{
+      const calibration=await generateCalibration({identity,role});
+      if(!calibration?.base64)throw new Error('NOVEL2_ACTOR_SHEET_EMPTY');
+      await saveCharacterLook({
+        role,lookKey:'canonical',title:'Нейтральная карточка актёра',
+        prompt:calibration.prompt,model:calibration.model,
+        imageBase64:calibration.base64,isPrimary:true
+      });
+      job.calibration='data:image/jpeg;base64,'+calibration.base64;
+      job.status='ready';
+    }catch(error){
+      // Never expose reference photos, prompts, provider credentials or raw
+      // upstream responses in the polling API or GitHub Actions logs.
+      const message=String(error?.message||'');
+      job.errorCode=/TIMEOUT|TRANSPORT|Abort|fetch failed/i.test(message)
+        ?'GENERATION_CONNECTION_INTERRUPTED'
+        :/EDGE_IMAGE|IMAGE_5\d\d|EMPTY_IMAGE/i.test(message)
+          ?'GENERATION_PROVIDER_FAILED':'GENERATION_FAILED';
+      job.status='failed';
+      console.error('NOVEL2_ACTOR_SHEET_FAILED',job.errorCode);
+    }finally{job.finishedAt=Date.now();}
+  })();
+  return job;
+}
+
+
 function send(res,status,payload,type='application/json; charset=utf-8'){
   const body=type.startsWith('application/json')?JSON.stringify(payload):String(payload);
   res.writeHead(status,{'content-type':type,'cache-control':'no-store','content-length':Buffer.byteLength(body)});
@@ -620,6 +663,20 @@ async function main(){
         if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
         const saved=await approveIdentity(auth.role);
         return send(res,200,{ok:true,identity:{role:auth.role,approved:true,version:saved.version}});
+      }
+
+      if(url.pathname==='/novel2/api/identity/calibrate/start'){
+        if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
+        ids=await identities();
+        const identity=ids[auth.role];
+        if(!identity?.identity_lock)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_NOT_FOUND'});
+        const job=launchActorSheetJob(auth.role,identity);
+        return send(res,200,{ok:true,job:actorSheetJobView(job)});
+      }
+
+      if(url.pathname==='/novel2/api/identity/calibrate/status'){
+        const job=actorSheetJobs.get(auth.role);
+        return send(res,200,{ok:true,job:actorSheetJobView(job,true)});
       }
 
       if(url.pathname==='/novel2/api/identity/calibrate'){
