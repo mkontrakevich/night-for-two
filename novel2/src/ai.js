@@ -58,7 +58,7 @@ function edgeServiceKey(){
   if(!config.botToken)return'';
   return crypto.createHash('sha256').update('novel2-ai-v1:'+config.botToken).digest('hex');
 }
-async function edgeJson(route,body,{timeoutMs=180000,label='NOVEL2_EDGE_AI'}={}){
+async function edgeJson(route,body,{timeoutMs=180000,label='NOVEL2_EDGE_AI',attempts=2}={}){
   if(!config.edgeAiUrl)throw new Error('NOVEL2_EDGE_AI_URL_MISSING');
   const key=edgeServiceKey();
   if(!key)throw new Error('NOVEL2_EDGE_AI_AUTH_MISSING');
@@ -69,7 +69,7 @@ async function edgeJson(route,body,{timeoutMs=180000,label='NOVEL2_EDGE_AI'}={})
       headers:{'content-type':'application/json','x-novel2-service-key':key},
       body:JSON.stringify(body)
     },
-    {attempts:2,timeoutMs,label}
+    {attempts,timeoutMs,label}
   );
   if(!response.ok){
     const detail=String(json?.detail||json?.error||json?.message||'failed').slice(0,220);
@@ -195,15 +195,21 @@ export async function visionJsonCompletion({system,text,images=[],temperature=.1
   return parseJson(raw);
 }
 
-export async function imageCompletion({prompt,inputReferences=[]}) {
+export async function imageCompletion({prompt,inputReferences=[],width=null,height=null,timeoutMs=null}) {
   if(config.edgeAiUrl){
     const refs=await resizeReferences(inputReferences,480,4);
     const json=await edgeJson('image',{
       prompt:String(prompt||''),
       input_references:refs,
-      width:Number(process.env.NOVEL2_EDGE_IMAGE_WIDTH||1024),
-      height:Number(process.env.NOVEL2_EDGE_IMAGE_HEIGHT||1792)
-    },{timeoutMs:Number(process.env.NOVEL2_IMAGE_TIMEOUT_MS||240000),label:'NOVEL2_EDGE_IMAGE'});
+      width:Number(width||process.env.NOVEL2_EDGE_IMAGE_WIDTH||1024),
+      height:Number(height||process.env.NOVEL2_EDGE_IMAGE_HEIGHT||1792)
+    },{
+      // Image generation is expensive. Do not silently retry a whole render
+      // when the first attempt times out; the user initiates explicit retries.
+      attempts:1,
+      timeoutMs:Math.min(180000,Number(timeoutMs||process.env.NOVEL2_IMAGE_TIMEOUT_MS||180000)),
+      label:'NOVEL2_EDGE_IMAGE'
+    });
     const base64=String(json?.image||'');
     if(!base64)throw new Error('NOVEL2_EDGE_IMAGE_EMPTY');
     return{base64,model:String(json?.model||'workers-ai')};
