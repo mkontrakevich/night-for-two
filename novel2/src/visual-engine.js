@@ -138,7 +138,7 @@ export async function generateCalibration({identity,role}) {
   // their own production settings.
   const result=await imageCompletion({
     prompt,inputReferences:references,width:832,height:1344,timeoutMs:180000,
-    provider:'openrouter'
+    provider:'edge-stream'
   });
   return {...result,prompt};
 }
