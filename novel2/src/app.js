@@ -17,7 +17,8 @@ import {
 import {createStoryBlueprint,createStoryBible,continueStory,generateAiCharacterReply} from './prose-engine.js';
 import {analyzeIdentity,buildLock,buildBaseActorCard} from './identity-engine.js';
 import {buildCharacterCard,buildSyntheticCharacter,normalizeCharacterCard} from './character-builder.js';
-import {generateVisual,generateCalibration,generateSyntheticReference,generateCharacterLook,characterLookDefinition} from './visual-engine.js';
+import {generateVisual,generateCalibration,calibrationSpec,generateSyntheticReference,generateCharacterLook,characterLookDefinition} from './visual-engine.js';
+import {resizeReferences} from './ai.js';
 import {fetchRelationshipContext,sliceRelationshipContext,explicitGenderForRole} from './relationship-context.js';
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
@@ -28,6 +29,23 @@ const htmlPath=path.resolve(__dirname,'../public/index.html');
 // The canonical result is committed to PostgreSQL before reporting success.
 const actorSheetJobs=new Map();
 const ACTOR_SHEET_MAX_MS=210000;
+
+function serviceAuthenticated(req){
+  const got=String(req.headers['x-novel2-service-key']||'');
+  const expected=crypto.createHash('sha256').update('novel2-ai-v1:'+config.botToken).digest('hex');
+  if(got.length!==expected.length)return false;
+  return crypto.timingSafeEqual(Buffer.from(got),Buffer.from(expected));
+}
+function beginEdgeActorJob(role,{force=false}={}){
+  const existing=actorSheetJobs.get(role);
+  markActorJobTimedOut(existing);
+  if(existing?.status==='working'||(existing?.status==='ready'&&!force))return{job:existing,fresh:false};
+  const job={jobId:crypto.randomUUID(),status:'working',phase:'actor_sheet',
+    startedAt:Date.now(),finishedAt:null,errorCode:null,calibration:'',external:true};
+  actorSheetJobs.set(role,job);
+  return{job,fresh:true};
+}
+
 function actorSheetJobView(job,includeResult=false){
   if(!job)return{status:'idle'};
   const view={status:job.status,phase:job.phase||'actor_sheet',
@@ -325,6 +343,39 @@ async function main(){
       if(req.method==='GET'&&(url.pathname==='/novel2'||url.pathname==='/novel2/'))return send(res,200,html,'text/html; charset=utf-8');
 
       if(!url.pathname.startsWith('/novel2/api/'))return send(res,404,{ok:false,error:'NOT_FOUND'});
+      if(url.pathname==='/novel2/api/identity/calibrate/complete'){
+        if(req.method!=='POST'||!serviceAuthenticated(req))
+          return send(res,403,{ok:false,error:'NOVEL2_EDGE_CALLBACK_DENIED'});
+        const input=await bodyJson(req);
+        const role=String(input.role||''),jobId=String(input.job_id||'');
+        if(!['A','B'].includes(role))return send(res,400,{ok:false,error:'NOVEL2_ACTOR_ROLE_INVALID'});
+        const job=actorSheetJobs.get(role);
+        if(!job||job.jobId!==jobId||job.status!=='working')
+          return send(res,409,{ok:false,error:'NOVEL2_ACTOR_JOB_STALE'});
+        if(input.status!=='ready'){
+          job.status='failed';job.errorCode='GENERATION_PROVIDER_FAILED';job.finishedAt=Date.now();
+          console.error('NOVEL2_ACTOR_SHEET_FAILED',{
+            error_code:job.errorCode,duration_ms:job.finishedAt-job.startedAt
+          });
+          return send(res,200,{ok:true,job:actorSheetJobView(job)});
+        }
+        const image=String(input.image||'');
+        if(image.length<1000||image.length>16000000||!/^[A-Za-z0-9+/=]+$/.test(image))
+          return send(res,422,{ok:false,error:'NOVEL2_ACTOR_RESULT_INVALID'});
+        const jpeg=await sharp(Buffer.from(image,'base64'),{limitInputPixels:10000000})
+          .jpeg({quality:88}).toBuffer();
+        const base64=jpeg.toString('base64');
+        job.phase='saving';
+        await saveCharacterLook({
+          role,lookKey:'canonical',title:'Нейтральная карточка актёра',
+          prompt:String(input.prompt||'').slice(0,16000),
+          model:String(input.model||'workers-ai').slice(0,200),
+          imageBase64:base64,isPrimary:true
+        });
+        job.calibration='data:image/jpeg;base64,'+base64;
+        job.status='ready';job.finishedAt=Date.now();
+        return send(res,200,{ok:true,job:actorSheetJobView(job)});
+      }
       const auth=authenticate(req);if(!auth)return send(res,403,{ok:false,error:'NOVEL2_ACCESS_DENIED'});
       const input=await bodyJson(req);
       let book=await latestBook();
@@ -715,6 +766,27 @@ async function main(){
         const saved=await approveIdentity(auth.role);
         actorSheetJobs.delete(auth.role);
         return send(res,200,{ok:true,identity:{role:auth.role,approved:true,version:saved.version}});
+      }
+
+      if(url.pathname==='/novel2/api/identity/calibrate/prepare'){
+        if(!serviceAuthenticated(req))return send(res,403,{ok:false,error:'NOVEL2_EDGE_PREPARE_DENIED'});
+        if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
+        ids=await identities();
+        const identity=ids[auth.role];
+        if(!identity?.identity_lock)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_NOT_FOUND'});
+        const {job,fresh}=beginEdgeActorJob(auth.role,{force:input.force===true});
+        if(!fresh)return send(res,200,{ok:true,job:actorSheetJobView(job)});
+        try{
+          const {prompt,references}=calibrationSpec({identity,role:auth.role});
+          const refs=await resizeReferences(references,480,4);
+          if(!refs.length||refs.length!==references.length)
+            throw new Error('NOVEL2_IMAGE_REFERENCES_MISSING');
+          return send(res,200,{ok:true,job:actorSheetJobView(job),
+            work:{job_id:job.jobId,role:auth.role,prompt,refs,width:832,height:1344}});
+        }catch(error){
+          job.status='failed';job.errorCode='GENERATION_REFERENCES_MISSING';job.finishedAt=Date.now();
+          return send(res,422,{ok:false,error:job.errorCode});
+        }
       }
 
       if(url.pathname==='/novel2/api/identity/calibrate/start'){
