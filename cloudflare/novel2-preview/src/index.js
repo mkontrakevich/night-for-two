@@ -219,6 +219,10 @@ export default{
     if(!host) return json(503,{ok:false,error:'NOVEL2_ORIGIN_HOST_MISSING'});
 
     const target=new URL(incoming.pathname+incoming.search,`http://${host}:${port}`);
+    // Document pages are small. Buffer them at the edge so VPC streaming and
+    // inherited Content-Length headers cannot leave the client waiting forever.
+    // API calls (including long-running AI operations) retain streaming behavior.
+    const isDocument=(request.method==='GET')&&(incoming.pathname==='/novel2'||incoming.pathname==='/novel2/');
 
     // Clone the request before retries so POST bodies remain replayable.
     const sources=[];
@@ -233,6 +237,15 @@ export default{
         headers.set('cache-control','no-store');
         headers.set('x-novel2-preview','1');
         if(attempt>1)headers.set('x-novel2-edge-retry',String(attempt-1));
+        if(isDocument&&response.ok){
+          const content=await response.arrayBuffer();
+          if(!content.byteLength||content.byteLength>2_000_000)throw new Error('NOVEL2_EDGE_DOCUMENT_INVALID_SIZE');
+          headers.delete('content-length');
+          headers.delete('transfer-encoding');
+          headers.set('content-length',String(content.byteLength));
+          headers.set('x-novel2-document-delivery','buffered');
+          return new Response(content,{status:response.status,statusText:response.statusText,headers});
+        }
         return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
       }catch(error){
         lastError=error;
@@ -243,7 +256,6 @@ export default{
     // Never expose raw transport JSON as the whole Telegram Mini App page.
     // Keep a lightweight self-healing shell on document navigation while the
     // tunnel reconnects; API/health calls still receive structured JSON.
-    const isDocument=(request.method==='GET'||request.method==='HEAD')&&(incoming.pathname==='/novel2'||incoming.pathname==='/novel2/');
     if(isDocument)return recoveryPage();
 
     return json(502,{
