@@ -2,7 +2,7 @@ function json(status,payload,extraHeaders={}){
   return Response.json(payload,{status,headers:{'cache-control':'no-store','x-novel2-preview':'1',...extraHeaders}});
 }
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-const AI_TEXT_MODEL='@cf/zai-org/glm-4.7-flash';
+const AI_TEXT_MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const AI_VISION_MODEL='@cf/google/gemma-4-26b-a4b-it';
 const AI_IMAGE_MODEL='@cf/black-forest-labs/flux-2-klein-4b';
 
@@ -57,7 +57,7 @@ async function handleAi(request,env,incoming){
     const input={
       messages,
       temperature:Number.isFinite(Number(body.temperature))?Math.max(0,Math.min(2,Number(body.temperature))):0.7,
-      max_completion_tokens:Math.max(32,Math.min(8000,Number(body.max_tokens||body.max_completion_tokens||5000)))
+      max_tokens:Math.max(32,Math.min(8000,Number(body.max_tokens||body.max_completion_tokens||5000)))
     };
     if(body.json_mode)input.response_format={type:'json_object'};
     try{
