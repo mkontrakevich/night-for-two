@@ -12,5 +12,8 @@
   "vars": {
     "NOVEL2_ORIGIN_HOST": "placeholder.invalid",
     "NOVEL2_ORIGIN_PORT": "5690"
+  },
+  "ai": {
+    "binding": "AI"
   }
 }
