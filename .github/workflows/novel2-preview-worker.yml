@@ -91,19 +91,23 @@ jobs:
           test "$code" = 200
           service_key="$(printf 'novel2-ai-v1:%s' "$NOVEL2_SERVICE_SECRET" | sha256sum | awk '{print $1}')"
           text_payload='{"messages":[{"role":"user","content":"Reply with exactly OK."}],"temperature":0,"max_tokens":24}'
-          curl --fail --silent --show-error --max-time 45 \
+          text_code=$(curl --silent --show-error --max-time 45 -o /tmp/novel2-ai-text.json -w '%{http_code}' \
             -H 'content-type: application/json' \
             -H "x-novel2-service-key: $service_key" \
             --data "$text_payload" \
-            "$base/novel2-ai/text" | tee /tmp/novel2-ai-text.json
+            "$base/novel2-ai/text")
+          echo "NOVEL2_WORKERS_AI_TEXT_HTTP=$text_code"
+          if [ "$text_code" != "200" ]; then cat /tmp/novel2-ai-text.json; exit 1; fi
           jq -e '.ok == true and (.content | type == "string") and (.content | length > 0)' /tmp/novel2-ai-text.json >/dev/null
 
           image_payload='{"prompt":"A plain neutral warm gray studio color swatch, no text, no people","width":256,"height":256}'
-          curl --fail --silent --show-error --max-time 90 \
+          image_code=$(curl --silent --show-error --max-time 90 -o /tmp/novel2-ai-image.json -w '%{http_code}' \
             -H 'content-type: application/json' \
             -H "x-novel2-service-key: $service_key" \
             --data "$image_payload" \
-            "$base/novel2-ai/image" | tee /tmp/novel2-ai-image.json >/dev/null
+            "$base/novel2-ai/image")
+          echo "NOVEL2_WORKERS_AI_IMAGE_HTTP=$image_code"
+          if [ "$image_code" != "200" ]; then cat /tmp/novel2-ai-image.json; exit 1; fi
           jq -e '.ok == true and (.image | type == "string") and (.image | length > 100)' /tmp/novel2-ai-image.json >/dev/null
           echo "NOVEL2_WORKERS_AI_READY=true"
                     echo "NOVEL2_PREVIEW_READY=$base/novel2/"
