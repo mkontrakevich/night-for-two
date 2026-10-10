@@ -159,8 +159,21 @@ async function handleAi(request,env,incoming){
 }
 
 
-function buildUpstream(target,request,incoming,attempt){
-  const upstream=new Request(target.toString(),request);
+function buildUpstream(target,request,incoming,attempt,smallBody=null){
+  let upstream;
+  if(smallBody===null){
+    upstream=new Request(target.toString(),request);
+  }else{
+    const headers=new Headers(request.headers);
+    headers.delete('content-length');
+    headers.delete('transfer-encoding');
+    upstream=new Request(target.toString(),{
+      method:request.method,headers,
+      // Known-size immutable bytes avoid indefinite streamed POST bodies
+      // across the beta VPC Network binding.
+      body:new TextEncoder().encode(smallBody)
+    });
+  }
   upstream.headers.set('x-forwarded-host',incoming.host);
   upstream.headers.set('x-forwarded-proto','https');
   upstream.headers.set('x-novel2-edge-attempt',String(attempt));
@@ -223,6 +236,16 @@ export default{
     // inherited Content-Length headers cannot leave the client waiting forever.
     // API calls (including long-running AI operations) retain streaming behavior.
     const isDocument=(request.method==='GET')&&(incoming.pathname==='/novel2'||incoming.pathname==='/novel2/');
+    const isSmallApi=(request.method==='POST')&&[
+      '/novel2/api/state',
+      '/novel2/api/identity/calibrate/start',
+      '/novel2/api/identity/calibrate/status',
+      '/novel2/api/books'
+    ].includes(incoming.pathname);
+    const smallBody=isSmallApi?await request.clone().text():null;
+    if(isSmallApi&&new TextEncoder().encode(smallBody).byteLength>16384){
+      return json(413,{ok:false,error:'NOVEL2_EDGE_SMALL_API_BODY_TOO_LARGE'});
+    }
 
     // Clone the request before retries so POST bodies remain replayable.
     const sources=[];
@@ -232,14 +255,15 @@ export default{
     let lastError=null;
     for(let attempt=1;attempt<=sources.length;attempt++){
       try{
-        const response=await env.NOVEL2_VPC.fetch(buildUpstream(target,sources[attempt-1],incoming,attempt));
+        const response=await env.NOVEL2_VPC.fetch(buildUpstream(target,sources[attempt-1],incoming,attempt,smallBody));
         const headers=new Headers(response.headers);
         headers.set('cache-control','no-store');
         headers.set('x-novel2-preview','1');
         if(attempt>1)headers.set('x-novel2-edge-retry',String(attempt-1));
-        if(isDocument&&response.ok){
+        if((isDocument||isSmallApi)&&response.ok){
           const content=await response.arrayBuffer();
-          if(!content.byteLength||content.byteLength>2_000_000)throw new Error('NOVEL2_EDGE_DOCUMENT_INVALID_SIZE');
+          const maxBytes=isDocument?2_000_000:16_000_000;
+          if(!content.byteLength||content.byteLength>maxBytes)throw new Error('NOVEL2_EDGE_RESPONSE_INVALID_SIZE');
           headers.delete('content-length');
           headers.delete('transfer-encoding');
           headers.set('content-length',String(content.byteLength));
