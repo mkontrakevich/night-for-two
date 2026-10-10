@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0909">
-<meta name="novel2-ui-release" content="sensual-editorial-20261010-r2">
+<meta name="novel2-ui-release" content="sensual-editorial-20261010-r3">
 <title>Interactive Novel 2.0</title>
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <style>
@@ -91,6 +91,7 @@ let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=n
 let activeRequestControllers=new Set(),navigationEpoch=0;
 let actorSheetTask={active:false,status:'idle',role:'',phase:'',startedAt:0,phaseStartedAt:0,maxSeconds:180,detached:false,error:''};
 let actorMenuTimer=null;
+let actorPollActive=false,actorRecoveryBusy=false;
 
 function telegramInitData(){
  const sdk=String(window.Telegram?.WebApp?.initData||'');
@@ -236,6 +237,7 @@ async function refresh(){
    state=(await api('state',{},15000)).state;
    aiAdvanceError='';aiAdvanceKey='';
    render();
+   void restoreActorSheetJob();
  }catch(e){
    if(isCancelled(e))return;
    stopLoading();
@@ -457,49 +459,103 @@ async function buildCharacterFromDetail(role){
    actorTaskPhase('actor_sheet',180);
    if(actorSheetTask.detached){menuMode=true;renderMainMenu()}else{menuMode=false;loading('Создаём нейтральную actor sheet…','image',180,true)}
    try{
-     const cal=await api('identity/calibrate',{},180000);
-     calibrationImage=String(cal.calibration||'');
-     if(!calibrationImage)throw new Error('NOVEL2_ACTOR_SHEET_EMPTY');
-     try{state=(await api('state',{},15000)).state||state}catch{}
-     characterLooksLoaded[role]=false;
-     actorTaskFinish('ready');
-     if(actorSheetTask.detached){menuMode=true;renderMainMenu()}else{menuMode=false;render()}
+     const started=await api('identity/calibrate/start',{},20000);
+     const job=started?.job||{};
+     if(job.status==='working'&&job.started_at)actorSheetTask.phaseStartedAt=Number(job.started_at);
+     actorSheetTask.maxSeconds=600;
+     void watchActorSheet(role);
+     return;
    }catch(calError){
-     calibrationImage='';
      actorTaskFinish('failed',calError?.message||calError);
-     try{state=(await api('state',{},15000)).state||state}catch{}
-     menuMode=true;characterDetailRole=role;
-     renderCharacterDetail(role);
+     menuMode=true;characterDetailRole=role;renderCharacterDetail(role);
    }
  }catch(e){
    if(isCancelled(e)){actorTaskFinish('cancelled');return}
    actorTaskFinish('failed',e?.message||e);
    alert(e.message);
    menuMode=true;characterDetailRole=role;renderCharacterDetail(role);
- }finally{busy=false}
+ }finally{if(!actorPollActive)busy=false}
+}
+function actorJobErrorText(code=''){
+ if(code==='GENERATION_CONNECTION_INTERRUPTED')return 'Ответ генератора не получен. Проверьте подключение.';
+ if(code==='GENERATION_PROVIDER_FAILED')return 'Сервис изображений не смог завершить генерацию.';
+ return 'Генерация не завершилась.';
+}
+async function watchActorSheet(role){
+ if(actorPollActive)return;
+ actorPollActive=true;
+ let connectionMisses=0;
+ try{
+   for(let check=0;check<300;check++){
+     await new Promise(resolve=>setTimeout(resolve,2200));
+     let j;
+     try{j=await api('identity/calibrate/status',{},20000);connectionMisses=0}
+     catch(error){if(isCancelled(error))return;if(++connectionMisses<7)continue;throw new Error('GENERATION_CONNECTION_INTERRUPTED')}
+     const task=j?.job||{};
+     if(task.status==='working'){
+       if(!actorSheetTask.active){actorTaskStart(role,'actor_sheet',600);actorSheetTask.detached=true;if(menuMode)renderMainMenu()}
+       continue;
+     }
+     if(task.status==='ready'){
+       calibrationImage=String(task.calibration||'');
+       if(!calibrationImage)throw new Error('GENERATION_RESULT_MISSING');
+       try{state=(await api('state',{},15000)).state||state}catch{}
+       characterDraft=state?.my_character||characterDraft;
+       characterLooksLoaded[role]=false;
+       actorTaskFinish('ready');
+       if(actorSheetTask.detached||menuMode){menuMode=true;renderMainMenu()}else{menuMode=false;render()}
+       return;
+     }
+     actorTaskFinish('failed',actorJobErrorText(task.error_code));
+     try{state=(await api('state',{},15000)).state||state}catch{}
+     menuMode=true;characterDetailRole=role;renderCharacterDetail(role);
+     return;
+   }
+   throw new Error('GENERATION_CONNECTION_INTERRUPTED');
+ }catch(error){
+   if(isCancelled(error))return;
+   actorTaskFinish('failed',actorJobErrorText(error.message));
+   menuMode=true;characterDetailRole=role;renderCharacterDetail(role);
+ }finally{actorPollActive=false;busy=false}
+}
+async function restoreActorSheetJob(){
+ if(actorRecoveryBusy||actorSheetTask.active||actorPollActive||!state||state?.mode==='reader')return;
+ actorRecoveryBusy=true;
+ try{
+   const role=String(state?.role||'A');
+   const j=await api('identity/calibrate/status',{},12000),job=j?.job||{};
+   if(job.status==='working'){
+     actorTaskStart(role,'actor_sheet',600);
+     actorSheetTask.phaseStartedAt=Number(job.started_at)||Date.now();
+     actorSheetTask.detached=true;busy=true;menuMode=true;renderMainMenu();
+     void watchActorSheet(role);
+   }else if(job.status==='ready'&&job.calibration){
+     calibrationImage=String(job.calibration);
+     characterDraft=state?.my_character||characterDraft;
+     actorSheetTask.role=role;actorTaskFinish('ready');
+     if(menuMode)renderMainMenu();
+   }
+ }catch(error){if(!isCancelled(error))console.warn('Actor status unavailable')}
+ finally{actorRecoveryBusy=false}
 }
 async function continueCalibrationFromDetail(role){
  if(busy)return;
  role=String(role||'').toUpperCase();
  if(role!==String(state?.role||'A'))return;
- actorTaskStart(role,'actor_sheet',180);
+ actorTaskStart(role,'actor_sheet',600);
  busy=true;characterDraft=state?.my_character||characterDraft;menuMode=false;characterDetailRole='';
- loading('Создаём нейтральную actor sheet…','image',180,true);
+ loading('Создаём нейтральную actor sheet…','image',600,true);
  try{
-   const j=await api('identity/calibrate',{},180000);
-   calibrationImage=String(j.calibration||'');
-   if(!calibrationImage)throw new Error('NOVEL2_ACTOR_SHEET_EMPTY');
-   try{state=(await api('state',{},15000)).state||state}catch{}
-   characterLooksLoaded[role]=false;
-   actorTaskFinish('ready');
-   if(actorSheetTask.detached){menuMode=true;renderMainMenu()}else{menuMode=false;render()}
- }catch(e){
-   if(isCancelled(e)){actorTaskFinish('cancelled');return}
-   calibrationImage='';
-   actorTaskFinish('failed',e?.message||e);
-   try{state=(await api('state',{},15000)).state||state}catch{}
+   const j=await api('identity/calibrate/start',{},20000);
+   const job=j?.job||{};
+   if(job.status==='working'&&job.started_at)actorSheetTask.phaseStartedAt=Number(job.started_at);
+   void watchActorSheet(role);
+ }catch(error){
+   if(isCancelled(error)){actorTaskFinish('cancelled');busy=false;return}
+   actorTaskFinish('failed',String(error?.message||error));
    menuMode=true;characterDetailRole=role;renderCharacterDetail(role);
- }finally{busy=false}
+   busy=false;
+ }
 }
 async function generateCharacterLookFromDetail(role,lookKey){
  if(busy)return;
