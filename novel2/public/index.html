@@ -8,6 +8,7 @@
 <title>Interactive Novel 2.0</title>
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <link rel="stylesheet" href="/novel2/noir-experience.css?v=1">
+<link rel="stylesheet" href="/novel2/noir-host.css?v=1">
 <style>
 :root{--paper:#f1e8d8;--ink:#231d18;--muted:#8e8174;--red:#8e2833;--line:rgba(36,29,24,.16);--safe:env(safe-area-inset-bottom)}
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}button,textarea,input{font:inherit}
@@ -653,9 +654,11 @@ function renderMainMenu(){
  const own=state?.characters?.[role]||{};
  const otherHuman=state?.characters?.[other]||{};
  const otherHumanReady=Boolean(otherHuman.ready&&!otherHuman.synthetic);
- const characterStrip=active
-   ?roleCardHtml('A',a)+roleCardHtml('B',b)
-   :roleCardHtml(role,own)+(otherHumanReady?roleCardHtml(other,otherHuman):'');
+ const partnerKnown=Boolean(active&&state?.scene?.noir_progress?.partner_reveal_phase==='fictional_reveal');
+ const strangerCard='<div class="playerCard mysteryPartner" aria-label="Сюжетная личность второго героя пока скрыта"><div class="avatarFallback">?</div><div><b>Незнакомец</b><small>Его роль раскроется в сюжете</small></div></div>';
+ const ownCast=active?(activeRole(role)||state?.characters?.[role]||{}):own;
+ const otherCast=active?(activeRole(other)||state?.characters?.[other]||{}):otherHuman;
+ const characterStrip=roleCardHtml(role,ownCast)+(partnerKnown?roleCardHtml(other,otherCast):strangerCard);
  const castNotice=!active&&!otherHumanReady?'<p class="castNote">AI-персонажи появятся после создания истории.</p>':'';
  const booksHtml=libraryBooks.length?libraryBooks.map(bookRowHtml).join(''):'<div class="hint">Готовых романов пока нет.</div>';
  const draftsHtml=libraryDrafts.length?libraryDrafts.map(draftRowHtml).join(''):'';
@@ -977,7 +980,7 @@ async function startNewBook(){
  if(busy)return;
  busy=true;loading('Создаём новую историю','story',600);
  try{
-   const j=await api('story/draft/new',{creative_brief:''},600000);
+   const j=await api('story/draft/new',{creative_brief:typeof window.novel2HostCreativeBrief==='function'?window.novel2HostCreativeBrief():''},600000);
    storyDraft=j.draft;menuMode=false;
    renderStoryDraft();
  }catch(e){if(isCancelled(e))return;alert(e.message);menuMode=true;renderMainMenu()}finally{busy=false}
@@ -1014,5 +1017,6 @@ async function loadVisual(){try{const j=await api('visual');const img=document.g
 refresh();
 </script>
 <script src="/novel2/noir-experience.js?v=1"></script>
+<script src="/novel2/noir-host.js?v=1"></script>
 </body>
 </html>
