@@ -70,6 +70,56 @@ export class ActorSheetWorkflow extends WorkflowEntrypoint {
   }
 }
 
+export class PurgatoryWorldWorkflow extends WorkflowEntrypoint {
+  async run(event,step){
+    const role=String(event?.payload?.role||''),jobId=String(event?.payload?.job_id||'');
+    if(!['A','B'].includes(role)||!jobId)return{status:'invalid'};
+    return await step.do('render and persist guest-inspired theatre', {
+      retries:{limit:0,delay:'5 seconds',backoff:'constant'},timeout:'5 minutes'
+    },async()=>{
+      const env=this.env,origin='http://'+env.NOVEL2_ORIGIN_HOST+':'+(env.NOVEL2_ORIGIN_PORT||'5690');
+      const key=String(env.NOVEL2_SERVICE_SECRET||'');
+      const call=async(route,payload)=>{
+        const result=await env.NOVEL2_VPC.fetch(new Request(origin+route,{
+          method:'POST',headers:{'content-type':'application/json','x-novel2-service-key':key},
+          body:JSON.stringify(payload)
+        }));
+        const body=await result.json();
+        if(!result.ok||!body?.ok)throw new Error('NOVEL2_LOBBY_VPC_'+result.status);
+        return body;
+      };
+      let ready=false;
+      try{
+        const prepared=await call('/novel2/api/lobby/world/work',{role,job_id:jobId});
+        const prompt=String(prepared.work?.prompt||'');
+        if(prompt.length<100)throw new Error('NOVEL2_LOBBY_PROMPT_EMPTY');
+        const form=new FormData();
+        form.append('prompt',prompt);form.append('width','832');form.append('height','1344');
+        const encoded=new Response(form);
+        const ai=await env.AI.run(AI_IMAGE_MODEL,{multipart:{
+          body:encoded.body,contentType:encoded.headers.get('content-type')||'multipart/form-data'
+        }});
+        const image=String(ai?.image||'');
+        if(image.length<1500)throw new Error('NOVEL2_LOBBY_IMAGE_EMPTY');
+        const result={role,job_id:jobId,status:'ready',image,model:AI_IMAGE_MODEL};
+        // The chargeable AI inference is NEVER repeated on callback failure.
+        for(let attempt=0;attempt<4;attempt++){
+          try{await call('/novel2/api/lobby/world/complete',result);ready=true;break}
+          catch(error){if(attempt===3)throw error;await new Promise(r=>setTimeout(r,600*(attempt+1)))}
+        }
+        return{status:ready?'ready':'failed'};
+      }catch(error){
+        if(!ready){
+          try{await call('/novel2/api/lobby/world/complete',
+            {role,job_id:jobId,status:'failed',error_code:'GENERATION_FAILED'})}catch{}
+        }
+        console.error('NOVEL2_LOBBY_WORKFLOW_FAILED',String(error?.message||'failed').slice(0,80));
+        return{status:'failed'};
+      }
+    });
+  }
+}
+
 function json(status,payload,extraHeaders={}){
   return Response.json(payload,{status,headers:{'cache-control':'no-store','x-novel2-preview':'1',...extraHeaders}});
 }
@@ -336,6 +386,47 @@ function recoveryPage(){
 }
 
 
+async function beginLobbyWorldAtEdge(request,env,host,port){
+  if(!env.NOVEL2_SERVICE_SECRET||!env.LOBBY_WORLD_WORKFLOW)
+    return json(503,{ok:false,error:'NOVEL2_LOBBY_WORLD_WORKFLOW_MISSING'});
+  const body=await request.clone().text();
+  if(body.length>2000)return json(413,{ok:false,error:'NOVEL2_LOBBY_PLACE_TOO_LONG'});
+  let parsed={};try{parsed=JSON.parse(body||'{}')}catch{
+    return json(400,{ok:false,error:'NOVEL2_LOBBY_JSON_INVALID'});
+  }
+  if(typeof parsed.place!=='string'||parsed.place.length>120||parsed.place.length<2)
+    return json(400,{ok:false,error:'NOVEL2_LOBBY_PLACE_INVALID'});
+  const target='http://'+host+':'+port+'/novel2/api/lobby/world/';
+  let prepared;
+  try{
+    const response=await env.NOVEL2_VPC.fetch(new Request(target+'prepare',{
+      method:'POST',headers:{
+        'content-type':'application/json','x-novel2-service-key':String(env.NOVEL2_SERVICE_SECRET),
+        'x-telegram-init-data':request.headers.get('x-telegram-init-data')||''
+      },body
+    }));
+    prepared=await response.json();
+    if(!response.ok||!prepared?.ok)
+      return json(response.status,{ok:false,error:String(prepared?.error||'NOVEL2_LOBBY_PREPARE_FAILED')});
+  }catch{return json(502,{ok:false,error:'NOVEL2_LOBBY_PREPARE_UNAVAILABLE'})}
+  const work=prepared.work;
+  if(!work)return json(200,{ok:true,world:prepared.state});
+  try{
+    await env.LOBBY_WORLD_WORKFLOW.create({
+      id:String(work.job_id),params:{role:String(work.role),job_id:String(work.job_id)}
+    });
+    return json(200,{ok:true,world:prepared.state});
+  }catch{
+    try{await env.NOVEL2_VPC.fetch(new Request(target+'complete',{
+      method:'POST',headers:{'content-type':'application/json',
+        'x-novel2-service-key':String(env.NOVEL2_SERVICE_SECRET)},
+      body:JSON.stringify({role:work.role,job_id:work.job_id,status:'failed',
+        error_code:'GENERATION_WORKFLOW_START_FAILED'})
+    }))}catch{}
+    return json(503,{ok:false,error:'NOVEL2_LOBBY_WORKFLOW_START_FAILED'});
+  }
+}
+
 async function beginActorSheetAtEdge(request,env,host,port){
   if(!env.NOVEL2_SERVICE_SECRET)
     return json(503,{ok:false,error:'NOVEL2_ACTOR_EDGE_SECRET_MISSING'});
@@ -485,6 +576,8 @@ export default{
     if(!env.NOVEL2_VPC||typeof env.NOVEL2_VPC.fetch!=='function') return json(503,{ok:false,error:'NOVEL2_VPC_BINDING_MISSING'});
     const host=env.NOVEL2_ORIGIN_HOST,port=env.NOVEL2_ORIGIN_PORT||'5690';
     if(!host) return json(503,{ok:false,error:'NOVEL2_ORIGIN_HOST_MISSING'});
+    if(request.method==='POST'&&incoming.pathname==='/novel2/api/lobby/world/start')
+      return beginLobbyWorldAtEdge(request,env,host,port);
     if(request.method==='POST'&&incoming.pathname==='/novel2/api/identity/calibrate/start')
       return beginActorSheetAtEdge(request,env,host,port);
 
@@ -497,6 +590,7 @@ export default{
       '/novel2/api/state',
       '/novel2/api/identity/calibrate/start',
       '/novel2/api/identity/calibrate/status',
+      '/novel2/api/lobby/world/status',
       '/novel2/api/books'
     ].includes(incoming.pathname);
     const smallBody=isSmallApi?await request.clone().text():null;
