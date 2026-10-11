@@ -21,6 +21,11 @@
       "name": "novel2-actor-sheet",
       "binding": "ACTOR_SHEET_WORKFLOW",
       "class_name": "ActorSheetWorkflow"
+    },
+    {
+      "name": "novel2-purgatory-world",
+      "binding": "LOBBY_WORLD_WORKFLOW",
+      "class_name": "PurgatoryWorldWorkflow"
     }
   ],
   "assets": {
