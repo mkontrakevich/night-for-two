@@ -4,7 +4,6 @@ export const config = Object.freeze({
   botToken: String(process.env.TELEGRAM_BOT_TOKEN || ''),
   ownerId: String(process.env.PRIMARY_OWNER_ID || ''),
   partnerId: String(process.env.PARTNER_TELEGRAM_ID || ''),
-  openRouterKey: String(process.env.OPENROUTER_API_KEY || ''),
   edgeAiUrl: String(process.env.NOVEL2_EDGE_AI_URL || '').replace(/\/+$/,''),
   textModel: String(process.env.NOVEL2_TEXT_MODEL || 'openai/gpt-5.6'),
   visionModel: String(process.env.NOVEL2_VISION_MODEL || 'openai/gpt-5.6'),
@@ -19,7 +18,7 @@ export function assertProductionConfig() {
     TELEGRAM_BOT_TOKEN: config.botToken,
     PRIMARY_OWNER_ID: config.ownerId,
     PARTNER_TELEGRAM_ID: config.partnerId,
-    AI_PROVIDER: config.edgeAiUrl || config.openRouterKey
+    NOVEL2_EDGE_AI_URL: config.edgeAiUrl
   })) if (!value) missing.push(key);
   if (missing.length && !config.localTest) throw new Error('NOVEL2_CONFIG_MISSING:' + missing.join(','));
 }
