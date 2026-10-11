@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/app.js",
-    "test": "node scripts/smoke.mjs && node scripts/reference-contract.test.mjs && node scripts/noir-director.test.mjs && node scripts/noir-onboarding.test.mjs && node scripts/secret-host.test.mjs && node --check public/noir-experience.js && node --check public/noir-host.js && node scripts/stranger-cloudflare.test.mjs"
+    "test": "node scripts/smoke.mjs && node scripts/reference-contract.test.mjs && node scripts/noir-director.test.mjs && node scripts/noir-onboarding.test.mjs && node scripts/secret-host.test.mjs && node --check public/noir-experience.js && node --check public/noir-host.js && node scripts/stranger-cloudflare.test.mjs && node scripts/actor-workflow-contract.test.mjs"
   },
   "dependencies": {
     "pg": "8.13.1",
