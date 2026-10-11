@@ -29,6 +29,7 @@ jobs:
       CLOUDFLARE_TUNNEL_ID: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
       NOVEL2_SERVICE_SECRET: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      NOVEL2_ALLOWED_USER_IDS: ${{ secrets.PRIMARY_OWNER_ID }},${{ secrets.PARTNER_TELEGRAM_ID }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -67,6 +68,29 @@ jobs:
           cfg['vpc_networks'][0]['tunnel_id']=vpc['tunnel_id']
           Path('wrangler.deploy.json').write_text(json.dumps(cfg,indent=2)+'\n')
           PY
+      - name: Provision private R2 theatre bucket
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os,urllib.request,urllib.error
+          root='https://api.cloudflare.com/client/v4/accounts/'+os.environ['CLOUDFLARE_ACCOUNT_ID']+'/r2/buckets'
+          headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN'],'Content-Type':'application/json'}
+          name='novel2-secret-noir-theatre'
+          req=urllib.request.Request(root+'/'+name,headers=headers)
+          try:
+              with urllib.request.urlopen(req,timeout=20) as response:
+                  existing=json.load(response)
+                  if not existing.get('success'): raise RuntimeError('R2_LOOKUP_FAILED')
+              print('NOVEL2_R2_EXISTS=true')
+          except urllib.error.HTTPError as exc:
+              if exc.code!=404: raise
+              request=urllib.request.Request(root,headers=headers,method='POST',data=json.dumps({'name':name}).encode())
+              with urllib.request.urlopen(request,timeout=30) as response:
+                  created=json.load(response)
+                  if not created.get('success'): raise RuntimeError('R2_CREATE_FAILED')
+              print('NOVEL2_R2_CREATED=true')
+          PY
       - name: Deploy preview Worker
         run: npx --yes wrangler@4 deploy --config wrangler.deploy.json
       - name: Bind OpenRouter key securely when available
@@ -79,6 +103,13 @@ jobs:
           else
             echo 'NOVEL2_HOST_OPENROUTER_CONFIGURED=false'
           fi
+      - name: Restrict AI Stranger to verified project guests
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${NOVEL2_ALLOWED_USER_IDS%%,*}"
+          test -n "$owner" || { echo '::error::NOVEL2_OWNER_ID_MISSING'; exit 1; }
+          printf %s "$NOVEL2_ALLOWED_USER_IDS" | npx --yes wrangler@4 secret put NOVEL2_ALLOWED_USER_IDS --config wrangler.deploy.json
       - name: Diagnose protected OpenRouter Stranger provider
         shell: bash
         run: |
