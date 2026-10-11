@@ -201,6 +201,7 @@ async function handleAi(request,env,incoming){
     const temperature=Math.max(0,Math.min(1,Number(body.temperature)||.7));
     // Secret lives only in the Cloudflare runtime. No browser-origin requests
     // can invoke this endpoint, and no photos are ever sent to the narrator.
+    let openrouterFailure=env.OPENROUTER_API_KEY?'unknown':'key_not_configured';
     if(env.OPENROUTER_API_KEY){
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),21000);
       try{
@@ -221,8 +222,8 @@ async function handleAi(request,env,incoming){
           const content=String(result?.choices?.[0]?.message?.content||'');
           if(content.length>2&&content.length<3500)
             return json(200,{ok:true,content,provider:'openrouter'});
-        }else console.warn('NOVEL2_HOST_OPENROUTER_UNAVAILABLE',{status:response.status});
-      }catch(error){console.warn('NOVEL2_HOST_OPENROUTER_UNAVAILABLE',{kind:'transport'})}
+        }else {openrouterFailure='http_'+response.status;console.warn('NOVEL2_HOST_OPENROUTER_UNAVAILABLE',{status:response.status});}
+      }catch(error){openrouterFailure=controller.signal.aborted?'timeout':'transport';console.warn('NOVEL2_HOST_OPENROUTER_UNAVAILABLE',{kind:openrouterFailure})}
       finally{clearTimeout(timer)}
     }
     // Prologue must continue when the regional OpenRouter route is blocked.
@@ -232,7 +233,7 @@ async function handleAi(request,env,incoming){
         response_format:{type:'json_object'}
       });
       const content=workerTextContent(result);
-      if(content.length>2)return json(200,{ok:true,content,provider:'workers-ai'});
+      if(content.length>2)return json(200,{ok:true,content,provider:'workers-ai',openrouter_failure:openrouterFailure});
       return json(502,{ok:false,error:'NOVEL2_HOST_EMPTY_REPLY'});
     }catch(error){
       return json(502,{ok:false,error:'NOVEL2_HOST_MODEL_FAILED'});
