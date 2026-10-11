@@ -337,6 +337,8 @@ async function main(){
   const html=await fs.readFile(htmlPath,'utf8');
   const noirJs=await fs.readFile(path.resolve(__dirname,'../public/noir-experience.js'),'utf8');
   const noirCss=await fs.readFile(path.resolve(__dirname,'../public/noir-experience.css'),'utf8');
+  const hostJs=await fs.readFile(path.resolve(__dirname,'../public/noir-host.js'),'utf8');
+  const hostCss=await fs.readFile(path.resolve(__dirname,'../public/noir-host.css'),'utf8');
 
   const server=http.createServer(async(req,res)=>{
     try{
@@ -345,6 +347,8 @@ async function main(){
       if(req.method==='GET'&&(url.pathname==='/novel2'||url.pathname==='/novel2/'))return send(res,200,html,'text/html; charset=utf-8');
       if(req.method==='GET'&&url.pathname==='/novel2/noir-experience.js')return send(res,200,noirJs,'text/javascript; charset=utf-8');
       if(req.method==='GET'&&url.pathname==='/novel2/noir-experience.css')return send(res,200,noirCss,'text/css; charset=utf-8');
+      if(req.method==='GET'&&url.pathname==='/novel2/noir-host.js')return send(res,200,hostJs,'text/javascript; charset=utf-8');
+      if(req.method==='GET'&&url.pathname==='/novel2/noir-host.css')return send(res,200,hostCss,'text/css; charset=utf-8');
 
       if(!url.pathname.startsWith('/novel2/api/'))return send(res,404,{ok:false,error:'NOT_FOUND'});
       if(url.pathname==='/novel2/api/identity/calibrate/work'){
