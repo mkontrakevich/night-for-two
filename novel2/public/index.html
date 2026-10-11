@@ -312,6 +312,7 @@ function bindMainMenu(){
  });
 }
 function roleCardHtml(role,character={}){
+ if(character?.hidden)return '<div class="playerCard" role="status"><div class="kicker">ГЕРОЙ ПОД МАСКОЙ</div><h3>Незнакомец</h3><p class="hint">Личность другого гостя откроется в ходе романа. Это не раскрывает его личные данные.</p></div>';
  const taskForRole=String(actorSheetTask.role||'')===String(role);
  const canonicalSaved=Boolean((characterLooks[role]||[]).some(x=>x?.key==='canonical'&&x?.image&&x?.model!=='existing'));
  const working=Boolean(!canonicalSaved&&taskForRole&&actorSheetTask.active);
@@ -795,14 +796,14 @@ function renderStoryDraft(){
  let html='';
  interactive.forEach((slot,i)=>{
    const role=runtime[i],summary=state?.characters?.[role]||{},isOwn=role===ownRole;
-   const humanReady=Boolean(summary.ready&&!summary.synthetic&&summary.character_card?.passport);
+   const humanReady=Boolean(summary.ready&&!summary.synthetic&&(summary.character_card?.passport||summary.hidden));
    const createOwn=isOwn&&!ownReady?'<button class="secondary" type="button" data-create-own-character>Создать моего персонажа из фото</button>':'';
    const preview=humanReady
-     ?castPreviewHtml(role,summary.name||('Игрок '+role),summary.gender||'',summary.avatar||'',isOwn?'ваш персонаж из фотографий':'персонаж второго реального игрока')
+     ?castPreviewHtml(role,isOwn?(summary.name||('Игрок '+role)):'Гость под маской',isOwn?(summary.gender||''):'',isOwn?(summary.avatar||''):'',isOwn?'ваш персонаж из фотографий':'второй реальный участник · личность пока скрыта')
      :isOwn
        ?castPreviewHtml(role,'Ваш персонаж','','','сначала создайте его из фотографий')
        :storyAiCastPreviewHtml(role,slot);
-   html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||('Главная роль '+(i+1)))+'</strong><p>'+esc(slot.description||'Интерактивный герой истории')+'</p>'+preview+createOwn+'<input type="hidden" data-cast-slot="'+esc(slot.slot_key)+'" value="'+(humanReady?'player:'+role:'story:auto')+'"></div>';
+   html+='<div class="castSlot"><strong>'+esc(isOwn?(slot.narrative_function||('Главная роль '+(i+1))):'Неизвестный герой')+'</strong><p>'+esc(isOwn?(slot.description||'Интерактивный герой истории'):'Его литературная роль будет раскрыта по сюжету.')+'</p>'+preview+createOwn+'<input type="hidden" data-cast-slot="'+esc(slot.slot_key)+'" value="'+(humanReady?'player:'+role:'story:auto')+'"></div>';
  });
  support.forEach((slot)=>{
    html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||'AI-персонаж')+'</strong><p>'+esc(slot.description||'Дополнительная роль истории')+'</p><div class="hint">Будет создан только для этого романа: характер, биография и Visual DNA выводятся из его функции в сюжете.</div><input type="hidden" data-cast-slot="'+esc(slot.slot_key)+'" value="story:auto"></div>';
@@ -1010,7 +1011,7 @@ async function exitStory(ask=true){
  }catch(e){alert(e.message);refresh()}finally{busy=false}
 }
 async function sendReply(){
- if(busy||!state?.can_reply)return;const box=document.getElementById('reply'),reply=box.value.trim();if(!reply)return;
+ if(busy||!state?.can_reply)return;const box=document.getElementById('reply'),reply=box.value.trim();if(!reply&&!selectedAction)return;
  busy=true;loading('Продолжаем роман из вашей реплики…','story',600);
  try{state=(await api('reply',{reply,action_key:selectedAction},600000)).state;selectedAction='';render()}catch(e){if(isCancelled(e))return;alert(e.message);refresh()}finally{busy=false}
 }
