@@ -188,6 +188,30 @@ async function requestProfile({role,referenceImages,userFacts,repairOf=null}){
   });
 }
 
+// Neutral actor onboarding must not depend on a separate remote vision call.
+// The photographs themselves are the authoritative identity reference; a
+// textual description is optional and must never block their persistence.
+export function referenceOnlyIdentity({role,referenceImages=[]}={}){
+  if(!['A','B'].includes(role))throw new Error('NOVEL2_IDENTITY_ROLE_INVALID');
+  if(!Array.isArray(referenceImages)||!referenceImages.length)throw new Error('NOVEL2_IDENTITY_REFERENCES_REQUIRED');
+  const profile=normalizeIdentityProfile({
+    face:{},hair:{},body:{},
+    stable_core_traits:[],
+    unknown_traits:['Any geometry not clearly established by the original photo references'],
+    do_not_drift:['Use source photographs as the only visual identity authority','No invented facial structure or body proportions'],
+    reference_coverage:{face_confidence:'low',profile_confidence:'low',body_confidence:'low',missing_views:[]}
+  });
+  const identityLock=[
+    'CHARACTER IDENTITY LOCK — PLAYER_'+role,
+    'The original uploaded photographs define the same adult person in every view.',
+    'Preserve exact visible face structure, nose geometry, hairline, skin texture and body proportions from all reference photos.',
+    'When a trait is not visible, represent it conservatively; do not invent descriptive specifics.',
+    'Do not beautify, change identity, age, facial geometry or body proportions.',
+    'Wardrobe for the neutral sheet only: opaque matte flesh-tone stage unitard; fully covered body.'
+  ].join(' ');
+  return{profile,identityLock};
+}
+
 export async function analyzeIdentity({role, referenceImages=[], userFacts={}}) {
   if(!['A','B'].includes(role)) throw new Error('NOVEL2_IDENTITY_ROLE_INVALID');
   if(!Array.isArray(referenceImages)||referenceImages.length<1) throw new Error('NOVEL2_IDENTITY_REFERENCES_REQUIRED');
