@@ -248,6 +248,7 @@ async function refresh(){
    state=(await api('state',{},15000)).state;
    aiAdvanceError='';aiAdvanceKey='';
    render();
+   if(state?.role&&!characterLooksLoaded[state.role])void loadCharacterLooks(state.role);
    void restoreActorSheetJob();
  }catch(e){
    if(isCancelled(e))return;
@@ -300,22 +301,24 @@ function bindMainMenu(){
  document.querySelectorAll('[data-draft]').forEach(el=>el.onclick=()=>openStoryDraft(el.dataset.draft));
  document.querySelectorAll('[data-character-role]').forEach(el=>el.onclick=()=>{
    const role=String(el.dataset.characterRole||'');
-   if(actorSheetTask.active&&String(actorSheetTask.role)===role){showActorTaskScreen();return}
-   if(actorSheetTask.status==='ready'&&String(actorSheetTask.role)===role&&calibrationImage&&characterDraft){menuMode=false;characterDetailRole='';render();return}
+   const canonicalSaved=Boolean((characterLooks[role]||[]).some(x=>x?.key==='canonical'&&x?.image&&x?.model!=='existing'));
+   if(!canonicalSaved&&actorSheetTask.active&&String(actorSheetTask.role)===role){showActorTaskScreen();return}
+   if(!canonicalSaved&&actorSheetTask.status==='ready'&&String(actorSheetTask.role)===role&&calibrationImage&&characterDraft){menuMode=false;characterDetailRole='';render();return}
    renderCharacterDetail(role);
    window.scrollTo(0,0);
  });
 }
 function roleCardHtml(role,character={}){
  const taskForRole=String(actorSheetTask.role||'')===String(role);
- const working=Boolean(taskForRole&&actorSheetTask.active);
- const readyPending=Boolean(taskForRole&&actorSheetTask.status==='ready'&&calibrationImage);
- const failed=Boolean(taskForRole&&actorSheetTask.status==='failed');
+ const canonicalSaved=Boolean((characterLooks[role]||[]).some(x=>x?.key==='canonical'&&x?.image&&x?.model!=='existing'));
+ const working=Boolean(!canonicalSaved&&taskForRole&&actorSheetTask.active);
+ const readyPending=Boolean(!canonicalSaved&&taskForRole&&actorSheetTask.status==='ready'&&calibrationImage);
+ const failed=Boolean(!canonicalSaved&&taskForRole&&actorSheetTask.status==='failed');
  const identityOnly=Boolean(character?.identity_only||isBaseActorCard(character?.character_card));
  const empty=!character?.ready&&!character?.character_card;
  const name=String(identityOnly||empty||working||readyPending?'Карточка актёра':(character?.name||character?.character_card?.passport?.fiction_name||'Персонаж'));
- const extra=working?'создаётся':failed?'ошибка генерации':readyPending?'готова к проверке':identityOnly?'ожидает карточку':empty?'не создана':character?.source_type==='ai_library'?'готовый персонаж':character?.synthetic?'AI-персонаж':'ваш персонаж';
- const sub=working?actorTaskPhaseLabel():failed?'Повторить без загрузки фото':readyPending?'Открыть и сохранить':identityOnly?'По сохранённым фото':empty?'Создать по фото':(character?.story_role||character?.archetype||character?.character_card?.passport?.story_role||'');
+ const extra=canonicalSaved?'готова':working?'создаётся':failed?'ошибка генерации':readyPending?'готова к проверке':identityOnly?'ожидает карточку':empty?'не создана':character?.source_type==='ai_library'?'готовый персонаж':character?.synthetic?'AI-персонаж':'ваш персонаж';
+ const sub=canonicalSaved?'Открыть готовую карточку':working?actorTaskPhaseLabel():failed?'Повторить без загрузки фото':readyPending?'Открыть и сохранить':identityOnly?'По сохранённым фото':empty?'Создать по фото':(character?.story_role||character?.archetype||character?.character_card?.passport?.story_role||'');
  const progress=working?'<div class="actorCardProgress"><div class="actorCardProgressMeta"><span data-actor-task-phase>'+esc(actorTaskPhaseLabel())+'</span><span data-actor-task-time>'+formatWait(actorTaskSeconds())+'</span></div><div class="actorCardProgressTrack" aria-label="Идёт обработка. Процент выполнения пока неизвестен"><b></b></div><small class="actorCardProgressNote">Ожидаем сервер · процент не рассчитывается</small></div>':'';
  return '<button type="button" class="playerCard'+(working?' isWorking':'')+(readyPending?' actorReadyPending':'')+(failed?' actorFailed':'')+'" data-character-role="'+esc(role)+'">'+avatarHtml(character?.avatar||'',name)+'<div><small>Игрок '+esc(role)+' · '+esc(extra)+'</small><b>'+esc(name)+'</b><small>'+esc(sub)+'</small></div>'+progress+'</button>';
 }
@@ -361,6 +364,7 @@ async function loadCharacterLooks(role){
    characterLooks[role]=Array.isArray(j.looks)?j.looks:[];
    characterLooksLoaded[role]=true;
    if(characterDetailRole===role)renderCharacterDetail(role);
+   else if(menuMode)renderMainMenu();
  }catch(e){
    characterLooksLoaded[role]=true;
    if(characterDetailRole===role)renderCharacterDetail(role);
@@ -417,10 +421,10 @@ function renderCharacterDetail(role){
  if(mine&&!active){
    const rows=Array.isArray(characterLooks[role])?characterLooks[role]:[];
    const actorSheetReady=rows.some(x=>x?.key==='canonical'&&x?.image&&x?.model!=='existing');
-   const status=actorSheetReady&&character?.ready?'ГОТОВА':actorSheetTask.status==='failed'&&String(actorSheetTask.role)===role?'ОШИБКА ГЕНЕРАЦИИ':hasIdentity?'НУЖНА КАРТОЧКА':'НЕ СОЗДАНА';
+   const status=actorSheetReady?'ГОТОВА':actorSheetTask.status==='failed'&&String(actorSheetTask.role)===role?'ОШИБКА ГЕНЕРАЦИИ':hasIdentity?'НУЖНА КАРТОЧКА':'НЕ СОЗДАНА';
    const looks=characterLooksHtml(role,actorSheetReady,false,true);
    const uploadFields='<div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Портреты и, по возможности, полный рост. Фотографии используются только как источник внешности.</div></div><button class="photoBuild" id="characterPhotoBuild" type="button">'+(hasIdentity?'Заменить фото и пересобрать':'Создать карточку актёра')+'</button>';
-   const failedNotice=actorSheetTask.status==='failed'&&String(actorSheetTask.role)===role
+   const failedNotice=!actorSheetReady&&actorSheetTask.status==='failed'&&String(actorSheetTask.role)===role
      ?'<div class="actorFailure" role="alert"><strong>Карточка актёра не создана</strong><p>'+esc(actorSheetTask.error||'Генерация прервана.')+'</p><p>Внешность сохранена. Повторно загружать фотографии не нужно.</p>'+(actorSheetTask.errorCode?'<small class="actorDiag">Код: '+esc(actorSheetTask.errorCode)+'</small>':'')+'</div>'
      :'';
    let photoPanel='';
@@ -640,7 +644,8 @@ function renderMainMenu(){
  const draftsHtml=libraryDrafts.length?libraryDrafts.map(draftRowHtml).join(''):'';
  app.innerHTML='<section class="mainMenu"><div class="editorialHero"><div class="editorialObjects" aria-hidden="true"></div><div class="editorialCopy"><div class="kicker">INTERACTIVE NOVEL 2.0 · PRIVATE STORIES</div><h1>Фантазии<br>становятся<br>историями</h1><p>Истории для двоих, в которых каждое решение меняет степень близости. Сначала сюжет — затем герои.</p><button type="button" class="editorialCTA" id="heroNewBook">Начать роман →</button></div></div>'+(active?'<div class="menuActions"><button type="button" class="secondary" id="continueBook">Продолжить роман →</button></div>':'')+'<div class="libraryTitle">'+(active?'Герои истории':'Карточка актёра')+'</div><div class="playerCards'+(active||otherHumanReady?' hasPair':'')+'">'+characterStrip+'</div>'+castNotice+(draftsHtml?'<div class="libraryTitle">Черновики историй</div>'+draftsHtml:'')+'<div class="libraryTitle">Мои романы</div>'+booksHtml+'</section>';
  bindMainMenu();
- const actorBlocked=actorSheetTask.active||(actorSheetTask.status==='ready'&&calibrationImage);
+ const ownSaved=Boolean((characterLooks[role]||[]).some(x=>x?.key==='canonical'&&x?.image&&x?.model!=='existing'));
+ const actorBlocked=!ownSaved&&(actorSheetTask.active||(actorSheetTask.status==='ready'&&calibrationImage));
  const heroNewBook=document.getElementById('heroNewBook');if(heroNewBook){heroNewBook.disabled=actorBlocked;heroNewBook.onclick=actorBlocked?null:startNewBook}
  const newBookButton=document.getElementById('newBook');if(newBookButton)newBookButton.disabled=actorBlocked;
  ensureActorMenuTicker();
