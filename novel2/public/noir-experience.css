@@ -46,3 +46,13 @@
 .noirReader button:focus-visible,.noirDock button:focus-visible{outline:2px solid #f4babc;outline-offset:3px}
 @keyframes noirAppear{from{opacity:0;filter:blur(8px);transform:translateY(11px)}to{opacity:1;filter:blur(0);transform:none}}
 @media(prefers-reduced-motion:reduce){.noirReader.entering .noirBeat,.noirReader.entering .noirStill,.noirReader.entering .noirInteraction{animation:none!important;opacity:1!important}.noirStillFrame img{transition:none}}
+
+.noirTrial{margin:18px 0 35px;border:1px solid rgba(215,134,151,.34);background:linear-gradient(125deg,rgba(85,23,43,.4),rgba(13,8,13,.3));padding:22px 18px}
+.noirTrial h2{font:400 clamp(23px,6vw,31px)/1.14 Georgia,serif;margin:13px 0;color:#f5e3df}
+.noirTrial p{font:400 16px/1.55 Georgia,serif;color:#e6d6cf}
+.noirTrial small{display:block;color:#bfa7a3;font-size:11px;line-height:1.55}
+.noirTrialActions{display:grid;gap:8px;margin-top:17px}
+.noirTrialActions button{min-height:47px;padding:11px 14px;border:1px solid rgba(230,185,183,.34);background:rgba(255,255,255,.025);color:#f3ded9;text-align:left;border-radius:0;font-size:12px}
+.noirTrialActions button[aria-pressed=true]{background:rgba(150,63,82,.33);border-color:#ead0cd}
+.noirReader.entering .noirTrial{animation:noirAppear .7s ease both;animation-delay:var(--beat-delay,0ms)}
+@media(prefers-reduced-motion:reduce){.noirReader.entering .noirTrial{animation:none!important}}
