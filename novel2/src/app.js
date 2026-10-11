@@ -272,6 +272,17 @@ function isAiControlled(ids,role,bookCast=[]){
 async function publicState(book,auth,ids={},bookCast=[]){
   const [a,b]=await Promise.all([characterSummary(ids.A,'A'),characterSummary(ids.B,'B')]);
   const summaries={A:a,B:b};
+  const otherRole=auth.role==='A'?'B':'A';
+  // Never transmit another human's uploaded reference photo or identity
+  // description to the first guest. Fictional role reveal is separate from
+  // user account disclosure and consent.
+  const otherSummary=summaries[otherRole]||{};
+  summaries[otherRole]={
+    ready:Boolean(otherSummary.ready),synthetic:Boolean(otherSummary.synthetic),
+    name:'Неизвестный герой',story_role:'',gender:'',avatar:'',
+    identity_only:false,control_mode:otherSummary.control_mode||'human',
+    character_card:{},hidden:true
+  };
   const base={
     role:auth.role,
     identity:{A:Boolean(summaries.A.ready),B:Boolean(summaries.B.ready)},
@@ -289,7 +300,14 @@ async function publicState(book,auth,ids={},bookCast=[]){
     scene,
     active_role:book.active_role,
     active_control_mode:isAiControlled(ids,book.active_role,bookCast)?'ai':'human',
-    cast:await Promise.all((Array.isArray(bookCast)?bookCast:[]).map(castCharacterSummary)),
+    cast:(await Promise.all((Array.isArray(bookCast)?bookCast:[]).map(castCharacterSummary))).map(entry=>{
+      if(String(entry.interactive_role||'')===String(auth.role))return entry;
+      const reveal=scene.noir_progress?.partner_reveal_phase==='fictional_reveal';
+      return reveal
+        ?{...entry,avatar:'',source_id:'',character_card:{},hidden:false}
+        :{...entry,name:'Незнакомец',story_role:'',gender:'',avatar:'',
+          source_id:'',character_card:{},hidden:true};
+    }),
     can_reply:!Boolean(scene.noir_progress?.finale)&&String(book.active_role)===String(auth.role)&&!isAiControlled(ids,book.active_role,bookCast)
   };
 }
@@ -651,6 +669,7 @@ async function main(){
       if(url.pathname==='/novel2/api/character/looks'){
         const targetRole=String(input.role||auth.role).toUpperCase();
         if(!['A','B'].includes(targetRole))return send(res,400,{ok:false,error:'NOVEL2_CHARACTER_ROLE_INVALID'});
+        if(targetRole!==auth.role)return send(res,403,{ok:false,error:'NOVEL2_OTHER_PLAYER_PRIVATE'});
         const identity=ids[targetRole];
         if(!identity?.character_card?.passport)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_NOT_GENERATED'});
         const looks=await characterLooksForRole(targetRole,identity);
@@ -661,6 +680,7 @@ async function main(){
         const targetRole=String(input.role||auth.role).toUpperCase();
         const lookKey=String(input.look_key||'').trim();
         if(!['A','B'].includes(targetRole))return send(res,400,{ok:false,error:'NOVEL2_CHARACTER_ROLE_INVALID'});
+        if(targetRole!==auth.role)return send(res,403,{ok:false,error:'NOVEL2_OTHER_PLAYER_PRIVATE'});
         const def=characterLookDefinition(lookKey);
         if(!def)return send(res,400,{ok:false,error:'NOVEL2_CHARACTER_LOOK_INVALID'});
         const identity=ids[targetRole];
@@ -694,6 +714,7 @@ async function main(){
         const targetRole=String(input.role||auth.role).toUpperCase();
         const lookKey=String(input.look_key||'').trim();
         if(!['A','B'].includes(targetRole))return send(res,400,{ok:false,error:'NOVEL2_CHARACTER_ROLE_INVALID'});
+        if(targetRole!==auth.role)return send(res,403,{ok:false,error:'NOVEL2_OTHER_PLAYER_PRIVATE'});
         if(!ids[targetRole]?.character_card?.passport)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_NOT_GENERATED'});
         await ensureCanonicalCharacterLook(targetRole,ids[targetRole]);
         await selectCharacterLook(targetRole,lookKey);
