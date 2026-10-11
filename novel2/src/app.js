@@ -15,7 +15,7 @@ import {
   getVisual,previousVisual,saveVisual,db
 } from './db.js';
 import {createStoryBlueprint,createStoryBible,continueStory,generateAiCharacterReply} from './prose-engine.js';
-import {analyzeIdentity,buildLock,buildBaseActorCard} from './identity-engine.js';
+import {analyzeIdentity,referenceOnlyIdentity,buildLock,buildBaseActorCard} from './identity-engine.js';
 import {buildCharacterCard,buildSyntheticCharacter,normalizeCharacterCard} from './character-builder.js';
 import {generateVisual,generateCalibration,calibrationSpec,generateSyntheticReference,generateCharacterLook,characterLookDefinition} from './visual-engine.js';
 import {resizeReferences} from './ai.js';
@@ -706,7 +706,9 @@ async function main(){
         const role=auth.role;
         const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,6):[];
         if(refs.length<1)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
-        const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts:{}});
+        // Photo saving and actor-sheet rendering do not require a flaky remote
+        // vision-description request. The image model uses actual photo refs.
+        const analyzed=referenceOnlyIdentity({role,referenceImages:refs});
         const baseActorCard=buildBaseActorCard({role,profile:analyzed.profile,sourcePhotoCount:refs.length});
         const builderMeta={
           synthetic:false,
