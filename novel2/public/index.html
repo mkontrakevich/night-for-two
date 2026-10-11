@@ -173,7 +173,7 @@ function formatWait(seconds=0){
  return String(m).padStart(2,'0')+':'+String(r).padStart(2,'0');
 }
 function actorTaskPhaseLabel(){
- if(actorSheetTask.phase==='analysis')return 'Анализируем фотографии';
+ if(actorSheetTask.phase==='analysis')return 'Сохраняем фотографии';
  if(actorSheetTask.phase==='saving')return 'Сохраняем карточку';
  return 'Создаём actor sheet';
 }
@@ -425,7 +425,7 @@ function renderCharacterDetail(role){
    const looks=characterLooksHtml(role,actorSheetReady,false,true);
    const uploadFields='<div class="field"><label>Фотографии · 1–6</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Портреты и, по возможности, полный рост. Фотографии используются только как источник внешности.</div></div><button class="photoBuild" id="characterPhotoBuild" type="button">'+(hasIdentity?'Заменить фото и пересобрать':'Создать карточку актёра')+'</button>';
    const failedNotice=!actorSheetReady&&actorSheetTask.status==='failed'&&String(actorSheetTask.role)===role
-     ?'<div class="actorFailure" role="alert"><strong>Карточка актёра не создана</strong><p>'+esc(actorSheetTask.error||'Генерация прервана.')+'</p><p>Внешность сохранена. Повторно загружать фотографии не нужно.</p>'+(actorSheetTask.errorCode?'<small class="actorDiag">Код: '+esc(actorSheetTask.errorCode)+'</small>':'')+'</div>'
+     ?'<div class="actorFailure" role="alert"><strong>Карточка актёра не создана</strong><p>'+esc(actorSheetTask.error||'Генерация прервана.')+'</p><p>'+(hasIdentity?'Внешность сохранена. Повторно выбирать фотографии не нужно.':'Сохранение фотографий не подтвердилось. Попробуйте ещё раз.')+'</p>'+(actorSheetTask.errorCode?'<small class="actorDiag">Код: '+esc(actorSheetTask.errorCode)+'</small>':'')+'</div>'
      :'';
    let photoPanel='';
    if(!hasIdentity){
@@ -468,7 +468,7 @@ async function buildCharacterFromDetail(role){
  const input=document.getElementById('characterFiles'),files=input?.files;
  if(!files||files.length<1){alert('Загрузите хотя бы одну фотографию.');return}
  actorTaskStart(role,'analysis',180);
- busy=true;loading('Анализируем фотографии и фиксируем внешность…','character',180,true);
+ busy=true;loading('Сохраняем фотографии и фиксируем внешность…','character',180,true);
  try{
    const refs=await filesToDataUrls(files);
    const j=await api('character/build',{reference_images:refs},180000);
@@ -491,7 +491,6 @@ async function buildCharacterFromDetail(role){
  }catch(e){
    if(isCancelled(e)){actorTaskFinish('cancelled');return}
    actorTaskFinish('failed',e?.message||e);
-   alert(e.message);
    menuMode=true;characterDetailRole=role;renderCharacterDetail(role);
  }finally{if(!actorPollActive)busy=false}
 }
@@ -913,7 +912,7 @@ async function buildCharacter(){
  if(busy)return;
  const input=document.getElementById('characterFiles'),files=input?.files;
  if(!files||files.length<1){alert('Загрузите хотя бы одну фотографию.');return}
- busy=true;loading('Анализируем фотографии и фиксируем внешность…','character',180);
+ busy=true;loading('Сохраняем фотографии и фиксируем внешность…','character',180);
  try{
    const refs=await filesToDataUrls(files);
    const j=await api('character/build',{reference_images:refs},180000);
