@@ -94,7 +94,18 @@
   );
   renderMainMenu=function(...args){
     if(shouldHost()){lobby();return}
-    return nativeMainMenu.apply(this,args);
+    const result=nativeMainMenu.apply(this,args);
+    // Existing players must be able to enter the same narrative invitation
+    // deliberately, even if they already have books or dismissed onboarding.
+    const begin=document.getElementById('heroNewBook');
+    if(begin&&!begin.disabled){
+      begin.textContent='Принять приглашение →';
+      begin.onclick=()=>{
+        write('novel2_host_step','0');
+        lobby();
+      };
+    }
+    return result;
   };
   renderCharacterDetail=function(...args){
     const result=nativeCharacterDetail.apply(this,args);
