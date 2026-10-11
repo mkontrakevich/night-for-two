@@ -36,6 +36,7 @@
     "night-product-deploy.yml",
     "novel2-ci.yml",
     "novel2-preview-worker.yml",
+    "novel2-validation.yml",
     "pages.yml",
     "persist-night-restart-policy.yml",
     "probe-native-night-quic-recovery.yml",
