@@ -28,6 +28,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_TUNNEL_ID: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
       NOVEL2_SERVICE_SECRET: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -68,6 +69,16 @@ jobs:
           PY
       - name: Deploy preview Worker
         run: npx --yes wrangler@4 deploy --config wrangler.deploy.json
+      - name: Bind OpenRouter key securely when available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+            printf %s "$OPENROUTER_API_KEY" | npx --yes wrangler@4 secret put OPENROUTER_API_KEY --config wrangler.deploy.json
+            echo 'NOVEL2_HOST_OPENROUTER_CONFIGURED=true'
+          else
+            echo 'NOVEL2_HOST_OPENROUTER_CONFIGURED=false'
+          fi
       - name: Verify published UI revision and Secret Host assets
         shell: bash
         run: |
