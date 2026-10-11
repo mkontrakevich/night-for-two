@@ -1,0 +1,31 @@
+name: Novel 2 Contract Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'novel2/**'
+      - 'skills/secret-noir-host/**'
+      - 'cloudflare/novel2-preview/src/**'
+      - '.github/workflows/novel2-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  standalone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: novel2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: node --check src/app.js && node --check src/secret-host-engine.js && node --check ../cloudflare/novel2-preview/src/index.js
+      - run: docker build -t novel2-secret-host:ci .
