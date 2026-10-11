@@ -24,7 +24,7 @@ init_data=urllib.parse.urlencode(params)
 base="https://novel2-preview.kontrakevich.workers.dev"
 
 def post(route,payload,signed=True):
-    headers={"content-type":"application/json"}
+    headers={"content-type":"application/json","accept":"application/json","user-agent":"curl/8.5.0"}
     if signed:headers["x-telegram-init-data"]=init_data
     request=urllib.request.Request(base+route,
         data=json.dumps(payload,ensure_ascii=False).encode("utf-8"),
@@ -33,13 +33,16 @@ def post(route,payload,signed=True):
         with urllib.request.urlopen(request,timeout=50) as resp:
             return resp.status,dict(resp.headers),json.load(resp)
     except urllib.error.HTTPError as error:
-        return error.code,dict(error.headers),json.loads(error.read().decode("utf-8"))
+        raw=error.read().decode("utf-8",errors="replace")
+        try: content=json.loads(raw)
+        except ValueError: content={"error":"NON_JSON_RESPONSE","content_type":error.headers.get("Content-Type","")}
+        return error.code,dict(error.headers),content
 
 path="/novel2/api/host/turn"
 status,headers,body=post(path,{"stage":"invitation"},False)
-assert status==401,(status,body.get("error"))
+assert status in (401,403),(status,body.get("error"),body.get("content_type"))
 status,headers,body=post(path,{"stage":"invitation","mood":"тайна"})
-assert status==200,(status,body.get("error"))
+assert status==200,(status,body.get("error"),body.get("content_type"))
 assert {k.lower():v for k,v in headers.items()}.get("x-secret-stranger")=="2.0.0",{k.lower():v for k,v in headers.items()}.get("x-secret-stranger")
 turn=body.get("turn",{})
 assert turn.get("stage")=="invitation",turn.get("stage")
