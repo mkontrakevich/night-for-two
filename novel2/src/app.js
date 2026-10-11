@@ -335,12 +335,16 @@ async function main(){
   assertProductionConfig();
   await initDb();
   const html=await fs.readFile(htmlPath,'utf8');
+  const noirJs=await fs.readFile(path.resolve(__dirname,'../public/noir-experience.js'),'utf8');
+  const noirCss=await fs.readFile(path.resolve(__dirname,'../public/noir-experience.css'),'utf8');
 
   const server=http.createServer(async(req,res)=>{
     try{
       const url=new URL(req.url,'http://localhost');
       if(req.method==='GET'&&url.pathname==='/novel2/health')return send(res,200,{ok:true,product:'interactive_novel_2'});
       if(req.method==='GET'&&(url.pathname==='/novel2'||url.pathname==='/novel2/'))return send(res,200,html,'text/html; charset=utf-8');
+      if(req.method==='GET'&&url.pathname==='/novel2/noir-experience.js')return send(res,200,noirJs,'text/javascript; charset=utf-8');
+      if(req.method==='GET'&&url.pathname==='/novel2/noir-experience.css')return send(res,200,noirCss,'text/css; charset=utf-8');
 
       if(!url.pathname.startsWith('/novel2/api/'))return send(res,404,{ok:false,error:'NOT_FOUND'});
       if(url.pathname==='/novel2/api/identity/calibrate/work'){
