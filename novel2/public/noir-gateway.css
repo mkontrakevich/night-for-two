@@ -1,0 +1,11 @@
+.noirEntrance{min-height:100dvh;box-sizing:border-box;display:flex;flex-direction:column;padding:calc(32px + var(--safe)) 26px calc(36px + var(--safe));color:#f0e1da;background:radial-gradient(ellipse at 91% 31%,rgba(135,29,54,.3),transparent 55%),linear-gradient(160deg,#080709,#1b0b11 62%,#090709)}
+.noirEntranceHead{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#bc9396;letter-spacing:.14em;font-size:10px}.noirEntranceHead button{border:0;background:none;color:#d6bdb7;font-size:12px;padding:10px 0}
+.noirEntranceTrack{height:2px;background:rgba(220,181,176,.2);margin-top:14px}.noirEntranceTrack span{height:100%;display:block;background:#eed4cb}
+.noirEntranceMessage{margin:auto 0;max-width:580px;padding:60px 0}.noirEntranceName{color:#be989b;font-size:10px;letter-spacing:.17em;margin-bottom:24px}
+.noirEntrance h1{font:400 clamp(40px,10.4vw,65px)/1.05 Georgia,serif;letter-spacing:-.045em;margin:0 0 26px;color:#f3e7e0}
+.noirEntranceMessage p{font:400 clamp(17px,4.5vw,22px)/1.58 Georgia,serif;max-width:35ch;color:#d2beba;margin:0}
+.noirEntranceMessage small{display:block;font:400 12px/1.6 -apple-system,sans-serif;color:#a58d8c;margin-top:19px;max-width:42ch}
+.noirEntranceActions{display:flex;flex-direction:column;gap:9px}.noirEntranceActions button{border-radius:0;min-height:52px;padding:13px;font-size:12px}.noirEntranceActions button:first-child{background:#e9d9d1;color:#281319;text-transform:uppercase;font-weight:600;letter-spacing:.08em}
+.noirEntranceActions button:nth-child(2){background:transparent;border:1px solid rgba(219,170,168,.3);color:#e5d2cc}.noirEntranceActions p{font:400 11px/1.55 -apple-system,sans-serif;color:#a08786;margin:7px 0 0}
+.noirEntranceReplay{padding:35px 30px 60px}.noirEntranceReplay button{border-radius:0;border:1px solid rgba(166,103,115,.28);background:transparent;color:#bdaaab;min-height:45px;width:100%}
+@media(prefers-reduced-motion:no-preference){.noirEntranceMessage{animation:noir-gate-in .65s ease-out both}}@keyframes noir-gate-in{from{opacity:0;filter:blur(6px);transform:translateY(10px)}to{opacity:1;filter:none;transform:translateY(0)}}
