@@ -189,6 +189,56 @@ async function handleAi(request,env,incoming){
   }
 
 
+  if(incoming.pathname==='/novel2-ai/host'){
+    let body={};
+    try{body=await request.json()}catch{return json(400,{ok:false,error:'NOVEL2_HOST_JSON_REQUIRED'})}
+    const messages=Array.isArray(body.messages)?body.messages.slice(0,2).map(x=>({
+      role:x?.role==='system'?'system':'user',content:String(x?.content||'').slice(0,15000)
+    })):[];
+    if(messages.length!==2||messages[0].role!=='system'||messages[1].role!=='user')
+      return json(400,{ok:false,error:'NOVEL2_HOST_MESSAGES_INVALID'});
+    const maxTokens=Math.max(128,Math.min(600,Number(body.max_tokens)||420));
+    const temperature=Math.max(0,Math.min(1,Number(body.temperature)||.7));
+    // Secret lives only in the Cloudflare runtime. No browser-origin requests
+    // can invoke this endpoint, and no photos are ever sent to the narrator.
+    if(env.OPENROUTER_API_KEY){
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),21000);
+      try{
+        const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+          method:'POST',signal:controller.signal,
+          headers:{'Authorization':'Bearer '+String(env.OPENROUTER_API_KEY),
+            'Content-Type':'application/json',
+            'HTTP-Referer':'https://novel2-preview.kontrakevich.workers.dev',
+            'X-Title':'Novel2 Secret Host'},
+          body:JSON.stringify({
+            model:String(env.OPENROUTER_HOST_MODEL||'openai/gpt-4.1-mini'),
+            messages,temperature,max_tokens:maxTokens,
+            response_format:{type:'json_object'}
+          })
+        });
+        if(response.ok){
+          const result=await response.json();
+          const content=String(result?.choices?.[0]?.message?.content||'');
+          if(content.length>2&&content.length<3500)
+            return json(200,{ok:true,content,provider:'openrouter'});
+        }else console.warn('NOVEL2_HOST_OPENROUTER_UNAVAILABLE',{status:response.status});
+      }catch(error){console.warn('NOVEL2_HOST_OPENROUTER_UNAVAILABLE',{kind:'transport'})}
+      finally{clearTimeout(timer)}
+    }
+    // Prologue must continue when the regional OpenRouter route is blocked.
+    try{
+      const result=await env.AI.run(AI_TEXT_MODEL,{
+        messages,temperature,max_tokens:maxTokens,
+        response_format:{type:'json_object'}
+      });
+      const content=workerTextContent(result);
+      if(content.length>2)return json(200,{ok:true,content,provider:'workers-ai'});
+      return json(502,{ok:false,error:'NOVEL2_HOST_EMPTY_REPLY'});
+    }catch(error){
+      return json(502,{ok:false,error:'NOVEL2_HOST_MODEL_FAILED'});
+    }
+  }
+
   if(incoming.pathname==='/novel2-ai/text'){
     let body={};
     try{body=await request.json();}catch{return json(400,{ok:false,error:'NOVEL2_AI_EDGE_JSON_REQUIRED'});}
