@@ -43,7 +43,10 @@ export async function buildSecretHostTurn({stage,place='',mood='тайна',acto
 let skillPromise;
 async function loadSkill(){
  skillPromise??=fs.readFile(SKILL_PATH,'utf8');
- return skillPromise;
+ const raw=await skillPromise;
+ const compact=raw.match(/## Runtime system prompt \(compact\)\s*\n([\s\S]*?)\n## /);
+ if(!compact?.[1])throw new Error('NOVEL2_HOST_RUNTIME_SKILL_MISSING');
+ return compact[1].trim();
 }
 export async function secretHostTurn(args={}){
  const {input,fallback_line}=await buildSecretHostTurn(args);
