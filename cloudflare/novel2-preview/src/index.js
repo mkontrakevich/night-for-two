@@ -1,4 +1,5 @@
 import {WorkflowEntrypoint} from 'cloudflare:workers';
+import {handleStranger,runStrangerWorld} from './stranger.js';
 
 export class ActorSheetWorkflow extends WorkflowEntrypoint {
   async run(event,step){
@@ -72,6 +73,7 @@ export class ActorSheetWorkflow extends WorkflowEntrypoint {
 
 export class PurgatoryWorldWorkflow extends WorkflowEntrypoint {
   async run(event,step){
+    if(event?.payload?.user_id)return runStrangerWorld(this.env,event.payload,step,AI_IMAGE_MODEL);
     const role=String(event?.payload?.role||''),jobId=String(event?.payload?.job_id||'');
     if(!['A','B'].includes(role)||!jobId)return{status:'invalid'};
     return await step.do('render and persist guest-inspired theatre', {
@@ -602,6 +604,9 @@ export default{
     const incoming=new URL(request.url);
     if(incoming.pathname==='/') return Response.redirect(new URL('/novel2/',incoming).toString(),302);
     if(incoming.pathname.startsWith('/novel2-ai/'))return handleAi(request,env,incoming);
+    // Native Cloudflare prologue. Existing casting/story API remains behind VPC until migrated.
+    const stranger=await handleStranger(request,env,incoming);
+    if(stranger)return stranger;
     // Static Mini App delivery is independent from the Windows VPC origin.
     // Dynamic authenticated APIs remain on the private origin.
     if(request.method==='GET'&&env.ASSETS&&typeof env.ASSETS.fetch==='function'){
