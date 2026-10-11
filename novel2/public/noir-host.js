@@ -172,7 +172,11 @@
       '01 / ПРИГЛАШЕНИЕ','02 / СОГЛАСИЕ','03 / ВАШ МИР',
       '04 / ПОДБОР ОБРАЗА','05 / ПЕРВАЯ ГЛАВА'
     ][step];
-    const lines=(fallbackLines[stage]||fallbackLines.invitation);
+    const lines=stage==='place_reaction' ? [
+      '«'+hostPlace()+'»… прекрасный выбор.',
+      'Ваше место уже превращается в театральную лавку образов. Посмотрите на материалы, свет и глубину.',
+      'А теперь выйдите на свет. Покажитесь — подберём Ваш первый наряд.'
+    ]:(fallbackLines[stage]||fallbackLines.invitation);
     const copy=lines.map((v,i)=>'<p style="--host-delay:'+(i*390)+'ms">'+esc(v)+'</p>').join('');
     const moodButtons=step===1?'<div class="hostMoods" role="group" aria-label="Выберите настроение истории">'+moods.map((v,i)=>'<button class="vintageMood" type="button" data-host-mood="'+v+'" aria-pressed="'+String(v===mood)+'">'+vintageButton(v.charAt(0).toUpperCase()+v.slice(1),['keyhole','heart','compass'][i])+'</button>').join('')+'</div>':'';
     const placeField=step===2?'<div class="hostPlaceField"><label for="hostPlace">ВАШЕ МЕСТО</label><input id="hostPlace" type="text" autocomplete="off" autocapitalize="sentences" maxlength="120" placeholder="Например, Северный полюс" value="'+esc(hostPlace())+'"><small id="hostInputError" role="alert">'+esc(hostPlaceError)+'</small></div>':'';
