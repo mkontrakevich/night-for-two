@@ -1,5 +1,5 @@
 import {jsonCompletion} from './ai.js';
-import {noirBeatPlan,attachNoirScene,cleanNoirAnalysis} from './noir-director.js';
+import {noirBeatPlan,attachNoirScene,cleanNoirAnalysis,noirPartnerPlan,noirTrialPlan} from './noir-director.js';
 
 const PROSE_SYSTEM = `
 Ты — литературный движок оригинального интерактивного романа для двух совершеннолетних игроков.
@@ -45,6 +45,11 @@ NOIR DIALOGUE SHOW · skills/night-erotic-serial-novelist/SKILL.md
 — Включи visual_after_paragraph — номер абзаца после которого иллюстрация может появиться без спойлера. Абзацы разделены пустой строкой, счёт с 1; если неуверен, укажи последний абзац.
 — Визуальный контракт skills/sd-story-illustration/SKILL.md: показывай только события, введённые до visual_after_paragraph; соблюдать IDENTITY LOCK, локацию, свет, одежду и хронологию.
 — Не генерируй декоративные картинки или изображения, противоречащие сцене.
+— AI-ведущий «Незнакомец» — художественная персона и проводник, а не реально присутствующий в чате человек. Вначале веди гостя в закрытое пространство истории.
+— Художественная личность партнёра раскрывается поэтапно через clues. До разрешённой фазы не раскрывай его полное имя, лицо и биографию. Реальные имена и контакты не раскрывай автоматически.
+— Каждая реплика игрока должна менять сюжетную линию, динамику отношений или степень доступа к тайне.
+— Пикантные задания по принципу Couple Adventure — лишь добровольные, интегрированные в сюжет и только в фазе, которую разрешил режиссёр. Всегда выбор «согласиться / мягче / отказаться» без наказания за отказ.
+— Музыкально-звуковые cues помечай как будущую возможность, не генерируй звук и не задерживай текст.
 
 DRAMA
 У романа должны быть цель, конфликт, поворот, тайна/ставка, развитие отношений и финал. Эротика усиливает драму, а не заменяет её.
@@ -270,6 +275,7 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
           chapter_no:1,chapter_title:'',prose:'',noir_whisper:'',visual_after_paragraph:0,target_role:'A',
           primary_interaction:{type:'free_reply',prompt:''},
           optional_actions:[],
+          noir_trial:{title:'',invitation:'',intensity:'subtle',softer_option:'',decline_option:'',effect:''},
           visual_beat:'',
           visual_scene:{
             location:'',
@@ -292,13 +298,15 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
         'characters_present содержит slot_key/идентификаторы реально присутствующих персонажей. Для интерактивных игроков используй A и B; для AI — их slot_key.',
         'visual_scene точно фиксирует локацию, присутствующих героев, положение тел, одежду, предметы и свет.',
         'Первая сцена заканчивается значимым выбором A или B, а не обязательным ходом каждого присутствующего персонажа.',
+        'В первом эпизоде второй герой остаётся сюжетной загадкой: не раскрывай его полное художественное имя, биографию или внешность; только убедительные следы и намёки.',
+        'Не задавай бессмысленные вопросы. Ведущий пригласил гостя в историю и через действия раскрыл конфликт.',
          'noir_whisper и visual_after_paragraph связывают литературное развитие с появлением изображения; никаких визуальных спойлеров.'
       ]
     }
   });
   let first=cleanScene(data.first_scene||{});
   if(!data.title||first.prose.length<500) throw new Error('NOVEL2_BIBLE_INVALID');
-  const bible={...data,noir_dialogue_contract:{version:1,episodes:6,beats_per_episode:5,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
+  const bible={...data,noir_dialogue_contract:{version:2,episodes:6,beats_per_episode:5,partner_reveal:'progressive',consent_first:true,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
   first=await ensureLongScene(first,{storyBible:bible,reason:'first_scene'});
   if(first.prose.length<2500) throw new Error('NOVEL2_BIBLE_TOO_SHORT');
   return {...bible,first_scene:attachNoirScene(first,noirBeatPlan(1))};
@@ -308,6 +316,8 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
   const bible=book.story_bible||{},canon=book.canon||{};
   const noirEnabled=Boolean(bible?.noir_dialogue_contract?.version);
   const nextPlan=noirEnabled?noirBeatPlan(Number(book.turn_no||1)+1):null;
+  const partner=nextPlan?noirPartnerPlan(nextPlan):null;
+  const trial=nextPlan?noirTrialPlan(nextPlan):null;
   // A final scene is terminal, not an invitation to loop.
   if(book?.current_scene?.noir_progress?.finale)throw new Error('NOVEL2_STORY_ALREADY_FINISHED');
   const data=await jsonCompletion({
@@ -315,9 +325,16 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
     temperature:.82,
     maxTokens:5200,
     user:{
-      task:'Продолжи роман после свободного ответа игрока. Ответ игрока — каноническое действие его героя. Напиши полноценный длинный литературный эпизод до следующего действительно значимого решения.',
+      task:nextPlan?.finale
+        ?'Создай финал романа как последствия последнего решения игрока. Заверши интригу и линии героев, не задавай новый вопрос.'
+        :'Истолкуй свободную реплику как поступок героя, реализуй его последствия, двигай события к следующему значимому решению.',
       story_bible:bible,
       canon,
+      noir_director:nextPlan?{
+        episode:nextPlan.episode,beat:nextPlan.beat,
+        stage:nextPlan.narrative_stage,directive:nextPlan.directive,
+        finale:nextPlan.finale,partner,trial,sound_generation:'deferred'
+      }:null,
       current_scene:book.current_scene||{},
       recent_turns:recentTurns,
       player_input:{role:playerRole,reply:String(playerReply||'').slice(0,3000),action_key:String(actionKey||'')},
@@ -345,10 +362,16 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
           continuity_updates:{},
           hook:''
         },
-        canon:{}
+        canon:{},
+        response_analysis:{intent:'',emotional_shift:'',plot_consequence:'',thread_affected:'',choice_effect:''}
       },
       hard_rules:[
         'Покажи последствия именно того, что написал игрок.',
+        'Сохрани короткий анализ реакции игрока в response_analysis, не допрашивая его по пунктам.',
+        'Если noir_director.partner не разрешает раскрытие, сохраняй анонимность художественного второго гостя.',
+        'Если noir_director.trial.available=true, придумай одно сюжетное чувственное испытание, включая мягкий вариант и отказ без наказания. Если false — не добавляй испытаний.',
+        'Если noir_director.finale=true, разреши конфликт романа и закончи без приглашения продолжать.',
+        'Не продлевай общение ради общения. Продвигай физическое событие, ставку или отношение.',
         'Между этим ответом и следующим решением дай ориентировочно 5500–9500 знаков прозы, 8–14 абзацев и 3–5 драматургических битов.',
         'Не возвращай управление игроку после каждой короткой реплики: персонажи вокруг него должны успеть ответить, действовать, изменить обстановку и продвинуть конфликт.',
         'Не повторяй его фразу дословно без необходимости.',
