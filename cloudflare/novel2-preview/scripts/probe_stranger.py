@@ -48,6 +48,7 @@ turn=body.get("turn",{})
 assert turn.get("stage")=="invitation",turn.get("stage")
 assert turn.get("next_action")=="accept_invitation",turn.get("next_action")
 assert isinstance(turn.get("line"),str) and turn["line"],"no AI/safe fallback line"
+assert turn.get("provider") in ("openrouter","workers-ai"),("NO_LIVE_AI_PROVIDER",turn.get("provider"))
 print("STRANGER_NATIVE_AUTH=PASS")
 print("STRANGER_NATIVE_PROVIDER="+str(turn.get("provider","unknown")))
 status,headers,body=post("/novel2/api/lobby/world/status",{})
