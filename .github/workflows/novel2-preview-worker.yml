@@ -256,3 +256,6 @@ jobs:
 
           echo "NOVEL2_WORKERS_AI_READY=true"
                     echo "NOVEL2_PREVIEW_READY=$base/novel2/"
+      - name: Verify native Stranger with signed Telegram request
+        shell: bash
+        run: python scripts/probe_stranger.py
