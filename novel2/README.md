@@ -60,7 +60,7 @@ Required production env:
 - TELEGRAM_BOT_TOKEN
 - PRIMARY_OWNER_ID
 - PARTNER_TELEGRAM_ID
-- OPENROUTER_API_KEY
+- NOVEL2_EDGE_AI_URL (Cloudflare Worker endpoint, not OpenRouter)
 
 Optional:
 - NOVEL2_TEXT_MODEL

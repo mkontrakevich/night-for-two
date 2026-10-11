@@ -119,39 +119,15 @@ export async function resizeReferences(values=[],maxPx=512,limit=4){
   return out;
 }
 
-async function openRouterChat(payload) {
-  if (!config.openRouterKey) throw new Error('NOVEL2_OPENROUTER_KEY_MISSING');
-  const {response,json}=await requestJson(
-    'https://openrouter.ai/api/v1/chat/completions',
-    {
-      method:'POST',
-      headers:{
-        authorization:`Bearer ${config.openRouterKey}`,
-        'content-type':'application/json',
-        'HTTP-Referer':'https://github.com/mkontrakevich/night-for-two',
-        'X-Title':'Interactive Novel 2.0'
-      },
-      body:JSON.stringify(payload)
-    },
-    {
-      attempts:Number(process.env.NOVEL2_AI_RETRIES||3),
-      timeoutMs:Number(process.env.NOVEL2_AI_TIMEOUT_MS||120000),
-      label:'NOVEL2_AI'
-    }
-  );
-  if (!response.ok) throw new Error('NOVEL2_AI_'+response.status+':'+String(typeof json?.error==='string'?json.error:json?.error?.message||json?.message||'failed'));
-  return String(json?.choices?.[0]?.message?.content || '');
-}
 async function chat(payload) {
-  if(config.edgeAiUrl){
-    const json=await edgeJson('text',{
-      messages:payload.messages||[],
-      temperature:payload.temperature,
-      max_tokens:payload.max_tokens
-    },{timeoutMs:Number(process.env.NOVEL2_AI_TIMEOUT_MS||120000),label:'NOVEL2_EDGE_TEXT'});
-    return String(json?.content||'');
-  }
-  return openRouterChat(payload);
+  // Single egress boundary: the Node origin may call AI only through Cloudflare.
+  if(!config.edgeAiUrl)throw new Error('NOVEL2_CLOUDFLARE_AI_REQUIRED');
+  const json=await edgeJson('text',{
+    messages:payload.messages||[],
+    temperature:payload.temperature,
+    max_tokens:payload.max_tokens
+  },{timeoutMs:Number(process.env.NOVEL2_AI_TIMEOUT_MS||120000),label:'NOVEL2_EDGE_TEXT'});
+  return String(json?.content||'');
 }
 
 export async function textCompletion({system, user, temperature=.75, maxTokens=5000, model=config.textModel}) {
@@ -167,17 +143,15 @@ export async function textCompletion({system, user, temperature=.75, maxTokens=5
 }
 
 export async function secretHostCompletion({system,user,temperature=.7,maxTokens=420}={}) {
+  if(!config.edgeAiUrl)throw new Error('NOVEL2_CLOUDFLARE_AI_REQUIRED');
   const messages=[
     {role:'system',content:String(system||'').slice(0,14500)},
     {role:'user',content:JSON.stringify(user||{}).slice(0,2200)}
   ];
-  if(config.edgeAiUrl){
-    const json=await edgeJson('host',{messages,temperature,max_tokens:maxTokens},
-      {timeoutMs:35000,attempts:1,label:'NOVEL2_EDGE_HOST'});
-    return {...parseJson(String(json?.content||'')),provider:String(json?.provider||'edge'),openrouter_failure:String(json?.openrouter_failure||'')};
-  }
-  const raw=await openRouterChat({model:config.textModel,temperature,max_tokens:maxTokens,messages});
-  return {...parseJson(raw),provider:'openrouter'};
+  const json=await edgeJson('host',{messages,temperature,max_tokens:maxTokens},
+    {timeoutMs:35000,attempts:1,label:'NOVEL2_EDGE_HOST'});
+  return {...parseJson(String(json?.content||'')),provider:String(json?.provider||'edge'),
+    openrouter_failure:String(json?.openrouter_failure||'')};
 }
 
 export async function jsonCompletion(args) {
@@ -196,31 +170,18 @@ export async function jsonCompletion(args) {
   }
 }
 
-export async function visionJsonCompletion({system,text,images=[],temperature=.1,maxTokens=2600,model=config.visionModel}) {
-  if(config.edgeAiUrl){
-    const refs=await resizeReferences(images,1024,4);
-    if(!refs.length)throw new Error('NOVEL2_VISION_REFERENCES_REQUIRED');
-    const json=await edgeJson('vision',{
-      system:String(system||''),
-      text:String(text||''),
-      images:refs,
-      temperature,
-      max_tokens:maxTokens
-    },{timeoutMs:Number(process.env.NOVEL2_AI_TIMEOUT_MS||120000),label:'NOVEL2_EDGE_VISION'});
-    return parseJson(String(json?.content||''));
-  }
-  const content=[{type:'text',text:String(text||'')}];
-  for(const image of images.slice(0,6)){
-    const url=String(image||'');
-    if(url) content.push({type:'image_url',image_url:{url}});
-  }
-  const raw=await openRouterChat({
-    model,
+export async function visionJsonCompletion({system,text,images=[],temperature=.1,maxTokens=2600}={}) {
+  if(!config.edgeAiUrl)throw new Error('NOVEL2_CLOUDFLARE_AI_REQUIRED');
+  const refs=await resizeReferences(images,1024,4);
+  if(!refs.length)throw new Error('NOVEL2_VISION_REFERENCES_REQUIRED');
+  const json=await edgeJson('vision',{
+    system:String(system||''),
+    text:String(text||''),
+    images:refs,
     temperature,
-    max_tokens:maxTokens,
-    messages:[{role:'system',content:system},{role:'user',content}]
-  });
-  return parseJson(raw);
+    max_tokens:maxTokens
+  },{timeoutMs:Number(process.env.NOVEL2_AI_TIMEOUT_MS||120000),label:'NOVEL2_EDGE_VISION'});
+  return parseJson(String(json?.content||''));
 }
 
 export async function buildOpenRouterImagePayload({prompt,inputReferences=[],model=config.imageModel}={}){
@@ -236,64 +197,23 @@ export async function buildOpenRouterImagePayload({prompt,inputReferences=[],mod
 }
 
 export async function imageCompletion({prompt,inputReferences=[],width=null,height=null,timeoutMs=null,provider='auto'}) {
-  // The casting sheet uses an explicitly selected provider. Never silently
-  // generate via Cloudflare first and bill again via the alternative route.
-  const useOpenRouter=provider==='openrouter';
-  if(config.edgeAiUrl&&!useOpenRouter){
-    // Image URL message objects are normalized to data URLs, then resized
-    // below 512px as required by FLUX.2 klein. Never launch a personal actor
-    // render with zero usable reference photographs.
-    const refs=await resizeReferences(inputReferences,480,4);
-    if(inputReferences.length&&!refs.length)throw new Error('NOVEL2_IMAGE_REFERENCES_MISSING');
-    const json=await edgeJson('image',{
-      prompt:String(prompt||''),
-      input_references:refs,
-      keepalive:provider==='edge-stream',
-      width:Number(width||process.env.NOVEL2_EDGE_IMAGE_WIDTH||1024),
-      height:Number(height||process.env.NOVEL2_EDGE_IMAGE_HEIGHT||1792)
-    },{
-      // Image generation is expensive. Do not silently retry a whole render
-      // when the first attempt times out; the user initiates explicit retries.
-      attempts:1,
-      timeoutMs:Math.min(180000,Number(timeoutMs||process.env.NOVEL2_IMAGE_TIMEOUT_MS||180000)),
-      label:'NOVEL2_EDGE_IMAGE'
-    });
-    const base64=String(json?.image||'');
-    if(!base64)throw new Error('NOVEL2_EDGE_IMAGE_EMPTY');
-    return{base64,model:String(json?.model||'workers-ai')};
-  }
-
-  if (!config.openRouterKey) throw new Error('NOVEL2_OPENROUTER_KEY_MISSING');
-  const payload=await buildOpenRouterImagePayload({prompt,inputReferences});
-
-  const requestImage=async body=>requestJson(
-    'https://openrouter.ai/api/v1/images',
-    {
-      method:'POST',
-      headers:{
-        authorization:`Bearer ${config.openRouterKey}`,
-        'content-type':'application/json',
-        'HTTP-Referer':'https://github.com/mkontrakevich/night-for-two',
-        'X-Title':'Interactive Novel 2.0 Visuals'
-      },
-      body:JSON.stringify(body)
-    },
-    {
-      attempts:1,
-      timeoutMs:Math.min(180000,Number(timeoutMs||process.env.NOVEL2_IMAGE_TIMEOUT_MS||180000)),
-      label:'NOVEL2_IMAGE'
-    }
-  );
-
-  let {response,json}=await requestImage(payload);
-  const message=String(json?.error?.message||'');
-  if(!response.ok&&config.imageModel.includes('seedream')&&payload.resolution&&/output pixels|larger resolution|minimum/i.test(message)){
-    const retryPayload={...payload};
-    delete retryPayload.resolution;
-    ({response,json}=await requestImage(retryPayload));
-  }
-  if(!response.ok)throw new Error('NOVEL2_IMAGE_'+response.status+':'+String(typeof json?.error==='string'?json.error:json?.error?.message||json?.message||'failed'));
-  const first=json?.data?.[0];
-  if(!first?.b64_json)throw new Error('NOVEL2_IMAGE_EMPTY');
-  return{base64:first.b64_json,model:config.imageModel};
+  if(!config.edgeAiUrl)throw new Error('NOVEL2_CLOUDFLARE_AI_REQUIRED');
+  if(provider==='openrouter')throw new Error('NOVEL2_DIRECT_OPENROUTER_FORBIDDEN');
+  const refs=await resizeReferences(inputReferences,480,4);
+  if(inputReferences.length&&!refs.length)throw new Error('NOVEL2_IMAGE_REFERENCES_MISSING');
+  const json=await edgeJson('image',{
+    prompt:String(prompt||''),
+    input_references:refs,
+    keepalive:provider==='edge-stream',
+    width:Number(width||process.env.NOVEL2_EDGE_IMAGE_WIDTH||1024),
+    height:Number(height||process.env.NOVEL2_EDGE_IMAGE_HEIGHT||1792)
+  },{
+    // One expensive inference for one explicit user job; no automatic image retries.
+    attempts:1,
+    timeoutMs:Math.min(180000,Number(timeoutMs||process.env.NOVEL2_IMAGE_TIMEOUT_MS||180000)),
+    label:'NOVEL2_EDGE_IMAGE'
+  });
+  const base64=String(json?.image||'');
+  if(!base64)throw new Error('NOVEL2_EDGE_IMAGE_EMPTY');
+  return{base64,model:String(json?.model||'workers-ai')};
 }
