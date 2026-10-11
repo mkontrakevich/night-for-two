@@ -1,4 +1,5 @@
 import {jsonCompletion} from './ai.js';
+import {noirBeatPlan,attachNoirScene,cleanNoirAnalysis} from './noir-director.js';
 
 const PROSE_SYSTEM = `
 Ты — литературный движок оригинального интерактивного романа для двух совершеннолетних игроков.
@@ -29,6 +30,13 @@ GAMEPLAY
 — следующая сцена обязана реализовать смысл пользовательского ответа, а не игнорировать его;
 — пользовательская реплика становится каноном;
 — никогда не подменяй ответ пользователя заранее написанной репликой.
+— СТРУКТУРА ПЕРВИЧНА: свободный текст — это решение персонажа, а не просьба бесконечно разговаривать с помощником. Прочитай его как намерение, действие и изменение отношений в контексте Story Bible, канона и текущей сцены.
+— Одно решение игрока запускает существенное последствие и следующий драматургический бит, а не очередное бессодержательное уточнение.
+— Веди к следующему значимому вопросу. Когда ответ уже понятен, не задавай дополнительные анкетные вопросы.
+— Ограниченное число сцен на эпизод: завязка → сближение → давление → решение → результат. Заверши локальный конфликт к пятому биту.
+— Каждый вариант действия, если он предлагается, должен менять хотя бы один из факторов: риск, сведения, отношение, маршрут или цену решения.
+— После финала романа не создавай новые ходы и не приглашай продолжать тот же сюжет.
+— Это вымышленный AI-рассказчик; не утверждай, что незнакомец — настоящий человек.
 
 NOIR DIALOGUE SHOW · skills/night-erotic-serial-novelist/SKILL.md
 — Это цельный роман, показываемый как приватное представление AI-ведущего «Незнакомец». Ведущий — художественный голос, не реальный человек.
@@ -290,14 +298,18 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
   });
   let first=cleanScene(data.first_scene||{});
   if(!data.title||first.prose.length<500) throw new Error('NOVEL2_BIBLE_INVALID');
-  const bible={...data,story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
+  const bible={...data,noir_dialogue_contract:{version:1,episodes:6,beats_per_episode:5,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
   first=await ensureLongScene(first,{storyBible:bible,reason:'first_scene'});
   if(first.prose.length<2500) throw new Error('NOVEL2_BIBLE_TOO_SHORT');
-  return {...bible,first_scene:first};
+  return {...bible,first_scene:attachNoirScene(first,noirBeatPlan(1))};
 }
 
 export async function continueStory({book, recentTurns, playerRole, playerReply, actionKey=''}) {
   const bible=book.story_bible||{},canon=book.canon||{};
+  const noirEnabled=Boolean(bible?.noir_dialogue_contract?.version);
+  const nextPlan=noirEnabled?noirBeatPlan(Number(book.turn_no||1)+1):null;
+  // A final scene is terminal, not an invitation to loop.
+  if(book?.current_scene?.noir_progress?.finale)throw new Error('NOVEL2_STORY_ALREADY_FINISHED');
   const data=await jsonCompletion({
     system:PROSE_SYSTEM,
     temperature:.82,
@@ -356,7 +368,17 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
   if(scene.prose.length<350) throw new Error('NOVEL2_SCENE_INVALID');
   scene=await ensureLongScene(scene,{storyBible:bible,recentTurns,reason:'between_player_decisions'});
   if(scene.prose.length<2500) throw new Error('NOVEL2_SCENE_TOO_SHORT');
-  return {scene,canon:data.canon&&typeof data.canon==='object'?data.canon:canon};
+  const analysis=cleanNoirAnalysis(data.response_analysis||{});
+  const mergedCanon=data.canon&&typeof data.canon==='object'?data.canon:canon;
+  const nextCanon=noirEnabled?{...mergedCanon,
+    noir_progress:{
+      episode:nextPlan.episode,beat:nextPlan.beat,
+      narrative_stage:nextPlan.narrative_stage,
+      finale:nextPlan.finale
+    },
+    noir_last_decision:analysis}:mergedCanon;
+  if(noirEnabled)scene=attachNoirScene(scene,nextPlan);
+  return {scene,canon:nextCanon};
 }
 
 
