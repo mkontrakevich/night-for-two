@@ -123,15 +123,15 @@ export function calibrationSpec({identity,role}) {
   const references=refsOf(identity);
   if(!references.length)throw new Error('NOVEL2_ACTOR_SHEET_REFERENCES_REQUIRED');
   const prompt=[
-    `Create a neutral casting identity sheet for PLAYER_${role}, the SAME adult person reconstructed only from the supplied reference images.`,
+    `Create a premium sensual editorial CASTING SHEET for adult PLAYER_${role}, the SAME recognizable real person reconstructed only from the supplied reference photos.`,
     'Purpose: establish visual identity only. Do NOT invent biography, profession, social status, personality, role, costume or story context.',
     'Exactly FOUR clean panels on one vertical contact sheet: top row two LARGE matching-scale facial portraits (frontal and strict side profile); bottom row two full-height views of the same actor (front and back). Keep the entire head and feet visible; do not crop any panel. Equal lighting, same person and physical proportions across all views.',
-    'WARDROBE: one simple OPAQUE MATTE FLESH-TONE FULL-BODY UNITARD / ACTOR BODYSUIT. It must clearly read as clothing, not nudity. No underwear styling, no transparency, no cleavage emphasis, no erotic posing.',
+    'WARDROBE: refined, weightless, flowing IVORY SILK DRAPE layered over a matching fully OPAQUE flesh-neutral casting bodysuit. Silk softly follows the silhouette as a sculptural textile, elegant and sensual, without revealing naked skin anatomy. FACE AND ENTIRE HAIR REMAIN COMPLETELY VISIBLE. Never cover eyes, forehead, nose, mouth or jaw with fabric. No nudity, no see-through crotch or genital outlines, no lingerie, no erotic poses.',
     'Barefoot or neutral studio footwear only. No jewelry, accessories, props, costume, makeup styling, profession cues or fashion styling.',
-    'Simple warm gray studio background, even neutral soft light, natural skin texture, no dramatic lighting, no beauty filter, no glamour retouching.',
+    'Simple warm-gray editorial casting studio; sophisticated softbox light, natural skin texture, restrained premium cinematic tonality and graceful posture. Only subtle idealization of light and grooming; never replace the real face or invent a different body.',
     'Use 65–85 mm portrait perspective for face views and distortion-free natural perspective for full body.',
     identity.identity_lock,
-    'The SAME person must remain consistent in all FOUR panels. Preserve face geometry, hairline, apparent age, build, limb proportions and posture from the references. Do not slim, enlarge, beautify or idealize the body.',
+    'The SAME person must remain consistent in all FOUR panels. PRIORITIZE likeness: preserve real face geometry, straight nose shape, eyes, mouth, hairline, apparent age, build, limb proportions and posture. Tasteful editorial refinement is limited to flattering lighting, natural posture, grooming and a modest cinematic finish: NEVER replace the identity, change ethnicity, invent exaggerated muscle mass, reshape the nose or alter stature.',
     'If a body trait is not supported by the references, keep it visually conservative and non-specific rather than inventing an extreme feature.',
     'No text labels, no logos, no extra people, no narrative environment.'
   ].join('\n');
