@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "cloudflare/novel2-preview/**"
+      - "novel2/public/**"
       - ".github/workflows/novel2-preview-worker.yml"
   workflow_dispatch:
 
@@ -67,6 +68,37 @@ jobs:
           PY
       - name: Deploy preview Worker
         run: npx --yes wrangler@4 deploy --config wrangler.deploy.json
+      - name: Verify published UI revision and Secret Host assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://novel2-preview.kontrakevich.workers.dev'
+          expected=$(python - <<'PY'
+          import re
+          from pathlib import Path
+          s=Path('../../novel2/public/index.html').read_text()
+          m=re.search(r'<meta name="novel2-ui-release" content="([^"]+)">',s)
+          if not m: raise SystemExit('NOVEL2_SOURCE_UI_VERSION_MISSING')
+          print(m.group(1))
+          PY
+          )
+          ready=0
+          for attempt in $(seq 1 5); do
+            code=$(curl -sS --max-time 25 -o /tmp/novel2-public-ui.html -w '%{http_code}' "$base/novel2/?asset_release=$expected" || true)
+            if [ "$code" = 200 ] && grep -Fq "content=\"$expected\"" /tmp/novel2-public-ui.html; then ready=1; break; fi
+            echo "NOVEL2_ASSET_HTML_PROBE_${attempt}=${code}"
+            sleep 3
+          done
+          test "$ready" = 1 || { echo '::error::NOVEL2_PUBLIC_ASSETS_STALE'; exit 1; }
+          for asset in noir-experience.js noir-experience.css noir-host.js noir-host.css; do
+            code=$(curl -sS --max-time 25 -o "/tmp/novel2-${asset}" -w '%{http_code}' "$base/novel2/$asset" || true)
+            test "$code" = 200 || { echo "::error::NOVEL2_PUBLIC_ASSET_MISSING:$asset:$code"; exit 1; }
+          done
+          grep -Fq 'const nativeMainMenu=renderMainMenu;' /tmp/novel2-noir-host.js
+          grep -Fq 'noirReader' /tmp/novel2-noir-experience.js
+          ! grep -Fq '/novel2/noir-gateway.js' /tmp/novel2-public-ui.html
+          echo "NOVEL2_PUBLIC_ASSETS_VERIFIED=$expected"
+
       - name: Verify stable preview
         shell: bash
         run: |
