@@ -32,5 +32,8 @@
     "directory": "../../novel2/public",
     "binding": "ASSETS",
     "run_worker_first": true
+  },
+  "placement": {
+    "region": "aws:us-east-1"
   }
 }
