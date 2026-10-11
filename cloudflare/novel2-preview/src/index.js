@@ -5,32 +5,35 @@ export class ActorSheetWorkflow extends WorkflowEntrypoint {
   async run(event,step){
     const role=String(event?.payload?.role||'');
     const jobId=String(event?.payload?.job_id||'');
-    if(!['A','B'].includes(role)||!jobId)return{status:'invalid'};
-    return await step.do('create and persist actor sheet',{
-      // A chargeable AI render is never repeated automatically.
-      retries:{limit:0,delay:'5 seconds',backoff:'constant'},
-      timeout:'5 minutes'
+    if(!['A','B'].includes(role)||!/^[a-f0-9-]{36}$/i.test(jobId))return{status:'invalid'};
+    const env=this.env;
+    if(!env.NOVEL2_THEATRE||!env.AI?.run)return{status:'cloudflare_bindings_missing'};
+    const origin='http://'+env.NOVEL2_ORIGIN_HOST+':'+(env.NOVEL2_ORIGIN_PORT||'5690');
+    const key=String(env.NOVEL2_SERVICE_SECRET||'');
+    const call=async(route,payload)=>{
+      const res=await env.NOVEL2_VPC.fetch(new Request(origin+route,{
+        method:'POST',headers:{'content-type':'application/json','x-novel2-service-key':key},
+        body:JSON.stringify(payload)
+      }));
+      const body=await res.json();
+      if(!res.ok||!body?.ok)throw new Error('NOVEL2_ACTOR_CALLBACK_'+res.status);
+      return body;
+    };
+    const stagedKey='stranger/actor-jobs/'+role+'/'+jobId+'.jpg';
+    // Only this stage invokes chargeable Workers AI. A failed origin callback
+    // MUST NEVER trigger a second inference for the same Workflow.
+    const generated=await step.do('render actor sheet once and checkpoint to private R2',{
+      retries:{limit:0,delay:'5 seconds',backoff:'constant'},timeout:'5 minutes'
     },async()=>{
-      const env=this.env;
-      const origin='http://'+env.NOVEL2_ORIGIN_HOST+':'+(env.NOVEL2_ORIGIN_PORT||'5690');
-      const key=String(env.NOVEL2_SERVICE_SECRET||'');
-      const call=async(route,payload)=>{
-        const res=await env.NOVEL2_VPC.fetch(new Request(origin+route,{
-          method:'POST',headers:{'content-type':'application/json','x-novel2-service-key':key},
-          body:JSON.stringify(payload)
-        }));
-        const json=await res.json();
-        if(!res.ok||!json?.ok)throw new Error('NOVEL2_ACTOR_VPC_'+res.status);
-        return json;
-      };
-      let success=false;
       try{
         const prepared=await call('/novel2/api/identity/calibrate/work',{role,job_id:jobId});
         const work=prepared.work||{};
-        const refs=Array.isArray(work.refs)?work.refs.slice(0,4):[];
+        const refs=Array.isArray(work.refs)?work.refs.slice(0,3):[];
         if(!refs.length)throw new Error('NOVEL2_ACTOR_NO_REFERENCES');
+        const prompt=String(work.prompt||'').slice(0,16000);
+        if(!prompt)throw new Error('NOVEL2_ACTOR_NO_PROMPT');
         const form=new FormData();
-        form.append('prompt',String(work.prompt||''));
+        form.append('prompt',prompt);
         form.append('width',String(work.width||832));
         form.append('height',String(work.height||1344));
         for(let i=0;i<refs.length;i++){
@@ -39,35 +42,56 @@ export class ActorSheetWorkflow extends WorkflowEntrypoint {
           form.append('input_image_'+i,blob,'reference-'+i+'.jpg');
         }
         const encoded=new Response(form);
-        const ai=await env.AI.run(AI_IMAGE_MODEL,{
+        const inference=await env.AI.run(AI_IMAGE_MODEL,{
           multipart:{body:encoded.body,contentType:encoded.headers.get('content-type')||'multipart/form-data'}
         });
-        const image=String(ai?.image||'');
-        if(image.length<1000)throw new Error('NOVEL2_ACTOR_IMAGE_EMPTY');
-        const payload={role,job_id:jobId,status:'ready',
-          image,model:AI_IMAGE_MODEL,prompt:String(work.prompt||'')};
-        // Transient origin failures do not cause repeat AI inference.
-        for(let attempt=0;attempt<4;attempt++){
-          try{
-            await call('/novel2/api/identity/calibrate/complete',payload);
-            success=true;
-            break;
-          }catch(error){
-            if(attempt===3)throw error;
-            await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
-          }
-        }
-        return{status:success?'ready':'failed'};
+        const raw=String(inference?.image||'').replace(/^data:image\/[\w.+-]+;base64,/,'');
+        if(raw.length<1500||!/^[A-Za-z0-9+/=]+$/.test(raw))throw new Error('NOVEL2_ACTOR_IMAGE_EMPTY');
+        const decoded=atob(raw),bytes=new Uint8Array(decoded.length);
+        for(let i=0;i<decoded.length;i++)bytes[i]=decoded.charCodeAt(i);
+        await env.NOVEL2_THEATRE.put(stagedKey,bytes,{
+          httpMetadata:{contentType:'image/jpeg'},
+          customMetadata:{kind:'actor-sheet',job_id:jobId,role}
+        });
+        // Durable workflow output contains only a private R2 key, never photos/image bytes.
+        return {status:'staged',key:stagedKey,prompt,model:AI_IMAGE_MODEL};
       }catch(error){
-        if(!success){
-          try{await call('/novel2/api/identity/calibrate/complete',
-            {role,job_id:jobId,status:'failed'})}catch{}
-        }
-        // Do not log source photos, prompts, provider responses or keys.
-        console.error('NOVEL2_ACTOR_WORKFLOW_FAILED',String(error?.message||'FAILED').slice(0,80));
+        try{
+          await call('/novel2/api/identity/calibrate/complete',
+            {role,job_id:jobId,status:'failed'});
+        }catch{}
+        console.error('NOVEL2_ACTOR_GENERATION_FAILED',{kind:'generation_or_staging'});
         return{status:'failed'};
       }
     });
+    if(generated.status!=='staged')return generated;
+    try{
+      // This stage is network-only and can retry WITHOUT spending AI credits.
+      return await step.do('sync previously staged sheet to canonical identity store',{
+        retries:{limit:9,delay:'20 seconds',backoff:'exponential'},
+        timeout:'3 minutes'
+      },async()=>{
+        const object=await env.NOVEL2_THEATRE.get(generated.key);
+        if(!object)throw new Error('NOVEL2_ACTOR_STAGED_RESULT_MISSING');
+        if(object.size<1000||object.size>12_000_000)throw new Error('NOVEL2_ACTOR_STAGED_RESULT_INVALID');
+        const bytes=new Uint8Array(await object.arrayBuffer());
+        let binary='';
+        for(let i=0;i<bytes.length;i+=32768)
+          binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
+        await call('/novel2/api/identity/calibrate/complete',{
+          role,job_id:jobId,status:'ready',image:btoa(binary),
+          model:generated.model,prompt:generated.prompt
+        });
+        // Canonical identity now owns the approved-result lifecycle.
+        try{await env.NOVEL2_THEATRE.delete(generated.key)}catch{}
+        return{status:'ready'};
+      });
+    }catch{
+      // The paid result remains private in R2 for controlled recovery.
+      // Do not mark a successfully generated result as a failed AI inference.
+      console.warn('NOVEL2_ACTOR_SYNC_PENDING',{code:'ORIGIN_UNAVAILABLE'});
+      return{status:'sync_pending'};
+    }
   }
 }
 
