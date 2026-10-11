@@ -13,8 +13,8 @@ assert(host.includes('actorConfirmed()&&step>=2'),'user must approve actor befor
 assert(host.includes('Подтверждаю 18+ и согласие'),'entrance consent');
 assert(host.includes("read('novel2_host_mood'"),'mood is remembered');
 assert(host.includes('nativeCharacterDetail(role)'),'actor screen handoff');
-assert(host.includes('real'),'no immediate real guest identity');
-assert(host.includes('Музыкально-звуовая генерация пока отключена'),'deferred audio only');
+assert(host.includes('реальную личность другого участника'),'never disclose real guest automatically');
+assert(host.includes('Генерация музыки и звуков пока отключена'),'deferred audio only');
 assert(reader.includes('data-trial-choice'),'opt-in narrative assignments');
 assert(reader.includes("noir_trial_decline"),'skip option');
 assert(reader.includes("noir_trial_soft"),'softer choice');
