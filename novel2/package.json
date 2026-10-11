@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/app.js",
-    "test": "node scripts/smoke.mjs && node scripts/reference-contract.test.mjs"
+    "test": "node scripts/smoke.mjs && node scripts/reference-contract.test.mjs && node scripts/noir-host-contract.test.mjs"
   },
   "dependencies": {
     "pg": "8.13.1",
