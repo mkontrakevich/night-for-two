@@ -460,6 +460,25 @@ export default{
     const incoming=new URL(request.url);
     if(incoming.pathname==='/') return Response.redirect(new URL('/novel2/',incoming).toString(),302);
     if(incoming.pathname.startsWith('/novel2-ai/'))return handleAi(request,env,incoming);
+    // Static Mini App delivery is independent from the Windows VPC origin.
+    // Dynamic authenticated APIs remain on the private origin.
+    if(request.method==='GET'&&env.ASSETS&&typeof env.ASSETS.fetch==='function'){
+      const uiPath=incoming.pathname==='/novel2'||incoming.pathname==='/novel2/'
+        ?'/index.html'
+        :['/noir-experience.js','/noir-experience.css','/noir-host.js','/noir-host.css']
+            .find(p=>incoming.pathname==='/novel2'+p);
+      if(uiPath){
+        const assetUrl=new URL(uiPath,incoming);
+        const assetResponse=await env.ASSETS.fetch(new Request(assetUrl.toString(),{method:'GET'}));
+        if(assetResponse.ok){
+          const headers=new Headers(assetResponse.headers);
+          headers.set('cache-control','no-store');
+          headers.set('x-novel2-preview','1');
+          headers.set('x-novel2-static-delivery','assets');
+          return new Response(assetResponse.body,{status:assetResponse.status,headers});
+        }
+      }
+    }
     if(!(incoming.pathname==='/novel2'||incoming.pathname.startsWith('/novel2/'))){
       return json(404,{ok:false,error:'NOVEL2_ROUTE_NOT_FOUND'});
     }
