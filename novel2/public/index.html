@@ -433,13 +433,29 @@ function renderCharacterDetail(role){
    }else if(!actorSheetReady){
      photoPanel='<div class="photoIdentityPanel"><div class="kicker">ACTOR CARD</div><h3>Фото уже сохранены</h3><p>Повторно выбирать фотографии не нужно. Создайте нейтральную карточку актёра из уже сохранённой внешности.</p><button class="photoBuild" id="characterResumeCalibration" type="button">'+(actorSheetTask.status==='failed'?'Повторить генерацию':'Создать карточку актёра')+'</button><button class="photoResume" id="showOtherPhotos" type="button">Использовать другие фото</button><div id="otherPhotosPanel" hidden style="margin-top:14px">'+uploadFields+'</div></div>';
    }else{
-     photoPanel='<div class="photoIdentityPanel"><div class="kicker">ACTOR CARD</div><h3>Карточка актёра готова</h3><button class="photoBuild" id="characterResumeCalibration" type="button">Пересоздать карточку</button><button class="photoResume" id="showOtherPhotos" type="button">Использовать другие фото</button><div id="otherPhotosPanel" hidden style="margin-top:14px">'+uploadFields+'</div></div>';
+     const approve=!character?.ready
+       ?'<p>Изображение сохранено. Проверьте четыре ракурса и подтвердите внешность.</p><button class="photoBuild" id="approveSavedActor" type="button">Подтвердить карточку</button>'
+       :'<p>Внешность подтверждена. Карточка готова для использования в романах.</p>';
+     photoPanel='<div class="photoIdentityPanel"><div class="kicker">ACTOR CARD</div><h3>Карточка актёра готова</h3>'+approve+'<button class="photoResume" id="showOtherPhotos" type="button">Использовать другие фото</button><div id="otherPhotosPanel" hidden style="margin-top:14px">'+uploadFields+'</div></div>';
    }
    app.innerHTML='<section class="characterDetail"><div class="characterDetailNav"><button class="characterBack" id="characterBack">← Назад</button><div class="characterStatus">'+esc(status)+'</div></div><div class="characterHeroCard">'+avatarHtml(character?.avatar||'','Карточка актёра','characterHeroAvatar')+'<div><div class="kicker">ИГРОК '+esc(role)+'</div><h1>Карточка актёра</h1></div></div>'+looks+failedNotice+photoPanel+'</section>';
    document.getElementById('characterBack').onclick=()=>{characterDetailRole='';menuMode=true;renderMainMenu();window.scrollTo(0,0)};
    const hero=document.querySelector('.characterHeroAvatar');if(hero)hero.onclick=()=>openCharacterViewer(role,actorSheetReady?'canonical':'source');
    const photoBuild=document.getElementById('characterPhotoBuild');if(photoBuild)photoBuild.onclick=()=>buildCharacterFromDetail(role);
    const resume=document.getElementById('characterResumeCalibration');if(resume)resume.onclick=()=>continueCalibrationFromDetail(role);
+   const approveSaved=document.getElementById('approveSavedActor');if(approveSaved)approveSaved.onclick=async()=>{
+     if(busy)return;
+     busy=true;approveSaved.disabled=true;
+     try{
+       await api('identity/approve',{},30000);
+       state=(await api('state',{},15000)).state||state;
+       actorTaskFinish('ready');calibrationImage='';
+       renderCharacterDetail(role);
+     }catch(error){
+       alert(error?.message||'Не удалось подтвердить карточку.');
+       approveSaved.disabled=false;
+     }finally{busy=false}
+   };
    const showOther=document.getElementById('showOtherPhotos');if(showOther)showOther.onclick=()=>{const p=document.getElementById('otherPhotosPanel');if(p){p.hidden=!p.hidden;showOther.textContent=p.hidden?'Использовать другие фото':'Скрыть выбор фото'}};
    bindCharacterLooks(role,false);
    if(hasIdentity&&!characterLooksLoaded[role])void loadCharacterLooks(role);
@@ -643,6 +659,9 @@ function renderMainMenu(){
  const draftsHtml=libraryDrafts.length?libraryDrafts.map(draftRowHtml).join(''):'';
  app.innerHTML='<section class="mainMenu"><div class="editorialHero"><div class="editorialObjects" aria-hidden="true"></div><div class="editorialCopy"><div class="kicker">INTERACTIVE NOVEL 2.0 · PRIVATE STORIES</div><h1>Фантазии<br>становятся<br>историями</h1><p>Истории для двоих, в которых каждое решение меняет степень близости. Сначала сюжет — затем герои.</p><button type="button" class="editorialCTA" id="heroNewBook">Начать роман →</button></div></div>'+(active?'<div class="menuActions"><button type="button" class="secondary" id="continueBook">Продолжить роман →</button></div>':'')+'<div class="libraryTitle">'+(active?'Герои истории':'Карточка актёра')+'</div><div class="playerCards'+(active||otherHumanReady?' hasPair':'')+'">'+characterStrip+'</div>'+castNotice+(draftsHtml?'<div class="libraryTitle">Черновики историй</div>'+draftsHtml:'')+'<div class="libraryTitle">Мои романы</div>'+booksHtml+'</section>';
  bindMainMenu();
+ // Load persisted Actor Sheet on home as soon as identity exists.
+ // The generated image is independent of final identity approval.
+ if(!active&&own?.identity_only&&!characterLooksLoaded[role])void loadCharacterLooks(role);
  const ownSaved=Boolean((characterLooks[role]||[]).some(x=>x?.key==='canonical'&&x?.image&&x?.model!=='existing'));
  const actorBlocked=!ownSaved&&(actorSheetTask.active||(actorSheetTask.status==='ready'&&calibrationImage));
  const heroNewBook=document.getElementById('heroNewBook');if(heroNewBook){heroNewBook.disabled=actorBlocked;heroNewBook.onclick=actorBlocked?null:startNewBook}
