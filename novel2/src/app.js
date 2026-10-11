@@ -19,6 +19,7 @@ import {analyzeIdentity,referenceOnlyIdentity,buildLock,buildBaseActorCard} from
 import {buildCharacterCard,buildSyntheticCharacter,normalizeCharacterCard} from './character-builder.js';
 import {generateVisual,generateCalibration,calibrationSpec,generateSyntheticReference,generateCharacterLook,characterLookDefinition} from './visual-engine.js';
 import {resizeReferences} from './ai.js';
+import {initLobbyWorldStore,getLobbyWorld,lobbyWorldStatus,prepareLobbyWorld,completeLobbyWorld} from './lobby-world-store.js';
 import {fetchRelationshipContext,sliceRelationshipContext,explicitGenderForRole} from './relationship-context.js';
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
@@ -352,6 +353,7 @@ async function driveAiTurns(book,ids,bookCast=[],maxTurns=4){
 async function main(){
   assertProductionConfig();
   await initDb();
+  await initLobbyWorldStore();
   const html=await fs.readFile(htmlPath,'utf8');
   const noirJs=await fs.readFile(path.resolve(__dirname,'../public/noir-experience.js'),'utf8');
   const noirCss=await fs.readFile(path.resolve(__dirname,'../public/noir-experience.css'),'utf8');
@@ -373,6 +375,55 @@ async function main(){
       if(req.method==='GET'&&url.pathname==='/novel2/noir-host.css')return send(res,200,hostCss,'text/css; charset=utf-8');
 
       if(!url.pathname.startsWith('/novel2/api/'))return send(res,404,{ok:false,error:'NOT_FOUND'});
+      if(url.pathname==='/novel2/api/lobby/world/prepare'){
+        if(req.method!=='POST'||!serviceAuthenticated(req))
+          return send(res,403,{ok:false,error:'NOVEL2_LOBBY_PREPARE_DENIED'});
+        const auth=authenticate(req);
+        if(!auth)return send(res,403,{ok:false,error:'NOVEL2_ACCESS_DENIED'});
+        const input=await bodyJson(req);
+        try{
+          const result=await prepareLobbyWorld({role:auth.role,place:input.place,mood:input.mood});
+          return send(res,200,{ok:true,work:result.work,state:lobbyWorldStatus(result.state)});
+        }catch(error){
+          const code=String(error?.message||'NOVEL2_LOBBY_PREPARE_FAILED');
+          if(/^NOVEL2_LOBBY_/.test(code))return send(res,400,{ok:false,error:code});
+          throw error;
+        }
+      }
+      if(url.pathname==='/novel2/api/lobby/world/work'){
+        if(req.method!=='POST'||!serviceAuthenticated(req))
+          return send(res,403,{ok:false,error:'NOVEL2_LOBBY_WORK_DENIED'});
+        const input=await bodyJson(req),role=String(input.role||'');
+        if(!['A','B'].includes(role))return send(res,400,{ok:false,error:'NOVEL2_LOBBY_ROLE_INVALID'});
+        const row=await getLobbyWorld(role);
+        if(!row||row.job_id!==String(input.job_id||'')||row.status!=='working')
+          return send(res,409,{ok:false,error:'NOVEL2_LOBBY_JOB_STALE'});
+        return send(res,200,{ok:true,work:{role,job_id:row.job_id,prompt:row.prompt,width:832,height:1344}});
+      }
+      if(url.pathname==='/novel2/api/lobby/world/complete'){
+        if(req.method!=='POST'||!serviceAuthenticated(req))
+          return send(res,403,{ok:false,error:'NOVEL2_LOBBY_COMPLETE_DENIED'});
+        const input=await bodyJson(req),role=String(input.role||'');
+        if(!['A','B'].includes(role))return send(res,400,{ok:false,error:'NOVEL2_LOBBY_ROLE_INVALID'});
+        let base64='';
+        if(input.status==='ready'){
+          const image=String(input.image||'');
+          if(image.length<1200||image.length>15_000_000||!/^[A-Za-z0-9+/=]+$/.test(image))
+            return send(res,422,{ok:false,error:'NOVEL2_LOBBY_RESULT_INVALID'});
+          const jpeg=await sharp(Buffer.from(image,'base64'),{limitInputPixels:10_000_000})
+            .resize({width:960,withoutEnlargement:true})
+            .jpeg({quality:83,mozjpeg:true}).toBuffer();
+          base64=jpeg.toString('base64');
+        }
+        try{
+          const row=await completeLobbyWorld({role,jobId:String(input.job_id||''),
+            imageBase64:base64,model:String(input.model||''),errorCode:String(input.error_code||'GENERATION_FAILED')});
+          return send(res,200,{ok:true,state:lobbyWorldStatus(row)});
+        }catch(error){
+          if(String(error?.message)==='NOVEL2_LOBBY_JOB_STALE')return send(res,409,{ok:false,error:'NOVEL2_LOBBY_JOB_STALE'});
+          throw error;
+        }
+      }
       if(url.pathname==='/novel2/api/identity/calibrate/work'){
         if(req.method!=='POST'||!serviceAuthenticated(req))
           return send(res,403,{ok:false,error:'NOVEL2_ACTOR_WORK_DENIED'});
@@ -488,6 +539,13 @@ async function main(){
         return send(res,200,{ok:true,drafts});
       }
 
+      if(url.pathname==='/novel2/api/lobby/world/status'){
+        const row=await getLobbyWorld(auth.role);
+        return send(res,200,{ok:true,world:lobbyWorldStatus(row,{includeImage:true})});
+      }
+      if(url.pathname==='/novel2/api/lobby/world/start'){
+        return send(res,409,{ok:false,error:'NOVEL2_LOBBY_EDGE_WORKFLOW_REQUIRED'});
+      }
       if(url.pathname==='/novel2/api/state'){
         // State reads must stay fast and side-effect free. Never block app opening
         // on prose generation; AI-controlled turns advance through a separate
