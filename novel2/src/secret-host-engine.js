@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {normalizeGuestPlace,buildLobbyNarratorLine} from './lobby-world.js';
 import {secretHostCompletion} from './ai.js';
 
-const SKILL_PATH=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../skills/secret-noir-host/SKILL.md');
+const SKILL_PATH=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../skills/secret-noir-host/SKILL.md');
 const STAGES=new Set(['invitation','consent','place_question','place_reaction','actor_intro','actor_review','handoff']);
 const ACTIONS={
   invitation:'accept_invitation',consent:'confirm_adult_consent',
