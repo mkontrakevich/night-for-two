@@ -79,6 +79,28 @@ jobs:
           else
             echo 'NOVEL2_HOST_OPENROUTER_CONFIGURED=false'
           fi
+      - name: Diagnose protected OpenRouter Stranger provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://novel2-preview.kontrakevich.workers.dev'
+          key="$(printf 'novel2-ai-v1:%s' "$NOVEL2_SERVICE_SECRET" | sha256sum | awk '{print $1}')"
+          python - <<'PY'
+          import json
+          body={'messages':[
+            {'role':'system','content':'Return only one JSON object with fields stage, line, next_action. Set stage=invitation and next_action=accept_invitation; line must be a Russian welcome sentence.'},
+            {'role':'user','content':'{}'}],
+            'temperature':0.2,'max_tokens':170}
+          open('/tmp/noir-host-probe.json','w').write(json.dumps(body,ensure_ascii=False))
+          PY
+          code=$(curl --silent --show-error --max-time 35 -o /tmp/noir-host-result.json -w '%{http_code}' \
+            -H 'content-type: application/json' -H "x-novel2-service-key: $key" \
+            --data-binary @/tmp/noir-host-probe.json "$base/novel2-ai/host" || true)
+          echo "NOVEL2_HOST_DIAG_HTTP=$code"
+          if [ "$code" = 200 ]; then
+            jq -r '"NOVEL2_HOST_DIAG_PROVIDER=" + (.provider // "unknown")' /tmp/noir-host-result.json
+            jq -r '"NOVEL2_HOST_DIAG_OPENROUTER_FALLBACK=" + (.openrouter_failure // "none")' /tmp/noir-host-result.json
+          fi
       - name: Verify published UI revision and Secret Host assets
         shell: bash
         run: |
