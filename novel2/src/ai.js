@@ -166,6 +166,20 @@ export async function textCompletion({system, user, temperature=.75, maxTokens=5
   });
 }
 
+export async function secretHostCompletion({system,user,temperature=.7,maxTokens=420}={}) {
+  const messages=[
+    {role:'system',content:String(system||'').slice(0,14500)},
+    {role:'user',content:JSON.stringify(user||{}).slice(0,2200)}
+  ];
+  if(config.edgeAiUrl){
+    const json=await edgeJson('host',{messages,temperature,max_tokens:maxTokens},
+      {timeoutMs:35000,attempts:1,label:'NOVEL2_EDGE_HOST'});
+    return {...parseJson(String(json?.content||'')),provider:String(json?.provider||'edge')};
+  }
+  const raw=await openRouterChat({model:config.textModel,temperature,max_tokens:maxTokens,messages});
+  return {...parseJson(raw),provider:'openrouter'};
+}
+
 export async function jsonCompletion(args) {
   const raw=await textCompletion(args);
   try{return parseJson(raw);}
