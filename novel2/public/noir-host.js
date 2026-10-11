@@ -61,68 +61,178 @@
     return true;
   }
   const actorConfirmed=()=>Boolean(state?.characters?.[ownRole()]?.ready);
-  const lines={
-    invite:[
-      'Эта дверь открывается не каждому персонажу.',
-      'За ней — кулуарная история, в которой чужое имя останется тайной, а каждый ваш выбор изменит ход событий.',
-      'Я — Незнакомец. Художественный ведущий этого мира. Могу я показать вам первую дверь?'
+  const narratorCache=new Map();
+  let worldCache=null,worldTimer=null,hostPlaceError='';
+  const hostPlace=()=>read('novel2_host_place','');
+  const hostStep=()=>Math.max(0,Math.min(4,Number(read('novel2_host_step','0'))||0));
+  function stopWorldPoll(){if(worldTimer){clearTimeout(worldTimer);worldTimer=null}}
+  function goToStep(next){
+    stopWorldPoll();hostPlaceError='';
+    write('novel2_host_step',String(next));lobby();
+  }
+  const fallbackLines={
+    invitation:[
+      'Здравствуйте, уважаемый Гость. Я счастлив приветствовать Вас.',
+      'Приоткройте завесу. Сегодня этот театр станет отражением Вашего выбора.',
+      'Позвольте мне провести Вас внутрь.'
     ],
-    threshold:[
-      'Кулуарные истории требуют не спешки, а вашего согласия.',
-      'Все участники совершеннолетние. Пикантные задания в сюжете добровольны: их можно принять, смягчить или пропустить, а игру — остановить.',
-      'Какой оттенок тайны вам ближе сегодня?'
+    consent:[
+      'Вы на пороге закрытого театра образов.',
+      'Здесь каждое приглашение добровольно. Вы можете отказаться, смягчить испытание или остановиться.',
+      'Подтвердите Ваше участие, и я задам первый вопрос.'
     ],
-    actor:[
-      'Прежде чем войти в историю, я предложу вам создать актёра.',
-      'Одна, две или три фотографии. Нейтральная визитка на весь экран — без вымышленной биографии, характера и сюжета.',
-      'Можно перегенерировать карточку по тем же снимкам или заменить фото. Вы решаете, когда образ готов.'
+    place_question:[
+      'Закройте глаза и представьте место, где бы Вы хотели оказаться.',
+      'Представили? Отлично. Теперь назовите мне это место.'
     ],
-    partner:[
-      'Актёр готов. Теперь ему нужен поступок, который изменит историю.',
-      'Партнёр остаётся за кулисами. Его художественный образ откроют слова, решения и события — не анкета и не фотография в начале игры.',
-      'Внутри вас ждут интрига, диалог и сюжетные испытания. Каждый выбор повлияет на последствия. Финал обязательно наступит.'
+    place_reaction:[
+      '«'+hostPlace()+'»… прекрасный выбор.',
+      'Я подготовлю для Вас театральную лавку, в которой это место проявится через свет, материалы и образы.',
+      'А теперь выйдите на свет. Покажитесь — подберём для Вас первый наряд.'
+    ],
+    handoff:[
+      'Замечательно. Теперь всё готово.',
+      'Театр принял Ваш образ. Кто станет Вашим партнёром, откроется лишь в истории.',
+      'Завеса поднимается. Приглашаю Вас к первой главе.'
     ]
   };
+  async function updateNarrator(stage,place,role){
+    const identity=stage+':'+place+':'+String(role)+':'+String(actorConfirmed());
+    const node=document.getElementById('hostThread');
+    if(!node)return;
+    if(narratorCache.has(identity)){
+      const line=narratorCache.get(identity);
+      node.innerHTML='<p>'+esc(line)+'</p>';
+      return;
+    }
+    try{
+      const j=await api('host/turn',{stage,place,mood},36000);
+      if(j.turn?.line&&app.querySelector('.hostLobby')&&
+          Number(app.querySelector('.hostLobby').dataset.step)===hostStep()&&
+          stage===(['invitation','consent','place_question','place_reaction','handoff'][hostStep()])){
+        narratorCache.set(identity,j.turn.line);
+        node.innerHTML='<p>'+esc(j.turn.line)+'</p>';
+      }
+    }catch{/* Scripted theatre line remains usable during AI provider failure. */}
+  }
+  function displayWorld(){
+    const root=app.querySelector('.hostLobby');
+    if(!root)return;
+    const art=document.getElementById('hostArt'),status=document.getElementById('hostWorldStatus');
+    if(worldCache?.status==='ready'&&worldCache.image&&art){
+      art.style.setProperty('--host-scene','url("'+worldCache.image+'")');
+      art.classList.add('withWorld');
+      if(status)status.textContent='Ваша театральная лавка создана';
+    }else if(worldCache?.status==='working'){
+      if(status)status.textContent='Театр принимает очертания Вашего места…';
+    }else if(worldCache?.status==='failed'){
+      if(status)status.textContent='Декорации пока не появились. Подготовка актёра доступна.';
+    }
+  }
+  async function pollWorld(){
+    stopWorldPoll();
+    try{
+      const j=await api('lobby/world/status',{},18000);
+      worldCache=j.world||null;
+      displayWorld();
+      if(worldCache?.status==='working'&&app.querySelector('.hostLobby'))
+        worldTimer=setTimeout(pollWorld,3700);
+    }catch{/* The actor flow is not blocked by a failed background image. */}
+  }
+  async function acceptPlace(){
+    const field=document.getElementById('hostPlace');
+    const place=String(field?.value||'').trim().replace(/\s+/g,' ');
+    if(place.length<2||place.length>120){
+      const error=document.getElementById('hostInputError');if(error)error.textContent='Назовите место — от 2 до 120 символов.';
+      return;
+    }
+    const button=document.getElementById('hostNext');if(button)button.disabled=true;
+    try{
+      const j=await api('lobby/world/start',{place,mood},26000);
+      write('novel2_host_place',place);
+      worldCache=j.world||null;
+      goToStep(3);
+    }catch(error){
+      hostPlaceError='Не удалось начать создание декораций. Попробуйте ещё раз.';
+      const node=document.getElementById('hostInputError');if(node)node.textContent=hostPlaceError;
+      if(button)button.disabled=false;
+    }
+  }
   function lobby(){
     const role=ownRole();
     if(state?.characters?.[role]?.identity_only&&!characterLooksLoaded[role])void loadCharacterLooks(role);
-    let step=Number(read('novel2_host_step','0'))||0;
-    if(actorConfirmed()&&step>=2)step=3;
-    const stage=['invite','threshold','actor','partner'][Math.min(3,Math.max(0,step))];
-    const title={invite:'Вас ожидала только история',threshold:'Правила этой двери',actor:'Ваша новая роль',partner:'Кто окажется за дверью?'}[stage];
-    const kicker={invite:'01 / ПРИГЛАШЕНИЕ',threshold:'02 / ПОРОГ',actor:'03 / ВЫБОР АКТЁРА',partner:'04 / ТАЙНА'}[stage];
-    const copy=lines[stage].map((v,i)=>'<p style="--host-delay:'+(i*360)+'ms">'+esc(v)+'</p>').join('');
+    let step=hostStep();
+    if(actorConfirmed()&&step===3){step=4;write('novel2_host_step','4')}
+    const stage=['invitation','consent','place_question','place_reaction','handoff'][step];
+    const title=[
+      'Завеса неизвестного','Добро пожаловать','Представьте место',
+      'Театр Ваших образов','Всё готово'
+    ][step];
+    const kicker=[
+      '01 / ПРИГЛАШЕНИЕ','02 / СОГЛАСИЕ','03 / ВАШ МИР',
+      '04 / ПОДБОР ОБРАЗА','05 / ПЕРВАЯ ГЛАВА'
+    ][step];
+    const lines=(fallbackLines[stage]||fallbackLines.invitation);
+    const copy=lines.map((v,i)=>'<p style="--host-delay:'+(i*390)+'ms">'+esc(v)+'</p>').join('');
     const moodButtons=step===1?'<div class="hostMoods" role="group" aria-label="Выберите настроение истории">'+moods.map((v,i)=>'<button class="vintageMood" type="button" data-host-mood="'+v+'" aria-pressed="'+String(v===mood)+'">'+vintageButton(v.charAt(0).toUpperCase()+v.slice(1),['keyhole','heart','compass'][i])+'</button>').join('')+'</div>':'';
-    const mystery=step===3?'<div class="hostSecret"><strong>Личность второго героя закрыта</strong>Вы узнаете его сюжетную роль постепенно — из слов, поступков и разгаданных тайн.<small>Это художественная интрига. Личные данные других гостей остаются конфиденциальными.</small></div>':'';
-    const button=step===0?'Войти под завесу':step===1?'Подтверждаю 18+ и согласие'
-      :step===2?(actorAvailable()?'Посмотреть карточку актёра':'Создать карточку актёра')
-      :'Начать роман';
-    const actionIcon=['curtain','seal','cameo','book'][Math.min(3,Math.max(0,step))];
-    const small=step===1?'Это подтверждение пользователя, не автоматическая проверка возраста. Все действия добровольны; остановка возможна в любой момент.'
-      :step===3?'Второй герой может управляться реальным гостем либо ИИ. Его реальная личность никогда не раскрывается без отдельного согласия.'
-      :'Открыть обычное меню можно в любой момент.';
-    app.innerHTML='<section class="hostLobby revealing"><div class="hostMasthead"><span><i></i>THE SECRET HOST · PRIVATE STORIES</span><button id="hostSkip" type="button">Открыть меню</button></div><div class="hostArt" aria-hidden="true"></div><div class="hostEpisode">'+kicker+'</div><h1>'+title+'</h1><div class="hostThread">'+copy+'</div>'+moodButtons+mystery+'<div class="hostChoice"><button type="button" id="hostNext" class="vintageStageAction" aria-label="'+esc(button)+'">'+vintageButton(button,actionIcon)+'</button></div><p class="hostNote">'+small+'</p></section>';
-    document.getElementById('hostSkip').onclick=skipHost;
+    const placeField=step===2?'<div class="hostPlaceField"><label for="hostPlace">ВАШЕ МЕСТО</label><input id="hostPlace" type="text" autocomplete="off" autocapitalize="sentences" maxlength="120" placeholder="Например, Северный полюс" value="'+esc(hostPlace())+'"><small id="hostInputError" role="alert">'+esc(hostPlaceError)+'</small></div>':'';
+    const secret=step===4?'<div class="hostSecret"><strong>Второй герой пока неизвестен</strong>Его вымышленная роль проявится в действиях и истории.<small>Реальные данные других гостей не раскрываются без их согласия.</small></div>':'';
+    const button=[
+      'Войти под завесу','Подтверждаю 18+ и согласие',
+      'Создать моё пространство',
+      actorAvailable()?'Посмотреть и подтвердить актёра':'Подобрать наряд актёра',
+      'Начать роман'
+    ][step];
+    const actionIcon=['curtain','seal','keyhole','cameo','book'][step];
+    const note=step===1?'Совершеннолетие подтверждается Вами. Все задания добровольны, выход доступен всегда.'
+      :step===3?'Для кастинговой карточки нужно от одной до трёх фотографий. Внешность должна оставаться узнаваемой.'
+      :step===4?'Партнёром может быть реальный приглашённый или вымышленный AI-герой.'
+      :'Пролог можно покинуть в любой момент.';
+    const hint=(step===0||step===3)?'<div class="hostSwipeHint" aria-hidden="true"><span class="hostSwipeGlyph">⌄</span> ЛИСТАЙ · ЗАВЕСА ОТКРЫВАЕТСЯ</div>':'';
+    app.innerHTML='<section class="hostLobby revealing" data-step="'+step+'"><div class="hostMasthead"><span><i></i>THE SECRET HOST · PRIVATE STORIES</span><button id="hostSkip" type="button">В фойе</button></div><div class="hostArt" id="hostArt" aria-hidden="true"><div class="hostNearCurtain"></div><div class="hostMidScene"></div><div class="hostFarScene"></div></div><div class="hostEpisode">'+kicker+'</div><h1>'+esc(title)+'</h1><div class="hostThread" id="hostThread">'+copy+'</div>'+moodButtons+placeField+secret+'<div class="hostChoice"><button type="button" id="hostNext" class="vintageStageAction" aria-label="'+esc(button)+'">'+vintageButton(button,actionIcon)+'</button></div>'+hint+'<p id="hostWorldStatus" class="hostWorldStatus" aria-live="polite"></p><p class="hostNote">'+note+'</p></section>';
+    document.getElementById('hostSkip').onclick=()=>{stopWorldPoll();skipHost()};
     decorateButton(document.getElementById('hostSkip'),'door');
     document.querySelectorAll('[data-host-mood]').forEach(x=>x.onclick=()=>{
       mood=x.dataset.hostMood;write('novel2_host_mood',mood);
       document.querySelectorAll('[data-host-mood]').forEach(y=>y.setAttribute('aria-pressed',String(y===x)));
     });
-    document.getElementById('hostNext').onclick=()=>{
-      if(step===0){write('novel2_host_step','1');lobby();return}
-      if(step===1){write('novel2_host_step','2');lobby();return}
-      if(step===2){if(actorConfirmed()){write('novel2_host_step','3');lobby();return}nativeCharacterDetail(role);return}
-      write('novel2_host_skip','1');
+    const field=document.getElementById('hostPlace');
+    if(field)field.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();void acceptPlace()}};
+    const go=document.getElementById('hostNext');
+    go.onclick=()=>{
+      if(step===0)return goToStep(1);
+      if(step===1)return goToStep(2);
+      if(step===2)return void acceptPlace();
+      if(step===3){
+        if(actorConfirmed())return goToStep(4);
+        nativeCharacterDetail(role);return;
+      }
+      stopWorldPoll();write('novel2_host_skip','1');
       try{localStorage.setItem('novel2_host_introduced','1')}catch{}
       startNewBook();
     };
+    // Touch is a theatrical hint; consent and generation remain click-only.
+    let initialY=null;
+    if(step===0){
+      const art=document.getElementById('hostArt');
+      art.addEventListener('touchstart',e=>{initialY=e.touches[0]?.clientY??null},{passive:true});
+      art.addEventListener('touchend',e=>{
+        const endY=e.changedTouches[0]?.clientY??0;
+        if(initialY!==null&&initialY-endY>65)goToStep(1);
+        initialY=null;
+      },{passive:true});
+    }
+    if(step>=3)void pollWorld();
+    else displayWorld();
+    void updateNarrator(stage,step===3?hostPlace():'',role);
   }
   window.novel2HostCreativeBrief=()=>(
-    'Оригинальная кинематографичная история для совершеннолетних в атмосфере закрытого нуарного шоу: тайна, притяжение, кулуарная интрига. '+
-    'Гость играет значимую роль, свободно отвечает своими словами, а последствия каждого выбора меняют события и отношения. Настроение: '+mood+'. '+
-    'Сюжет первичен. Художественного партнёра раскрывать постепенно через события; реальную личность другого участника никогда не выдавать автоматически. '+
-    'Предлагать только добровольные чувственные сюжетные испытания с возможностью более мягкого варианта или отказа без наказания. '+
-    'Вести роман по конечным драматургическим эпизодам к финалу. Генерация музыки и звуков пока отключена.'
+    'Кинематографичный роман для совершеннолетних в эстетике закрытого театра образов. '+
+    'Желаемое место гостя: '+JSON.stringify(hostPlace().slice(0,120))+'. '+
+    'Сюжет использует настроение и визуальные ассоциации этого места, но не обязан буквально происходить там. '+
+    'Гость управляет важными решениями, настроение: '+mood+'. Вымышленный партнёр открывается постепенно; реальные личности скрыты. '+
+    'Добровольные чувственные задания можно принять, смягчить или пропустить без наказания. '+
+    'Драматургия конечна. Генерация звука отложена.'
   );
   renderMainMenu=function(...args){
     if(shouldHost()){lobby();return}
@@ -152,6 +262,14 @@
       }
     }
     const screen=app.querySelector('section.characterDetail');
+    if(screen&&actorConfirmed()&&hostStep()===3&&read('novel2_host_skip')!=='1'&&!screen.querySelector('#hostAfterApproval')){
+      const next=document.createElement('button');next.id='hostAfterApproval';next.type='button';
+      next.className='hostAfterApproval';next.textContent='Продолжить к роману';
+      next.onclick=()=>goToStep(4);
+      const section=screen.querySelector('.photoIdentityPanel')||screen;
+      section.appendChild(next);
+      decorateButton(next,'book');
+    }
     if(screen){
       for(const [selector,icon] of [
         ['#characterPhotoBuild','cameo'],
