@@ -174,7 +174,7 @@ export async function secretHostCompletion({system,user,temperature=.7,maxTokens
   if(config.edgeAiUrl){
     const json=await edgeJson('host',{messages,temperature,max_tokens:maxTokens},
       {timeoutMs:35000,attempts:1,label:'NOVEL2_EDGE_HOST'});
-    return {...parseJson(String(json?.content||'')),provider:String(json?.provider||'edge')};
+    return {...parseJson(String(json?.content||'')),provider:String(json?.provider||'edge'),openrouter_failure:String(json?.openrouter_failure||'')};
   }
   const raw=await openRouterChat({model:config.textModel,temperature,max_tokens:maxTokens,messages});
   return {...parseJson(raw),provider:'openrouter'};
