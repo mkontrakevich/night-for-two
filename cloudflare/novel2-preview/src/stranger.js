@@ -71,7 +71,8 @@ async function signature(key,text){
  return new Uint8Array(await crypto.subtle.sign('HMAC',imported,new TextEncoder().encode(text)));
 }
 export async function guestFromRequest(request,env){
- const token=String(env.NOVEL2_SERVICE_SECRET||'');
+ // The internal VPC service key is hashed; Telegram initData must use the raw bot token.
+ const token=String(env.NOVEL2_TELEGRAM_BOT_TOKEN||'');
  const allowed=String(env.NOVEL2_ALLOWED_USER_IDS||'').split(',').map(v=>v.trim()).filter(Boolean);
  if(!token||!allowed.length)return null;
  const raw=request.headers.get('x-telegram-init-data')||'';

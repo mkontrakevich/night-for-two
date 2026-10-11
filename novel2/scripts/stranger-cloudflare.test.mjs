@@ -41,7 +41,7 @@ const bucket={
  async put(key,content){store.set(key,content)}
 };
 let aiCalls=0;
-const env={NOVEL2_SERVICE_SECRET:token,NOVEL2_ALLOWED_USER_IDS:userId,
+const env={NOVEL2_TELEGRAM_BOT_TOKEN:token,NOVEL2_ALLOWED_USER_IDS:userId,
  NOVEL2_THEATRE:bucket,LOBBY_WORLD_WORKFLOW:{create:async job=>jobs.push(job)},
  AI:{run:async(_model,input)=>{
   aiCalls++;

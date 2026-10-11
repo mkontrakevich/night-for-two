@@ -103,6 +103,12 @@ jobs:
           else
             echo 'NOVEL2_HOST_OPENROUTER_CONFIGURED=false'
           fi
+      - name: Bind raw Telegram verification key separately from service auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${NOVEL2_SERVICE_SECRET:-}" || exit 1
+          printf %s "$NOVEL2_SERVICE_SECRET" | npx --yes wrangler@4 secret put NOVEL2_TELEGRAM_BOT_TOKEN --config wrangler.deploy.json
       - name: Restrict AI Stranger to verified project guests
         shell: bash
         run: |
