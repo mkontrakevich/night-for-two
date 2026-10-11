@@ -76,6 +76,9 @@ export function buildVisualPrompt({scene, identities={}, cast=[], previousVisual
   return [
     'VERTICAL 9:16 cinematic editorial frame for an original adult dark-romance novel.',
     'ILLUSTRATE THE CURRENT STORY SCENE, NOT A GENERIC COUPLE PORTRAIT.',
+    scene?.noir_progress&&scene.noir_progress.partner_reveal_phase!=='fictional_reveal'
+      ?'MYSTERY LOCK: the second story guest is not yet narratively identified. Do not depict a recognizable frontal face, distinctive portrait, explicit name or revealing visual clue for the mysterious partner. Prefer implied presence, anonymous silhouette, hands, reflections or a reverse angle, without revealing future secrets.'
+      :'',
     `LOCATION: ${String(visual.location||'').trim()||'derive the exact current location from the prose'}`,
     `LOCATION DETAILS: ${String(visual.location_details||'').trim()||'preserve architecture, materials, furniture, weather and recurring spatial details from the story'}`,
     `CHARACTERS PHYSICALLY PRESENT: ${roles.join(', ')}. Do not add cast members who are absent from this scene.`,
