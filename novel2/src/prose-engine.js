@@ -30,6 +30,14 @@ GAMEPLAY
 — пользовательская реплика становится каноном;
 — никогда не подменяй ответ пользователя заранее написанной репликой.
 
+NOIR DIALOGUE SHOW · skills/night-erotic-serial-novelist/SKILL.md
+— Это цельный роман, показываемый как приватное представление AI-ведущего «Незнакомец». Ведущий — художественный голос, не реальный человек.
+— Для каждой сцены noir_whisper: одна короткая реплика ведущего (макс. 160 знаков), основанная только на уже раскрытых событиях. Не выдавай будущих секретов, не пиши реплики за игроков. Допускается пустая строка.
+— Развивай драматургические биты, сохраняй канон, характеры и реплики героев; не подменяй длинную прозу множеством бессмысленных чат-сообщений.
+— Включи visual_after_paragraph — номер абзаца после которого иллюстрация может появиться без спойлера. Абзацы разделены пустой строкой, счёт с 1; если неуверен, укажи последний абзац.
+— Визуальный контракт skills/sd-story-illustration/SKILL.md: показывай только события, введённые до visual_after_paragraph; соблюдать IDENTITY LOCK, локацию, свет, одежду и хронологию.
+— Не генерируй декоративные картинки или изображения, противоречащие сцене.
+
 DRAMA
 У романа должны быть цель, конфликт, поворот, тайна/ставка, развитие отношений и финал. Эротика усиливает драму, а не заменяет её.
 
@@ -61,6 +69,8 @@ function cleanScene(value={}) {
     chapter_no:Math.max(1,Number(s.chapter_no)||1),
     chapter_title:String(s.chapter_title||'').slice(0,100),
     prose:String(s.prose||'').trim().slice(0,18000),
+    noir_whisper:String(s.noir_whisper||'').trim().slice(0,160),
+    visual_after_paragraph:Math.max(0,Math.min(40,Number(s.visual_after_paragraph)||0)),
     target_role:['A','B'].includes(String(s.target_role))?String(s.target_role):'A',
     primary_interaction:{
       type:'free_reply',
@@ -249,7 +259,7 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
         supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card])),
         canon:{},
         first_scene:{
-          chapter_no:1,chapter_title:'',prose:'',target_role:'A',
+          chapter_no:1,chapter_title:'',prose:'',noir_whisper:'',visual_after_paragraph:0,target_role:'A',
           primary_interaction:{type:'free_reply',prompt:''},
           optional_actions:[],
           visual_beat:'',
@@ -273,7 +283,8 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
         'Используй дополнительные AI-роли уже в первой сцене, если это естественно для opening_situation.',
         'characters_present содержит slot_key/идентификаторы реально присутствующих персонажей. Для интерактивных игроков используй A и B; для AI — их slot_key.',
         'visual_scene точно фиксирует локацию, присутствующих героев, положение тел, одежду, предметы и свет.',
-        'Первая сцена заканчивается значимым выбором A или B, а не обязательным ходом каждого присутствующего персонажа.'
+        'Первая сцена заканчивается значимым выбором A или B, а не обязательным ходом каждого присутствующего персонажа.',
+         'noir_whisper и visual_after_paragraph связывают литературное развитие с появлением изображения; никаких визуальных спойлеров.'
       ]
     }
   });
@@ -303,6 +314,8 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
           chapter_no:Number(book.chapter_no)||1,
           chapter_title:'',
           prose:'',
+          noir_whisper:'',
+          visual_after_paragraph:0,
           target_role:playerRole==='A'?'B':'A',
           primary_interaction:{type:'free_reply',prompt:''},
           optional_actions:[],
@@ -334,7 +347,8 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
         'Следующий активный герой обычно другой игрок, если драматургически нет веской причины оставить ход текущему.',
         'visual_scene должен строго соответствовать только что написанной сцене: та же локация, те же физически присутствующие герои, их одежда, позы, реквизит и время/свет.',
         'Не помещай героя в characters_present, если по прозе его физически нет в этой локации.',
-        'characters_present может содержать A, B и slot_key любых supporting_characters; не ограничивай кадр двумя персонажами.'
+        'characters_present может содержать A, B и slot_key любых supporting_characters; не ограничивай кадр двумя персонажами.',
+         'noir_whisper не спойлерит события, visual_after_paragraph ставится после раскрытия иллюстрируемого эпизода.'
       ]
     }
   });
