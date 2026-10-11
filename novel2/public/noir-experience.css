@@ -1,0 +1,43 @@
+/* INTERACTIVE NOVEL 2.0 — NOIR SHOW
+   Erotic noir through typographic tension, soundless pacing and scene-grounded
+   imagery. These are messages inside a fiction, not a claim of a human chat. */
+.reader.noirReader{min-height:100dvh;padding-bottom:calc(220px + var(--safe));background:radial-gradient(ellipse at 78% 2%,rgba(111,20,42,.23),transparent 49%),#0a080a;color:#f1e5e0}
+.noirReader .chrome{background:rgba(10,7,9,.96);backdrop-filter:blur(16px);border-color:rgba(218,166,169,.18);color:#f0e5e0}
+.noirReader .bookTitle{font:400 15px/1.28 Georgia,serif;color:#f3e6e0}
+.noirReader .chapter{color:#b28f91;font-size:10px}
+.noirReader .exitStory{border-radius:0;min-height:42px;border:1px solid rgba(223,171,171,.27);color:#efdfda}
+.noirConnection{padding:42px 24px 30px;border-bottom:1px solid rgba(223,174,177,.12);background:radial-gradient(ellipse at 85% 25%,rgba(115,19,39,.18),transparent 60%)}
+.noirSignal{font-size:9px;letter-spacing:.22em;color:#b68590;text-transform:uppercase}
+.noirSignal::before{content:"";width:5px;height:5px;background:#bf6370;box-shadow:0 0 11px #bb5968;display:inline-block;border-radius:50%;vertical-align:middle;margin-right:10px}
+.noirConnection h1{font:400 clamp(39px,11vw,66px)/.99 Georgia,serif;letter-spacing:-.048em;color:#f1e7e2;margin:16px 0 13px}
+.noirConnection p{font:400 13px/1.65 Georgia,serif;max-width:32ch;color:#a99395;margin:0}
+.noirTranscript{max-width:680px;padding:23px 21px 10px;margin:auto}
+.noirTranscriptHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:28px;color:#ae8c8c;font-size:9px;letter-spacing:.15em}
+.noirSkip{padding:8px 0;background:transparent;border:0;color:#e0c9c4;text-decoration:underline;text-underline-offset:4px;font-size:11px;letter-spacing:0}
+.noirBeat{font:400 clamp(17px,4.5vw,21px)/1.66 Georgia,serif;color:#e0d5cf;white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 23px;border-left:1px solid rgba(204,127,145,.28);padding:0 0 17px 16px}
+.noirBeat.spoken{border-left-color:#be6977;color:#f5e6dd;font-style:italic;margin-left:12px}
+.noirReader.entering .noirBeat,.noirReader.entering .noirStill,.noirReader.entering .noirInteraction{animation:noirAppear .7s cubic-bezier(.2,.7,.3,1) both;animation-delay:var(--beat-delay,0ms)}
+.noirReader.revealed .noirBeat,.noirReader.revealed .noirStill,.noirReader.revealed .noirInteraction{opacity:1;filter:none;transform:none;animation:none}
+.noirStill{margin:14px 0 32px;padding:0 0 14px;border-bottom:1px solid rgba(230,176,173,.13)}
+.noirStillHead{display:flex;justify-content:space-between;gap:12px;color:#b08f8e;letter-spacing:.16em;font-size:9px;margin-bottom:13px}
+.noirStillFrame{min-height:150px;background:linear-gradient(120deg,#170d12,#271017 70%,#0b080b);border:1px solid rgba(211,162,160,.21);display:grid;place-items:center;position:relative;overflow:hidden}
+.noirStillFrame img{width:100%;height:auto;max-height:72dvh;object-fit:contain;opacity:0;transition:opacity 850ms ease}
+.noirStill.on .noirStillFrame img{opacity:1}
+.noirStillPending{position:absolute;padding:25px;font:400 13px/1.6 Georgia,serif;color:#af9495;text-align:center}
+.noirStill.on .noirStillPending{display:none}
+.noirInteraction{border-top:1px solid rgba(222,162,168,.22);padding:23px 0 7px;margin:22px 0}
+.noirInteraction .turnPrompt{margin:15px 0 18px;padding:0;border:0;color:#f6e9e2;font:400 clamp(23px,6vw,32px)/1.22 Georgia,serif}
+.noirReader .choiceRow{display:grid;grid-template-columns:1fr;gap:8px;margin:13px 0}
+.noirReader .chip{border-radius:0;background:rgba(114,36,55,.14);color:#ecdad7;border:1px solid rgba(213,151,154,.25);text-align:left;min-height:44px}
+.noirReader .chip[aria-pressed=true]{border-color:#e5babb;background:rgba(131,39,59,.29)}
+.noirReader .status{padding:9px 0 24px;color:#ad9994;font-size:12px}
+.noirReader .aiRetry{border-radius:0;color:#f1ded7;border-color:rgba(211,151,154,.32)}
+.replyDock.noirDock{background:linear-gradient(180deg,rgba(9,7,9,.62),#0d090b 19%);border-color:rgba(213,161,164,.25);color:#efe0d9}
+.noirDock textarea{min-height:68px;max-height:145px;border-radius:0;border:1px solid rgba(216,159,161,.32);background:#21151a;color:#f3e6df}
+.noirDock textarea::placeholder{color:#9e8a8c}
+.noirDock textarea:focus{outline:1px solid rgba(214,170,173,.72)}
+.noirDock .send{border-radius:0;background:#e5d7d0;color:#32191e;min-height:48px;letter-spacing:.09em;text-transform:uppercase}
+.noirDockLabel{color:#ad7f84;font-size:9px;letter-spacing:.21em;text-transform:uppercase;margin-bottom:7px}
+.noirReader button:focus-visible,.noirDock button:focus-visible{outline:2px solid #f4babc;outline-offset:3px}
+@keyframes noirAppear{from{opacity:0;filter:blur(8px);transform:translateY(11px)}to{opacity:1;filter:blur(0);transform:none}}
+@media(prefers-reduced-motion:reduce){.noirReader.entering .noirBeat,.noirReader.entering .noirStill,.noirReader.entering .noirInteraction{animation:none!important;opacity:1!important}.noirStillFrame img{transition:none}}
