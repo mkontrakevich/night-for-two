@@ -35,5 +35,11 @@
   },
   "placement": {
     "region": "aws:us-east-1"
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "NOVEL2_THEATRE",
+      "bucket_name": "novel2-secret-noir-theatre"
+    }
+  ]
 }
