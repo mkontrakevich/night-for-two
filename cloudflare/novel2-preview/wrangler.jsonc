@@ -22,5 +22,10 @@
       "binding": "ACTOR_SHEET_WORKFLOW",
       "class_name": "ActorSheetWorkflow"
     }
-  ]
+  ],
+  "assets": {
+    "directory": "../../novel2/public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  }
 }
