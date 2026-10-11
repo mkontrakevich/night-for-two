@@ -68,10 +68,15 @@
       if(i+1===anchor){placed=true;return p+picture}
       return p;
     }).join('')+(placed?'':picture);
-    const options=(s.optional_actions||[]).map(x=>'<button class="chip" type="button" data-action="'+esc(x.key)+'" aria-pressed="false">'+esc(x.label)+'</button>').join('');
+    const options=(s.noir_trial?.opt_in?[]:(s.optional_actions||[])).map(x=>'<button class="chip" type="button" data-action="'+esc(x.key)+'" aria-pressed="false">'+esc(x.label)+'</button>').join('');
+    const finale=Boolean(s.noir_progress?.finale);
+    const hiddenPartner=String(s.noir_progress?.partner_reveal_phase||'')!=='fictional_reveal';
+    const stageText=s.noir_progress?.episode
+      ?'ЭПИЗОД '+s.noir_progress.episode+' · РЕШЕНИЕ '+s.noir_progress.beat+' / '+(s.noir_progress.beats_per_episode||5)
+      :'ГЛАВА '+(s.chapter_no||state.book?.chapter_no||1);
     const aiTurn=state.active_control_mode==='ai';
     const waitingText=aiTurn?(aiAdvanceError?'Не удалось получить ход AI-персонажа.':'AI-персонаж пишет продолжение…'):'Ход второго героя · история продолжится после его ответа';
-    const status=state.can_reply?'Ваш ход · отвечайте от лица своего героя':aiTurn
+    const status=finale?'Роман завершён. Следующая история начнётся с нового приглашения.':state.can_reply?'Ваш ход · отвечайте от лица своего героя':aiTurn
       ?'<div class="aiTurnStatus"><span class="aiTurnDot"></span><span id="aiStatus">'+esc(waitingText)+'</span>'+(aiAdvanceError?'<button class="aiRetry" id="retryAiTurn" type="button">Повторить</button>':'')+'</div>':esc(waitingText);
     const title=s.chapter_title||('Глава '+(s.chapter_no||state.book?.chapter_no||1));
     const whisper=String(s.noir_whisper||'').trim();
@@ -83,7 +88,7 @@
       ?'<aside class="noirTrial" style="--beat-delay:'+delay(paragraphs.length)+'ms"><div class="noirSignal">СЮЖЕТНОЕ ИСПЫТАНИЕ · ПО ЖЕЛАНИЮ</div><h2>'+esc(trial.title)+'</h2><p>'+esc(trial.invitation)+'</p><small>Выбор добровольный и не препятствует продолжению романа.</small><div class="noirTrialActions"><button type="button" data-trial-choice="accept">Принять приглашение</button><button type="button" data-trial-choice="softer">'+esc(trial.softer_option||'Выбрать мягче')+'</button><button type="button" data-trial-choice="decline">'+esc(trial.decline_option||'Отказаться и продолжить')+'</button></div></aside>'
       :'';
     const finalDelay=seen?0:Math.min(6100,paragraphs.length*360+360);
-    app.innerHTML='<section class="reader noirReader '+(seen?'revealed':'entering')+'"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><button class="exitStory" id="mainMenu" type="button">Главное меню</button></div><header class="noirConnection"><div class="noirSignal">НЕЗНАКОМЕЦ · AI-ВЕДУЩИЙ</div><h1>'+esc(title)+'</h1><p>История открывается в словах, взглядах и решениях.</p></header><div class="noirTranscript"><div class="noirTranscriptHead"><span>ГОЛОС ИЗ ТЕМНОТЫ</span><button type="button" class="noirSkip" id="noirSkip" '+(seen?'hidden':'')+'>Показать всю сцену</button></div>'+whisperHtml+beats+trialHtml+'<div class="noirInteraction" style="--beat-delay:'+finalDelay+'ms"><div class="noirSignal">ВАШЕ РЕШЕНИЕ</div><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(options?'<div class="choiceRow">'+options+'</div>':'')+'<div class="status">'+status+'</div></div></div></section><div class="replyDock noirDock"><div class="noirDockLabel">ВАША РЕПЛИКА</div><textarea id="reply" aria-label="Реплика вашего героя" placeholder="'+(state.can_reply?'Ответить от лица героя…':aiTurn?'AI-персонаж формирует ответ…':'Ожидаем второго героя…')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected" aria-live="polite"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить →</button></div></div>';
+    app.innerHTML='<section class="reader noirReader '+(seen?'revealed':'entering')+'"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">'+esc(stageText)+'</div></div><button class="exitStory" id="mainMenu" type="button">Главное меню</button></div><header class="noirConnection"><div class="noirSignal">НЕЗНАКОМЕЦ · AI-ВЕДУЩИЙ</div><h1>'+esc(title)+'</h1><p>'+(hiddenPartner?'Партнёр пока остаётся загадкой. ':'')+'История открывается в словах, взглядах и решениях.</p></header><div class="noirTranscript"><div class="noirTranscriptHead"><span>ГОЛОС ИЗ ТЕМНОТЫ</span><button type="button" class="noirSkip" id="noirSkip" '+(seen?'hidden':'')+'>Показать всю сцену</button></div>'+whisperHtml+beats+trialHtml+'<div class="noirInteraction" style="--beat-delay:'+finalDelay+'ms"><div class="noirSignal">ВАШЕ РЕШЕНИЕ</div><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(options?'<div class="choiceRow">'+options+'</div>':'')+'<div class="status">'+status+'</div></div></div></section><div class="replyDock noirDock"><div class="noirDockLabel">ВАША РЕПЛИКА</div><textarea id="reply" aria-label="Реплика вашего героя" placeholder="'+(finale?'История завершена':state.can_reply?'Ответить от лица героя…':aiTurn?'AI-персонаж формирует ответ…':'Ожидаем второго героя…')+'" '+(state.can_reply&&!finale?'':'disabled')+'></textarea><div class="replyRow"><div id="selected" aria-live="polite"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить →</button></div></div>';
     document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>{
       selectedAction=x.dataset.action;
       document.querySelectorAll('[data-action]').forEach(y=>y.setAttribute('aria-pressed',String(y===x)));
@@ -92,7 +97,7 @@
     document.querySelectorAll('[data-trial-choice]').forEach(btn=>btn.onclick=()=>{
       if(!state.can_reply)return;
       const kind=btn.dataset.trialChoice;
-      const code={accept:'noir_trial_accept',softer:'noir_trial_softer',decline:'noir_trial_decline'}[kind];
+      const code={accept:'noir_trial_accept',softer:'noir_trial_soft',decline:'noir_trial_decline'}[kind];
       const words={accept:'Я принимаю приглашение.',softer:'Я выбираю более мягкий вариант.',decline:'Я отказываюсь от испытания и продолжаю историю.'};
       selectedAction=code||'';
       const reply=document.getElementById('reply');
@@ -107,7 +112,7 @@
     if(seen)showVisual();
     else revealTimer=setTimeout(()=>{if(sceneKey===key)finishReveal()},Math.min(6950,Math.max(1450,finalDelay+750)));
     void loadSceneVisual();
-    if(aiTurn&&!aiAdvanceInFlight&&!aiAdvanceError)setTimeout(()=>advanceAiTurn(),0);
+    if(aiTurn&&!finale&&!aiAdvanceInFlight&&!aiAdvanceError)setTimeout(()=>advanceAiTurn(),0);
   }
   render=function(...args){
     if(storyDraft||menuMode||calibrationImage&&characterDraft||!state||state.mode!=='reader'){
