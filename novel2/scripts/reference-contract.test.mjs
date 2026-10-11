@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import {resizeReferences,buildOpenRouterImagePayload} from '../src/ai.js';
+import {referenceOnlyIdentity,buildBaseActorCard} from '../src/identity-engine.js';
 
 // Regression: visual-engine passes {type:'image_url',image_url:{url:...}} objects,
 // and the Worker expects raw JPEG data URLs in input_references. A previous
@@ -42,3 +43,12 @@ await assert.rejects(buildOpenRouterImagePayload({
   inputReferences:[{image_url:{url:'invalid'}}]
 }),/NOVEL2_IMAGE_REFERENCES_MISSING/);
 console.log('NOVEL2_ACTOR_OPENROUTER_PAYLOAD_OK references=4');
+
+const referenceIdentity=referenceOnlyIdentity({role:'A',referenceImages:provided});
+assert.match(referenceIdentity.identityLock,/original uploaded photographs/i);
+assert.equal(referenceIdentity.profile.reference_coverage.face_confidence,'low');
+assert.equal(buildBaseActorCard({
+  role:'A',profile:referenceIdentity.profile,sourcePhotoCount:provided.length
+}).actor_identity.source_photo_count,4);
+assert.throws(()=>referenceOnlyIdentity({role:'A',referenceImages:[]}),/NOVEL2_IDENTITY_REFERENCES_REQUIRED/);
+console.log('NOVEL2_REFERENCE_ONLY_ACTOR_ONBOARDING_OK');
