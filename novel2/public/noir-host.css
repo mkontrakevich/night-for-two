@@ -25,3 +25,9 @@
 .hostSecret small{display:block;font-size:10px;line-height:1.6;letter-spacing:.05em;color:#c5a5a6}
 @keyframes hostAppear{from{opacity:0;filter:blur(7px);transform:translateY(10px)}to{opacity:1;filter:none;transform:none}}
 @media(prefers-reduced-motion:reduce){.hostLobby.revealing .hostThread p{animation:none!important}}
+
+.hostGuide{border-left:2px solid #aa6573;background:linear-gradient(95deg,rgba(117,33,55,.25),rgba(13,9,11,.12));padding:18px 20px;margin:0 0 18px}
+.hostGuide div{font-size:9px;letter-spacing:.17em;color:#c7a1a2}
+.hostGuide p{font:400 16px/1.5 Georgia,serif;color:#e5d2cc;margin:9px 0 0}
+.mysteryPartner{cursor:default;pointer-events:none}
+.mysteryPartner .avatarFallback{font-size:25px;background:radial-gradient(circle at 54% 44%,rgba(149,65,86,.28),#170f13)}
