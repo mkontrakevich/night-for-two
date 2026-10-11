@@ -92,10 +92,18 @@ export function attachNoirScene(scene={},plan=noirBeatPlan(1)){
   };
   const prompt=plan.finale?'':String(source.primary_interaction?.prompt||'').trim();
   const options=plan.finale?[]:(Array.isArray(source.optional_actions)?source.optional_actions:[]).slice(0,3);
+  // Trial choices are explicit opt-ins and stay available even if the
+  // novelist did not include them among ordinary narrative actions.
+  // The server validates action_key against these canonical options.
+  const plotChoices=trial?[
+    {key:'noir_trial_accept',label:'Принять приглашение'},
+    {key:'noir_trial_soft',label:trial.softer_option},
+    {key:'noir_trial_decline',label:trial.decline_option}
+  ]:options;
   const blocks=String(source.prose||'').trim().split(/\n\s*\n+/).filter(Boolean);
   // SD still appears after text has established the location/characters.
   const visualAfter=Math.max(1,Math.ceil((blocks.length||1)*.75));
   return {...source,chapter_no:Math.max(Number(source.chapter_no)||1,plan.episode),
     primary_interaction:{type:plan.finale?'none':'free_reply',prompt},
-    optional_actions:options,noir_trial:trial,noir_progress:progress,visual_after_paragraph:visualAfter};
+    optional_actions:plotChoices,noir_trial:trial,noir_progress:progress,visual_after_paragraph:visualAfter};
 }
