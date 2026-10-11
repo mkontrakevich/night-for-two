@@ -27,6 +27,7 @@ if(t.stage!=='invitation'||t.next_action!=='accept_invitation'||String(t.line||'
   throw new Error('NOVEL2_HOST_E2E_CONTRACT_FAILED');
 console.log('NOVEL2_HOST_E2E_CONTRACT_READY=true');
 console.log('NOVEL2_HOST_E2E_PROVIDER='+String(t.provider||'unknown').replace(/[^a-z-]/g,''));
+console.log('NOVEL2_HOST_E2E_OPENROUTER_ERROR='+String(t.openrouter_failure||'none').replace(/[^a-z0-9_]/g,''));
 console.log('NOVEL2_HOST_E2E_FALLBACK='+Boolean(t.fallback));
 console.log('NOVEL2_HOST_E2E_LINE_CHARACTERS='+String(t.line).length);
 if(t.provider!=='openrouter'||t.fallback)throw new Error('NOVEL2_HOST_OPENROUTER_NOT_ACTIVE');
