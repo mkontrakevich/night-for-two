@@ -217,5 +217,3 @@ export async function imageCompletion({prompt,inputReferences=[],width=null,heig
   if(!base64)throw new Error('NOVEL2_EDGE_IMAGE_EMPTY');
   return{base64,model:String(json?.model||'workers-ai')};
 }
-
-}
