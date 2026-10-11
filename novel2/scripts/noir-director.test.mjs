@@ -9,7 +9,7 @@ assert.deepEqual([noirBeatPlan(10).episode,noirBeatPlan(10).beat],[2,5]);
 assert.equal(noirBeatPlan(31).finale,true);
 assert.equal(noirPartnerPlan(noirBeatPlan(1)).phase,'anonymous');
 assert.equal(noirPartnerPlan(noirBeatPlan(9)).phase,'clues');
-assert.equal(noirPartnerPlan(noirBeatPlan(15)).phase,'approach');
+assert.equal(noirPartnerPlan(noirBeatPlan(13)).phase,'approach');
 assert.equal(noirPartnerPlan(noirBeatPlan(16)).phase,'fictional_reveal');
 assert.equal(noirPartnerPlan(noirBeatPlan(31)).allow_real_guest_identity_reveal,false);
 assert.equal(noirTrialPlan(noirBeatPlan(2)).available,true);
