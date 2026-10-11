@@ -20,6 +20,7 @@ import {buildCharacterCard,buildSyntheticCharacter,normalizeCharacterCard} from 
 import {generateVisual,generateCalibration,calibrationSpec,generateSyntheticReference,generateCharacterLook,characterLookDefinition} from './visual-engine.js';
 import {resizeReferences} from './ai.js';
 import {initLobbyWorldStore,getLobbyWorld,lobbyWorldStatus,prepareLobbyWorld,completeLobbyWorld} from './lobby-world-store.js';
+import {secretHostTurn} from './secret-host-engine.js';
 import {fetchRelationshipContext,sliceRelationshipContext,explicitGenderForRole} from './relationship-context.js';
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
@@ -539,6 +540,24 @@ async function main(){
         return send(res,200,{ok:true,drafts});
       }
 
+      if(url.pathname==='/novel2/api/host/turn'){
+        const stage=String(input.stage||'');
+        const approved=Boolean(ids?.[auth.role]?.approved);
+        const rows=await listCharacterLooks(auth.role);
+        const actorReady=rows.some(x=>x.look_key==='canonical'&&x.model!=='existing'&&x.image_base64);
+        const world=await getLobbyWorld(auth.role);
+        const place=stage==='place_reaction'?String(world?.place||input.place||''):'';
+        try{
+          const turn=await secretHostTurn({stage,place,mood:String(world?.mood||input.mood||'тайна'),
+            actorReady,actorApproved:approved});
+          return send(res,200,{ok:true,turn});
+        }catch(error){
+          const code=String(error?.message||'');
+          if(/^NOVEL2_HOST_|^NOVEL2_LOBBY_PLACE/.test(code))
+            return send(res,409,{ok:false,error:code});
+          throw error;
+        }
+      }
       if(url.pathname==='/novel2/api/lobby/world/status'){
         const row=await getLobbyWorld(auth.role);
         return send(res,200,{ok:true,world:lobbyWorldStatus(row,{includeImage:true})});
