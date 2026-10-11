@@ -56,7 +56,7 @@ export async function secretHostTurn(args={}){
   if(!line||parsed?.stage!==input.stage||parsed?.next_action!==input.allowed_next_action)
     throw new Error('NOVEL2_HOST_CONTRACT_INVALID');
   return {stage:input.stage,line,scene_hint:String(parsed?.scene_hint||'').slice(0,180),
-    next_action:input.allowed_next_action,provider:String(parsed?.provider||'ai'),fallback:false};
+    next_action:input.allowed_next_action,provider:String(parsed?.provider||'ai'),openrouter_failure:String(parsed?.openrouter_failure||'').slice(0,40),fallback:false};
  }catch(error){
   // Cinematic onboarding is never prevented by a regional AI failure.
   console.warn('NOVEL2_SECRET_HOST_FALLBACK',{code:'HOST_AI_UNAVAILABLE'});
