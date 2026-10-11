@@ -14,6 +14,11 @@
 .noirTranscript{max-width:680px;padding:23px 21px 10px;margin:auto}
 .noirTranscriptHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:28px;color:#ae8c8c;font-size:9px;letter-spacing:.15em}
 .noirSkip{padding:8px 0;background:transparent;border:0;color:#e0c9c4;text-decoration:underline;text-underline-offset:4px;font-size:11px;letter-spacing:0}
+.noirWhisper{margin:0 0 33px;border:1px solid rgba(217,137,154,.28);border-left:2px solid #b75e70;padding:17px 19px 18px;background:linear-gradient(115deg,rgba(115,31,52,.27),rgba(14,9,13,.22))}
+.noirWhisper small{font-size:9px;letter-spacing:.17em;color:#d2a6ac}
+.noirWhisper p{font:400 clamp(21px,5.3vw,27px)/1.25 Georgia,serif;color:#f2dfdd;margin:12px 0 0}
+.noirReader.entering .noirWhisper{animation:noirAppear .7s ease both;animation-delay:var(--beat-delay,0ms)}
+.noirReader.revealed .noirWhisper{animation:none}
 .noirBeat{font:400 clamp(17px,4.5vw,21px)/1.66 Georgia,serif;color:#e0d5cf;white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 23px;border-left:1px solid rgba(204,127,145,.28);padding:0 0 17px 16px}
 .noirBeat.spoken{border-left-color:#be6977;color:#f5e6dd;font-style:italic;margin-left:12px}
 .noirReader.entering .noirBeat,.noirReader.entering .noirStill,.noirReader.entering .noirInteraction{animation:noirAppear .7s cubic-bezier(.2,.7,.3,1) both;animation-delay:var(--beat-delay,0ms)}
