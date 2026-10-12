@@ -54,12 +54,12 @@ function card(role,count){
  return{kind:'base_actor_identity',role,
   passport:{fiction_name:'Игрок '+role,age:null,gender:'',story_role:'',archetype:'',biography:'',story_hook:''},
   actor_identity:{neutral:true,source:'user_photos',source_photo_count:count,story_role_assigned:false,
-    presentation:'neutral casting reference',wardrobe:'opaque ivory silk over neutral opaque bodysuit'},
+    presentation:'neutral casting reference',wardrobe:'securely wrapped opaque ivory silk drapery'},
   visual:{unknown_traits:['Body and face details not established by source images'],
     consistency_rules:['same identity in every view','do not alter nose, eyes, skin texture or proportions']},
   behavioral_baseline:{relationship_grounded:false},psychology:{},romance:{},literary_portrait:'',
   visual_dna:{consistency_rules:['source photographs govern likeness','no new face or body geometry'],
-    wardrobe_anchor:'ivory silk drape over fully opaque neutral bodysuit',do_not_change:[]}};
+    wardrobe_anchor:'opaque ivory silk fabric with secure editorial draping',do_not_change:[]}};
 }
 export async function handleNativeActor(request,env,url){
  if(request.method!=='POST'||!url.pathname.startsWith('/novel2/api/cloud/actor/'))return null;
@@ -75,9 +75,9 @@ export async function handleNativeActor(request,env,url){
    if(action==='build'){
      if(body.photo_consent!==true)return json(422,{ok:false,error:'NOVEL2_ACTOR_PHOTO_CONSENT_REQUIRED'});
      const photos=body.reference_images,thumbs=body.model_references;
-     if(!Array.isArray(photos)||photos.length<1||photos.length>3||
+     if(!Array.isArray(photos)||photos.length<1||photos.length>4||
        !Array.isArray(thumbs)||thumbs.length!==photos.length)
-       return json(422,{ok:false,error:'NOVEL2_ACTOR_ONE_TO_THREE_PHOTOS_REQUIRED'});
+       return json(422,{ok:false,error:'NOVEL2_ACTOR_ONE_TO_FOUR_PHOTOS_REQUIRED'});
      const original=photos.map(p=>decodeJpeg(p,4_000_000));
      const small=thumbs.map(p=>decodeJpeg(p,250_000));
      for(const bytes of small){
@@ -181,7 +181,7 @@ export async function runNativeActor(env,payload,step){
     const current=await row(env,guest);
     if(!current||current.status!=='working'||current.job_id!==job)throw Error('NOVEL2_ACTOR_JOB_SUPERSEDED');
     const refs=safeJson(current.reference_keys,[]);
-    if(refs.length<1||refs.length>3)throw Error('NOVEL2_ACTOR_REFERENCES_INVALID');
+    if(refs.length<1||refs.length>4)throw Error('NOVEL2_ACTOR_REFERENCES_INVALID');
     const form=new FormData();
     const prompt=actorViewPrompt({view,role:current.role,identityLock:current.identity_lock});
     form.append('prompt',prompt);
