@@ -12,7 +12,7 @@ import {
   createStoryDraft,getStoryDraft,listStoryDrafts,deleteStoryDraft,markStoryDraftUsed,
   saveBookCast,getBookCast,claimBookCastControl,updateBookCastReference,
   listCharacterLooks,saveCharacterLook,ensureCanonicalCharacterLook,selectCharacterLook,
-  getVisual,previousVisual,saveVisual,db
+  getVisual,previousVisual,saveVisual,db,pairKey
 } from './db.js';
 import {createStoryBlueprint,createStoryBible,continueStory,generateAiCharacterReply} from './prose-engine.js';
 import {analyzeIdentity,referenceOnlyIdentity,buildLock,buildBaseActorCard} from './identity-engine.js';
@@ -376,6 +376,40 @@ async function main(){
       if(req.method==='GET'&&url.pathname==='/novel2/noir-host.css')return send(res,200,hostCss,'text/css; charset=utf-8');
 
       if(!url.pathname.startsWith('/novel2/api/'))return send(res,404,{ok:false,error:'NOT_FOUND'});
+      // Service-to-service read-only migration. Private legacy records are never
+      // exposed through public authenticated guest APIs or GitHub logs.
+      if(url.pathname==='/novel2/api/migration/batch'){
+        if(req.method!=='POST'||!serviceAuthenticated(req))
+          return send(res,403,{ok:false,error:'NOVEL2_MIGRATION_DENIED'});
+        const input=await bodyJson(req);
+        const table=String(input.table||'');
+        const offset=Number(input.offset||0);
+        if(!Number.isSafeInteger(offset)||offset<0||offset>10000000)
+          return send(res,422,{ok:false,error:'NOVEL2_MIGRATION_OFFSET_INVALID'});
+        const limit=2;
+        const scoped={
+          books:'SELECT * FROM novel2_books WHERE pair_key=$1 ORDER BY id LIMIT $2 OFFSET $3',
+          turns:'SELECT t.* FROM novel2_turns t JOIN novel2_books b ON t.book_id=b.id WHERE b.pair_key=$1 ORDER BY t.id LIMIT $2 OFFSET $3',
+          identity:'SELECT * FROM novel2_identity WHERE pair_key=$1 ORDER BY role LIMIT $2 OFFSET $3',
+          ai_characters:'SELECT * FROM novel2_ai_characters WHERE $1::text<>\'\' ORDER BY id LIMIT $2 OFFSET $3',
+          story_drafts:'SELECT * FROM novel2_story_drafts WHERE pair_key=$1 ORDER BY id LIMIT $2 OFFSET $3',
+          book_cast:'SELECT c.* FROM novel2_book_cast c JOIN novel2_books b ON c.book_id=b.id WHERE b.pair_key=$1 ORDER BY c.book_id,c.slot_key LIMIT $2 OFFSET $3',
+          character_looks:'SELECT * FROM novel2_character_looks WHERE pair_key=$1 ORDER BY role,look_key LIMIT $2 OFFSET $3',
+          visuals:'SELECT v.* FROM novel2_visuals v JOIN novel2_books b ON v.book_id=b.id WHERE b.pair_key=$1 ORDER BY v.id LIMIT $2 OFFSET $3',
+          lobby_world:'SELECT * FROM novel2_lobby_world WHERE pair_key=$1 ORDER BY role LIMIT $2 OFFSET $3'
+        };
+        if(!Object.hasOwn(scoped,table))return send(res,422,{ok:false,error:'NOVEL2_MIGRATION_TABLE_INVALID'});
+        const {rows}=await db.query(scoped[table],[pairKey(),limit+1,offset]);
+        const keyFor=row=>{
+          if(table==='identity'||table==='lobby_world')return String(row.role);
+          if(table==='character_looks')return String(row.role)+':'+String(row.look_key);
+          if(table==='book_cast')return String(row.book_id)+':'+String(row.slot_key);
+          return String(row.id);
+        };
+        const list=rows.slice(0,limit).map(row=>({key:keyFor(row),data:row}));
+        return send(res,200,{ok:true,table,offset,records:list,
+          next_offset:offset+list.length,more:rows.length>limit});
+      }
       if(url.pathname==='/novel2/api/lobby/world/prepare'){
         if(req.method!=='POST'||!serviceAuthenticated(req))
           return send(res,403,{ok:false,error:'NOVEL2_LOBBY_PREPARE_DENIED'});
