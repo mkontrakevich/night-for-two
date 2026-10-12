@@ -11,7 +11,7 @@ const env={
  NOVEL2_SERVICE_SECRET:'internal-service-secret',NOVEL2_ORIGIN_HOST:'private.internal',NOVEL2_ORIGIN_PORT:'5690',
  LEGACY_MIGRATION_WORKFLOW:{create:async spec=>jobs.push(spec)},
  NOVEL2_THEATRE:{put:async(k,v)=>objects.set(k,v)},
- NOVEL2_DB:{prepare(sql){return{bind(...args){return{
+ NOVEL2_DB:{prepare(sql){return{first:async()=>state&&['working','snapshotted'].includes(state.state)?{id:state.id,state:state.state}:null,bind(...args){return{
   async first(){
    if(sql.includes('WHERE id=?'))return state;
    if(sql.includes('WHERE state IN'))return state?.state==='working'||state?.state==='snapshotted'?{id:state.id,state:state.state}:null;
