@@ -271,30 +271,38 @@ function isAiControlled(ids,role,bookCast=[]){
   if(castEntry)return castEntry.control_mode==='ai';
   return Boolean(ids?.[role]?.approved&&ids?.[role]?.builder_meta?.synthetic&&ids?.[role]?.builder_meta?.control_mode==='ai');
 }
+// The private blueprint and complete cast never leave the story backend.
+// Character appearances occur only in narrative scenes when the director reveals them.
+function publicStoryDraft(draft){
+ if(!draft)return null;
+ const bp=draft.blueprint||{};
+ return {
+   id:draft.id,title:String(draft.title||bp.title||''),
+   logline:String(draft.logline||bp.logline||''),
+   status:String(draft.status||'draft'),
+   created_at:draft.created_at,updated_at:draft.updated_at,
+   blueprint:{
+     title:String(bp.title||draft.title||''),
+     logline:String(bp.logline||draft.logline||''),
+     genre_tone:String(bp.genre_tone||'')
+   }
+ };
+}
 async function publicState(book,auth,ids={},bookCast=[]){
-  const [a,b]=await Promise.all([characterSummary(ids.A,'A'),characterSummary(ids.B,'B')]);
-  const summaries={A:a,B:b};
-  const otherRole=auth.role==='A'?'B':'A';
-  // Never transmit another human's uploaded reference photo or identity
-  // description to the first guest. Fictional role reveal is separate from
-  // user account disclosure and consent.
-  const otherSummary=summaries[otherRole]||{};
-  summaries[otherRole]={
-    ready:Boolean(otherSummary.ready),synthetic:Boolean(otherSummary.synthetic),
-    name:'Неизвестный герой',story_role:'',gender:'',avatar:'',
-    identity_only:false,control_mode:otherSummary.control_mode||'human',
-    character_card:{},hidden:true
-  };
+  const own=await characterSummary(ids[auth.role],auth.role);
   const base={
     role:auth.role,
-    identity:{A:Boolean(summaries.A.ready),B:Boolean(summaries.B.ready)},
-    characters:summaries,
+    identity:{[auth.role]:Boolean(own.ready)},
+    characters:{[auth.role]:own},
     my_character:ids[auth.role]?.profile
       ?buildBaseActorCard({role:auth.role,profile:ids[auth.role].profile,sourcePhotoCount:ids[auth.role]?.reference_images?.length||0})
       :null
   };
   if(!book)return{mode:'home',...base};
   const scene=book.current_scene||{};
+  const ownCast=(Array.isArray(bookCast)?bookCast:[]).filter(
+    entry=>String(entry.interactive_role||'')===String(auth.role)
+  );
   return{
     mode:'reader',
     ...base,
@@ -302,14 +310,7 @@ async function publicState(book,auth,ids={},bookCast=[]){
     scene,
     active_role:book.active_role,
     active_control_mode:isAiControlled(ids,book.active_role,bookCast)?'ai':'human',
-    cast:(await Promise.all((Array.isArray(bookCast)?bookCast:[]).map(castCharacterSummary))).map(entry=>{
-      if(String(entry.interactive_role||'')===String(auth.role))return entry;
-      const reveal=scene.noir_progress?.partner_reveal_phase==='fictional_reveal';
-      return reveal
-        ?{...entry,avatar:'',source_id:'',character_card:{},hidden:false}
-        :{...entry,name:'Незнакомец',story_role:'',gender:'',avatar:'',
-          source_id:'',character_card:{},hidden:true};
-    }),
+    cast:await Promise.all(ownCast.map(castCharacterSummary)),
     can_reply:!Boolean(scene.noir_progress?.finale)&&String(book.active_role)===String(auth.role)&&!isAiControlled(ids,book.active_role,bookCast)
   };
 }
@@ -528,7 +529,7 @@ async function main(){
       if(url.pathname==='/novel2/api/books'){
         const books=await listBooks(30);
         const drafts=await listStoryDrafts(12);
-        return send(res,200,{ok:true,books,drafts});
+        return send(res,200,{ok:true,books,drafts:drafts.map(publicStoryDraft)});
       }
 
       if(url.pathname==='/novel2/api/story/draft/delete'){
@@ -566,12 +567,12 @@ async function main(){
       if(url.pathname==='/novel2/api/story/draft/new'){
         const blueprint=await createStoryBlueprint({creativeBrief:input.creative_brief||''});
         const draft=await createStoryDraft({title:blueprint.title,logline:blueprint.logline,blueprint});
-        return send(res,200,{ok:true,draft});
+        return send(res,200,{ok:true,draft:publicStoryDraft(draft)});
       }
 
       if(url.pathname==='/novel2/api/story/drafts'){
         const drafts=await listStoryDrafts(12);
-        return send(res,200,{ok:true,drafts});
+        return send(res,200,{ok:true,drafts:drafts.map(publicStoryDraft)});
       }
 
       if(url.pathname==='/novel2/api/host/turn'){
