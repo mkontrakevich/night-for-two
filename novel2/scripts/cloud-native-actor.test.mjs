@@ -62,7 +62,8 @@ const api=async(action,payload={},auth=true)=>{
 };
 assert.equal((await api('status',{},false)).status,401,'non-guest actor data must stay private');
 assert.equal((await api('build',{reference_images:[photo],model_references:[model]})).status,422,'explicit consent required');
-let build=await api('build',{photo_consent:true,reference_images:[photo],model_references:[model]});
+let build=await api('build',{photo_consent:true,reference_images:[photo,photo,photo,photo],model_references:[model,model,model,model]});
+assert.equal(build.data.character.actor_identity.source_photo_count,4,'all four guided angles are retained');
 assert.equal(build.status,200);
 assert.equal(build.data.identity.role,'A');
 assert.equal(build.data.character.kind,'base_actor_identity');
@@ -86,7 +87,7 @@ const flat=await sharp(Buffer.from(svg)).jpeg().toBuffer();
 assert.equal((await sharp(flat).metadata()).height,1536);
 assert.equal((await api('approve')).data.identity.approved,true);
 assert.equal((await api('looks')).data.looks.length,1);
-assert.ok(images.size>=3);
+assert.ok(images.size>=9,'four R2 originals, four model thumbnails and one composed sheet');
 assert.equal((await api('remove')).data.deleted,true);
 assert.equal(record,null);
 assert.equal(images.size,0,'delete all saved actor photos and generated image');
