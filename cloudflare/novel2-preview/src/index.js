@@ -33,7 +33,7 @@ export class ActorSheetWorkflow extends WorkflowEntrypoint {
       retries:{limit:0,delay:'5 seconds',backoff:'constant'},timeout:'5 minutes'
     },async()=>{
       const prepared=await call('/novel2/api/identity/calibrate/work',{role,job_id:jobId});
-      const work=prepared.work||{},refs=Array.isArray(work.refs)?work.refs.slice(0,3):[];
+      const work=prepared.work||{},refs=Array.isArray(work.refs)?work.refs.slice(0,4):[];
       if(!refs.length)throw new Error('NOVEL2_ACTOR_NO_REFERENCES');
       // Older origin contracts still contain contradictory 4-up prompt text.
       // Never forward it to an individual view. The references are canonical.
