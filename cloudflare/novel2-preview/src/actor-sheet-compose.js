@@ -18,7 +18,8 @@ export function actorViewPrompt({view,role='A',identityLock=''}) {
  return [
   'Render ONE isolated, photorealistic adult human actor reference photograph.',
   'This is a SINGLE photograph, NOT a grid, collage, triptych, split screen, contact sheet or multiple views.',
-  'Exactly one person, exactly one head, two eyes at most, one neck, exactly two arms, two hands, two legs, two feet. Never duplicate or merge bodies.',
+  'Exactly one human in the scene, one anatomically coherent head, no other faces or bodies. No duplicates, reflections, clones, merged features or extra limbs.',
+  view.key.startsWith('body')?'Full body proportions: exactly two arms, two hands, two legs and two feet.': 'Portrait crop shows only the head, neck and shoulders; do NOT squeeze legs or a second full-body view into the portrait.',
   view.direction,
   'The face and physique MUST match the supplied personal reference photographs. Keep apparent age, nose contour, eye placement, jaw, hairline and proportions stable.',
   identityLock,
