@@ -278,12 +278,12 @@ function publicStoryDraft(draft){
  const bp=draft.blueprint||{};
  return {
    id:draft.id,title:String(draft.title||bp.title||''),
-   logline:String(draft.logline||bp.logline||''),
+   logline:'',
    status:String(draft.status||'draft'),
    created_at:draft.created_at,updated_at:draft.updated_at,
    blueprint:{
      title:String(bp.title||draft.title||''),
-     logline:String(bp.logline||draft.logline||''),
+     logline:'',
      genre_tone:String(bp.genre_tone||'')
    }
  };
@@ -565,6 +565,8 @@ async function main(){
       }
 
       if(url.pathname==='/novel2/api/story/draft/new'){
+        if(!hasPersistentHumanIdentity(ids[auth.role]))
+          return send(res,409,{ok:false,error:'NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED'});
         const blueprint=await createStoryBlueprint({creativeBrief:input.creative_brief||''});
         const draft=await createStoryDraft({title:blueprint.title,logline:blueprint.logline,blueprint});
         return send(res,200,{ok:true,draft:publicStoryDraft(draft)});
