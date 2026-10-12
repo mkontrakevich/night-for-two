@@ -117,6 +117,7 @@ let activeRequestControllers=new Set(),navigationEpoch=0;
 let actorSheetTask={active:false,status:'idle',role:'',phase:'',startedAt:0,phaseStartedAt:0,maxSeconds:180,detached:false,error:''};
 let actorMenuTimer=null;
 let actorPollActive=false,actorRecoveryBusy=false;
+let pendingNewStoryAfterIdentity=false;
 
 function telegramInitData(){
  const sdk=String(window.Telegram?.WebApp?.initData||'');
@@ -456,7 +457,7 @@ function renderCharacterDetail(role){
      photoPanel='<div class="photoIdentityPanel"><div class="kicker">ACTOR CARD</div><h3>Карточка актёра готова</h3>'+approve+'<button class="photoBuild" id="characterResumeCalibration" type="button">Перегенерировать по тем же фото</button><button class="photoResume" id="showOtherPhotos" type="button">Заменить фото и пересобрать</button><div id="otherPhotosPanel" hidden style="margin-top:14px">'+uploadFields+'</div></div>';
    }
    app.innerHTML='<section class="characterDetail"><div class="characterDetailNav"><button class="characterBack" id="characterBack">← Назад</button><div class="characterStatus">'+esc(status)+'</div></div><div class="characterHeroCard">'+avatarHtml(character?.avatar||'','Карточка актёра','characterHeroAvatar')+'<div><div class="kicker">ИГРОК '+esc(role)+'</div><h1>Карточка актёра</h1></div></div>'+looks+failedNotice+photoPanel+'</section>';
-   document.getElementById('characterBack').onclick=()=>{characterDetailRole='';menuMode=true;renderMainMenu();window.scrollTo(0,0)};
+   document.getElementById('characterBack').onclick=()=>{pendingNewStoryAfterIdentity=false;characterDetailRole='';menuMode=true;renderMainMenu();window.scrollTo(0,0)};
    const hero=document.querySelector('.characterHeroAvatar');if(hero)hero.onclick=()=>openCharacterViewer(role,actorSheetReady?'canonical':'source');
    const photoBuild=document.getElementById('characterPhotoBuild');if(photoBuild)photoBuild.onclick=()=>buildCharacterFromDetail(role);
    const resume=document.getElementById('characterResumeCalibration');if(resume)resume.onclick=()=>continueCalibrationFromDetail(role,actorSheetReady);
@@ -468,6 +469,7 @@ function renderCharacterDetail(role){
        state=(await api('state',{},15000)).state||state;
        actorTaskFinish('ready');calibrationImage='';
        renderCharacterDetail(role);
+       if(pendingNewStoryAfterIdentity){busy=false;await startNewBook()}
      }catch(error){
        alert(error?.message||'Не удалось подтвердить карточку.');
        approveSaved.disabled=false;
@@ -671,7 +673,7 @@ function renderMainMenu(){
  const castNotice='';
  const booksHtml=libraryBooks.length?libraryBooks.map(bookRowHtml).join(''):'<div class="hint">Готовых романов пока нет.</div>';
  const draftsHtml=libraryDrafts.length?libraryDrafts.map(draftRowHtml).join(''):'';
- app.innerHTML='<section class="mainMenu"><div class="editorialHero"><div class="editorialObjects" aria-hidden="true"></div><div class="editorialCopy"><div class="kicker">INTERACTIVE NOVEL 2.0 · PRIVATE STORIES</div><h1>Фантазии<br>становятся<br>историями</h1><p>Истории для двоих, в которых каждое решение меняет степень близости. Сначала сюжет — затем герои.</p><button type="button" class="editorialCTA" id="heroNewBook">Начать роман →</button></div></div>'+(active?'<div class="menuActions"><button type="button" class="secondary" id="continueBook">Продолжить роман →</button></div>':'')+'<div class="libraryTitle">'+'Карточка актёра'+'</div><div class="playerCards'+' '+'">'+characterStrip+'</div>'+castNotice+(draftsHtml?'<div class="libraryTitle">Черновики историй</div>'+draftsHtml:'')+'<div class="libraryTitle">Мои романы</div>'+booksHtml+'</section>';
+ app.innerHTML='<section class="mainMenu"><div class="editorialHero"><div class="editorialObjects" aria-hidden="true"></div><div class="editorialCopy"><div class="kicker">INTERACTIVE NOVEL 2.0 · PRIVATE STORIES</div><h1>Фантазии<br>становятся<br>историями</h1><p>Каждое ваше решение меняет сюжет. История начинается с вашего выбора.</p><button type="button" class="editorialCTA" id="heroNewBook">Начать роман →</button></div></div>'+(active?'<div class="menuActions"><button type="button" class="secondary" id="continueBook">Продолжить роман →</button></div>':'')+'<div class="libraryTitle">'+'Карточка актёра'+'</div><div class="playerCards'+' '+'">'+characterStrip+'</div>'+castNotice+(draftsHtml?'<div class="libraryTitle">Черновики историй</div>'+draftsHtml:'')+'<div class="libraryTitle">Мои романы</div>'+booksHtml+'</section>';
  bindMainMenu();
  // Load persisted Actor Sheet on home as soon as identity exists.
  // The generated image is independent of final identity approval.
@@ -811,7 +813,7 @@ function renderStoryDraft(){
  const button=ready?'Начать роман':'Создать карточку актёра';
  app.innerHTML='<section class="storySetup privateStorySetup"><div class="kicker">ВАША ИСТОРИЯ</div>'+
    '<h1>'+esc(storyDraft.title||bp.title||'Новая история')+'</h1>'+
-   '<p>'+esc(storyDraft.logline||bp.logline||'')+'</p>'+
+   (storyDraft.logline||bp.logline?'<p>'+esc(storyDraft.logline||bp.logline)+'</p>':'')+
    (bp.genre_tone?'<div class="storyMeta">'+esc(bp.genre_tone)+'</div>':'')+
    '<div class="libraryTitle">Ваш актёр</div>'+actorPreview+
    '<div class="actions"><button class="primary" id="launchDraft">'+button+'</button>'+
@@ -827,7 +829,11 @@ function beginOwnCharacterForDraft(){
 }
 async function resumeDraftAfterIdentity(){
  const id=String(resumeStoryDraftId||'');resumeStoryDraftId='';
- if(!id){await refresh();return}
+ if(!id){
+   await refresh();
+   if(pendingNewStoryAfterIdentity)await startNewBook({resume:true});
+   return;
+ }
  state=(await api('state',{},15000)).state;
  await loadLibrary();
  const draft=libraryDrafts.find(x=>String(x.id)===id);
@@ -980,9 +986,18 @@ async function regenerateCalibration(){
  try{const j=await api('identity/calibrate');calibrationImage=j.calibration||'';render()}
  catch(e){alert(e.message);render()}finally{busy=false}
 }
-async function startNewBook(){
- if(busy)return;
- busy=true;loading('Создаём новую историю','story',600);
+async function startNewBook({resume=false}={}){
+ if(busy&&!resume)return;
+ const role=String(state?.role||'A'),actor=state?.characters?.[role]||{};
+ if(!actor.ready||actor.synthetic){
+   // Guide -> private world -> player's Actor Sheet -> story blueprint.
+   // Never build a story/cast before the user confirms their own identity.
+   pendingNewStoryAfterIdentity=true;
+   menuMode=false;characterDetailRole=role;renderCharacterDetail(role);
+   return;
+ }
+ pendingNewStoryAfterIdentity=false;
+ busy=true;loading('Создаём историю…','story',600);
  try{
    const j=await api('story/draft/new',{creative_brief:typeof window.novel2HostCreativeBrief==='function'?window.novel2HostCreativeBrief():''},600000);
    storyDraft=j.draft;menuMode=false;
