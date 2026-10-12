@@ -316,10 +316,17 @@ jobs:
           set -euo pipefail
           base='https://novel2-preview.kontrakevich.workers.dev'
           key="$(printf 'novel2-ai-v1:%s' "$NOVEL2_SERVICE_SECRET" | sha256sum | awk '{print $1}')"
+          job_id=$(jq -r '.job_id // empty' /tmp/novel2-migration-start.json)
+          test -n "$job_id" || { echo "::error::NOVEL2_MIGRATION_START_NO_JOB"; exit 1; }
+          payload=$(jq -nc --arg id "$job_id" '{job_id:$id}')
           status_code=$(curl -sS --max-time 30 -o /tmp/novel2-migration-status.json -w '%{http_code}' \
             -H 'content-type: application/json' -H "x-novel2-service-key: $key" \
-            --data '{}' "$base/novel2-ai/migration/status")
-          test "$status_code" = 200 || { echo "::error::NOVEL2_MIGRATION_STATUS_UNAVAILABLE:$status_code"; exit 1; }
+            --data "$payload" "$base/novel2-ai/migration/status")
+          if [ "$status_code" != 200 ]; then
+            echo "::error::NOVEL2_MIGRATION_STATUS_UNAVAILABLE:$status_code"
+            jq -r '.error // "NON_JSON_RESPONSE"' /tmp/novel2-migration-status.json || true
+            exit 1
+          fi
           jq -e '.ok == true and (.migration.state | type=="string")' /tmp/novel2-migration-status.json >/dev/null
           state=$(jq -r '.migration.state' /tmp/novel2-migration-status.json)
           records=$(jq -r '.migration.records // 0' /tmp/novel2-migration-status.json)
