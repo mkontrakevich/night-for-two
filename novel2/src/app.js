@@ -857,8 +857,8 @@ async function main(){
       if(url.pathname==='/novel2/api/character/build'){
         if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
         const role=auth.role;
-        if(Array.isArray(input.reference_images)&&input.reference_images.length>3)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_MAX_THREE_PHOTOS'});
-        const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,3):[];
+        if(Array.isArray(input.reference_images)&&input.reference_images.length>4)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_MAX_FOUR_PHOTOS'});
+        const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,4):[];
         if(refs.length<1)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
         // Photo saving and actor-sheet rendering do not require a flaky remote
         // vision-description request. The image model uses actual photo refs.
@@ -894,8 +894,8 @@ async function main(){
       if(url.pathname==='/novel2/api/identity/analyze'){
         if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
         const role=auth.role;
-        if(Array.isArray(input.reference_images)&&input.reference_images.length>3)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_MAX_THREE_PHOTOS'});
-        const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,3):[];
+        if(Array.isArray(input.reference_images)&&input.reference_images.length>4)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_MAX_FOUR_PHOTOS'});
+        const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,4):[];
         if(refs.length<1)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_REFERENCES_REQUIRED'});
         const analyzed=await analyzeIdentity({role,referenceImages:refs,userFacts:{}});
         const baseActorCard=buildBaseActorCard({role,profile:analyzed.profile,sourcePhotoCount:refs.length});
@@ -922,8 +922,8 @@ async function main(){
         if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
         const role=auth.role;
         const profile=input.profile&&typeof input.profile==='object'?input.profile:{};
-        if(Array.isArray(input.reference_images)&&input.reference_images.length>3)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_MAX_THREE_PHOTOS'});
-        const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,3):[];
+        if(Array.isArray(input.reference_images)&&input.reference_images.length>4)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_MAX_FOUR_PHOTOS'});
+        const refs=Array.isArray(input.reference_images)?input.reference_images.slice(0,4):[];
         if(!Object.keys(profile).length)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_PROFILE_REQUIRED'});
         const identityLock=buildLock(role,profile);
         await saveIdentity(role,{
