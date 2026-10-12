@@ -1,3 +1,4 @@
+import {ACTOR_VIEW_SPEC,actorViewPrompt,bytesFromAiImage,base64FromBytes,compositeActorSvg} from './actor-sheet-compose.js';
 /* Cloudflare-owned identity casting. Photo bytes in PRIVATE R2; only metadata in D1.
  * This is a migration endpoint; existing production story/actor routes remain intact
  * until their state has been reconciled and verified against legacy PostgreSQL. */
@@ -47,7 +48,7 @@ async function readActorImage(env,key){
  const bytes=new Uint8Array(await obj.arrayBuffer());
  let binary='';
  for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
- return 'data:image/jpeg;base64,'+btoa(binary);
+ return (key.endsWith('.svg')?'data:image/svg+xml;base64,':'data:image/jpeg;base64,')+btoa(binary);
 }
 function card(role,count){
  return{kind:'base_actor_identity',role,
@@ -60,18 +61,6 @@ function card(role,count){
   visual_dna:{consistency_rules:['source photographs govern likeness','no new face or body geometry'],
     wardrobe_anchor:'ivory silk drape over fully opaque neutral bodysuit',do_not_change:[]}};
 }
-const actorPrompt=role=>[
- 'PREMIUM EDITORIAL FOUR-PANEL CASTING SHEET, 832x1344 portrait.',
- 'Show the SAME ADULT PERSON accurately reconstructed from the supplied reference images.',
- 'Top row: LARGE equally scaled frontal portrait and strict side profile; bottom row: full body front and back.',
- 'Never crop heads, feet, face or hair. Exact same person, real observable facial anatomy and body proportions.',
- 'Especially preserve nose geometry, eyes, jaw, hairline, skin texture and apparent age. Do not beautify or swap faces.',
- 'Wardrobe: refined natural IVORY SILK DRAPE over fully OPAQUE flesh-neutral bodysuit, elegant and nontransparent.',
- 'Silk follows the silhouette subtly; face is uncovered. Graceful neutral posture, no erotic pose, no nudity.',
- 'Warm-gray studio, 85mm portrait perspective, credible editorial light, understated luxury.',
- 'If body geometry is uncertain, stay conservative. No invented extreme body proportions.',
- 'No text, no captions, no logos, no other people, no storyboard.'
-].join('\n');
 export async function handleNativeActor(request,env,url){
  if(request.method!=='POST'||!url.pathname.startsWith('/novel2/api/cloud/actor/'))return null;
  if(!env.NOVEL2_DB||!env.NOVEL2_THEATRE)return json(503,{ok:false,error:'NOVEL2_ACTOR_D1_R2_MISSING'});
@@ -183,51 +172,74 @@ export async function handleNativeActor(request,env,url){
 export async function runNativeActor(env,payload,step){
  const guest={key:String(payload.cloud_guest||'')},job=slug(payload.job_id);
  if(!/^[a-f0-9]{64}$/.test(guest.key)||job.length!==36)return{status:'invalid'};
- let stage;
- try{stage=await step.do('render native casting once and store in R2',{
-   retries:{limit:0,delay:'5 seconds',backoff:'constant'},timeout:'5 minutes'
- },async()=>{
-   const current=await row(env,guest);
-   if(!current||current.status!=='working'||current.job_id!==job)return{status:'superseded'};
-   const refs=safeJson(current.reference_keys,[]);
-   if(refs.length<1||refs.length>3)throw Error('NOVEL2_ACTOR_REFERENCES_INVALID');
-   const form=new FormData();
-   form.append('prompt',actorPrompt(current.role));form.append('width','832');form.append('height','1344');
-   for(let i=0;i<refs.length;i++){
+ const panels=[],imageKey=prefix(guest)+'renders/'+job+'.svg';
+ try{
+  for(const view of ACTOR_VIEW_SPEC){
+   const staged=await step.do('native actor isolated '+view.key,{
+    retries:{limit:0,delay:'5 seconds',backoff:'constant'},timeout:'5 minutes'
+   },async()=>{
+    const current=await row(env,guest);
+    if(!current||current.status!=='working'||current.job_id!==job)throw Error('NOVEL2_ACTOR_JOB_SUPERSEDED');
+    const refs=safeJson(current.reference_keys,[]);
+    if(refs.length<1||refs.length>3)throw Error('NOVEL2_ACTOR_REFERENCES_INVALID');
+    const form=new FormData();
+    const prompt=actorViewPrompt({view,role:current.role,identityLock:current.identity_lock});
+    form.append('prompt',prompt);
+    form.append('width',String(view.width));
+    form.append('height',String(view.height));
+    for(let i=0;i<refs.length;i++){
      const image=await env.NOVEL2_THEATRE.get(refs[i].model);
      if(!image||image.size>250_000)throw Error('NOVEL2_ACTOR_REFERENCE_LOST');
      form.append('input_image_'+i,new Blob([await image.arrayBuffer()],{type:'image/jpeg'}),'ref-'+i+'.jpg');
-   }
-   const source=new Response(form);
-   const generated=await env.AI.run(MODEL,{multipart:{
+    }
+    const source=new Response(form);
+    const generated=await env.AI.run(MODEL,{multipart:{
      body:source.body,contentType:source.headers.get('content-type')
-   }});
-   const encoded=String(generated?.image||'').replace(/^data:image\/[\w.+-]+;base64,/,'');
-   if(encoded.length<1200||!/^[A-Za-z0-9+/=]+$/.test(encoded))throw Error('NOVEL2_ACTOR_AI_EMPTY');
-   const binary=atob(encoded),bytes=new Uint8Array(binary.length);
-   for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
-   const imageKey=prefix(guest)+'renders/'+job+'.jpg';
-   await env.NOVEL2_THEATRE.put(imageKey,bytes,{httpMetadata:{contentType:'image/jpeg'}});
-   return{status:'staged',imageKey,prompt:actorPrompt(current.role)};
- });}catch{
-   // Report failure without exposing personal images, prompt, or model responses.
-   await env.NOVEL2_DB.prepare(
-     'UPDATE actor_identity SET status=?,error_code=?,updated_at=? WHERE guest_key=? AND job_id=? AND status=?'
-   ).bind('failed','GENERATION_FAILED',now(),guest.key,job,'working').run().catch(()=>{});
-   console.error('NOVEL2_NATIVE_CASTING_FAILED',{code:'GENERATION_FAILED'});
-   return{status:'failed'};
- }
- if(stage.status!=='staged')return stage;
- return step.do('commit R2 actor result to D1 without AI retry',{
-   retries:{limit:7,delay:'15 seconds',backoff:'exponential'},timeout:'90 seconds'
- },async()=>{
-   const result=await env.NOVEL2_DB.prepare(
-     'UPDATE actor_identity SET status=?,image_key=?,prompt=?,model=?,error_code="",updated_at=? WHERE guest_key=? AND job_id=? AND status=?'
-   ).bind('ready',stage.imageKey,stage.prompt,MODEL,now(),guest.key,job,'working').run();
-   if(!result.meta?.changes){
-     await env.NOVEL2_THEATRE.delete(stage.imageKey);
-     return{status:'superseded'};
+    }});
+    const bytes=bytesFromAiImage(generated?.image);
+    if(!bytes)throw Error('NOVEL2_ACTOR_PANEL_MALFORMED_'+view.key);
+    const key=prefix(guest)+'renders/'+job+'/'+view.key+'.jpg';
+    await env.NOVEL2_THEATRE.put(key,bytes,{httpMetadata:{contentType:'image/jpeg'}});
+    return{key,view:view.key};
+   });
+   panels.push(staged);
+  }
+  await step.do('native actor deterministic 2x2 sheet without inference',{
+   retries:{limit:5,delay:'5 seconds',backoff:'exponential'},timeout:'2 minutes'
+  },async()=>{
+   const sources=[];
+   for(let i=0;i<ACTOR_VIEW_SPEC.length;i++){
+    const obj=await env.NOVEL2_THEATRE.get(panels[i].key);
+    if(!obj||obj.size<100||obj.size>10_000_000)throw Error('NOVEL2_ACTOR_PANEL_LOST');
+    sources.push({key:ACTOR_VIEW_SPEC[i].key,bytes:new Uint8Array(await obj.arrayBuffer())});
    }
-   return{status:'ready'};
+   const bytes=new TextEncoder().encode(compositeActorSvg(sources));
+   if(bytes.length>15_000_000)throw Error('NOVEL2_ACTOR_SHEET_TOO_LARGE');
+   await env.NOVEL2_THEATRE.put(imageKey,bytes,{httpMetadata:{contentType:'image/svg+xml'}});
+   return{imageKey};
+  });
+ }catch{
+  const current=await row(env,guest).catch(()=>null);
+  if(current?.status==='working'&&current.job_id===job)
+   await env.NOVEL2_DB.prepare(
+    'UPDATE actor_identity SET status=?,error_code=?,updated_at=? WHERE guest_key=? AND job_id=? AND status=?'
+   ).bind('failed','GENERATION_FAILED',now(),guest.key,job,'working').run().catch(()=>{});
+  for(const panel of panels)await env.NOVEL2_THEATRE.delete(panel.key).catch(()=>{});
+  console.error('NOVEL2_NATIVE_CASTING_FAILED',{code:'ISOLATED_VIEW_OR_COMPOSITION'});
+  return{status:'failed'};
+ }
+ return step.do('commit isolated native actor sheet to D1 without inference retry',{
+  retries:{limit:7,delay:'15 seconds',backoff:'exponential'},timeout:'90 seconds'
+ },async()=>{
+  const result=await env.NOVEL2_DB.prepare(
+   'UPDATE actor_identity SET status=?,image_key=?,prompt=?,model=?,error_code="",updated_at=? WHERE guest_key=? AND job_id=? AND status=?'
+  ).bind('ready',imageKey,'Four isolated actor portraits; deterministic collage',MODEL,now(),guest.key,job,'working').run();
+  if(!result.meta?.changes){
+   await env.NOVEL2_THEATRE.delete(imageKey);
+   for(const panel of panels)await env.NOVEL2_THEATRE.delete(panel.key);
+   return{status:'superseded'};
+  }
+  for(const panel of panels)await env.NOVEL2_THEATRE.delete(panel.key).catch(()=>{});
+  return{status:'ready'};
  });
 }
