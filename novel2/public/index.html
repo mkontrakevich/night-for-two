@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0909">
-<meta name="novel2-ui-release" content="noir-ai-stranger-purgatory-20261012-r4">
+<meta name="novel2-ui-release" content="noir-private-story-onboarding-20261012-r5">
 <title>Interactive Novel 2.0</title>
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <link rel="stylesheet" href="/novel2/noir-experience.css?v=1">
@@ -92,6 +92,20 @@
 .characterDetail .photoIdentityPanel,.characterDetail .photoBuild,.characterDetail .photoResume{border-radius:0}
 .mainMenu .actorCardProgressNote{display:block;margin-top:9px;font-size:10px;line-height:1.35;color:#968482;letter-spacing:0}
 .actorFailure .actorDiag{display:block;margin-top:10px;color:#bca7a3;font-size:10px;letter-spacing:.07em}
+
+/* Private Story: one player actor only. No pre-story cast UI. */
+.privateStorySetup{padding:calc(27px + env(safe-area-inset-top,0px)) 20px calc(26px + var(--safe));display:flex;flex-direction:column;gap:0}
+.privateStorySetup h1{margin:14px 0 16px}
+.privateStorySetup>p{margin:0 0 16px}
+.privateStorySetup .storyMeta{margin:0 0 6px}
+.privateStorySetup .libraryTitle{margin:24px 0 11px}
+.privateActorCard{display:grid;grid-template-columns:66px 1fr;gap:14px;align-items:center;padding:15px 0;border-top:1px solid rgba(255,255,255,.15);border-bottom:1px solid rgba(255,255,255,.15)}
+.privateActorCard .castAvatar,.privateActorCard .avatarFallback{width:66px;height:76px;border-radius:0}
+.privateActorCard b{display:block;font:400 21px/1.2 Georgia,serif}
+.privateActorCard small{display:block;margin-top:7px;color:#a99b92;font-size:12px;line-height:1.4}
+.privateStorySetup .actions{margin:28px 0 0;gap:10px}
+.privateStorySetup .primary,.privateStorySetup .secondary{border-radius:0;min-height:54px}
+.privateStorySetup .primary{background:#f5eee8;color:#17120f}
 </style>
 </head>
 <body><main id="app"></main>
@@ -649,21 +663,15 @@ function renderMainMenu(){
  const active=state?.mode==='reader'&&state?.book;
  const cast=Array.isArray(state?.cast)?state.cast:[];
  const activeRole=role=>cast.find(x=>String(x?.interactive_role||'')===role)||null;
- const a=active?(activeRole('A')||state?.characters?.A||{}):(state?.characters?.A||{});
- const b=active?(activeRole('B')||state?.characters?.B||{}):(state?.characters?.B||{});
- const role=String(state?.role||'A'),other=role==='A'?'B':'A';
+ const role=String(state?.role||'A');
  const own=state?.characters?.[role]||{};
- const otherHuman=state?.characters?.[other]||{};
- const otherHumanReady=Boolean(otherHuman.ready&&!otherHuman.synthetic);
- const partnerKnown=Boolean(active&&state?.scene?.noir_progress?.partner_reveal_phase==='fictional_reveal');
- const strangerCard='<div class="playerCard mysteryPartner" aria-label="Сюжетная личность второго героя пока скрыта"><div class="avatarFallback">?</div><div><b>Незнакомец</b><small>Его роль раскроется в сюжете</small></div></div>';
- const ownCast=active?(activeRole(role)||state?.characters?.[role]||{}):own;
- const otherCast=active?(activeRole(other)||state?.characters?.[other]||{}):otherHuman;
- const characterStrip=roleCardHtml(role,ownCast)+(partnerKnown?roleCardHtml(other,otherCast):strangerCard);
- const castNotice=!active&&!otherHumanReady?'<p class="castNote">AI-персонажи появятся после создания истории.</p>':'';
+ const ownCast=active?(activeRole(role)||own):own;
+ // No character roster, partner placeholder, cast count or preview in the lobby.
+ const characterStrip=roleCardHtml(role,ownCast);
+ const castNotice='';
  const booksHtml=libraryBooks.length?libraryBooks.map(bookRowHtml).join(''):'<div class="hint">Готовых романов пока нет.</div>';
  const draftsHtml=libraryDrafts.length?libraryDrafts.map(draftRowHtml).join(''):'';
- app.innerHTML='<section class="mainMenu"><div class="editorialHero"><div class="editorialObjects" aria-hidden="true"></div><div class="editorialCopy"><div class="kicker">INTERACTIVE NOVEL 2.0 · PRIVATE STORIES</div><h1>Фантазии<br>становятся<br>историями</h1><p>Истории для двоих, в которых каждое решение меняет степень близости. Сначала сюжет — затем герои.</p><button type="button" class="editorialCTA" id="heroNewBook">Начать роман →</button></div></div>'+(active?'<div class="menuActions"><button type="button" class="secondary" id="continueBook">Продолжить роман →</button></div>':'')+'<div class="libraryTitle">'+(active?'Герои истории':'Карточка актёра')+'</div><div class="playerCards'+(active||otherHumanReady?' hasPair':'')+'">'+characterStrip+'</div>'+castNotice+(draftsHtml?'<div class="libraryTitle">Черновики историй</div>'+draftsHtml:'')+'<div class="libraryTitle">Мои романы</div>'+booksHtml+'</section>';
+ app.innerHTML='<section class="mainMenu"><div class="editorialHero"><div class="editorialObjects" aria-hidden="true"></div><div class="editorialCopy"><div class="kicker">INTERACTIVE NOVEL 2.0 · PRIVATE STORIES</div><h1>Фантазии<br>становятся<br>историями</h1><p>Истории для двоих, в которых каждое решение меняет степень близости. Сначала сюжет — затем герои.</p><button type="button" class="editorialCTA" id="heroNewBook">Начать роман →</button></div></div>'+(active?'<div class="menuActions"><button type="button" class="secondary" id="continueBook">Продолжить роман →</button></div>':'')+'<div class="libraryTitle">'+'Карточка актёра'+'</div><div class="playerCards'+' '+'">'+characterStrip+'</div>'+castNotice+(draftsHtml?'<div class="libraryTitle">Черновики историй</div>'+draftsHtml:'')+'<div class="libraryTitle">Мои романы</div>'+booksHtml+'</section>';
  bindMainMenu();
  // Load persisted Actor Sheet on home as soon as identity exists.
  // The generated image is independent of final identity approval.
@@ -789,31 +797,27 @@ function storyAiCastPreviewHtml(role,slot={}){
 function renderStoryDraft(){
  stopLoading();
  if(!storyDraft){menuMode=true;renderMainMenu();return}
- const bp=storyDraft.blueprint||{},slots=Array.isArray(bp.cast_slots)?bp.cast_slots:[],interactive=slots.filter(x=>x.interactive).slice(0,2),support=slots.filter(x=>!x.interactive);
- const runtime=['A','B'],ownRole=String(state?.role||'A'),ownSummary=state?.characters?.[ownRole]||{};
- const ownReady=Boolean(ownSummary.ready&&!ownSummary.synthetic&&ownSummary.character_card?.passport);
- let html='';
- interactive.forEach((slot,i)=>{
-   const role=runtime[i],summary=state?.characters?.[role]||{},isOwn=role===ownRole;
-   const humanReady=Boolean(summary.ready&&!summary.synthetic&&(summary.character_card?.passport||summary.hidden));
-   const createOwn=isOwn&&!ownReady?'<button class="secondary" type="button" data-create-own-character>Создать моего персонажа из фото</button>':'';
-   const preview=humanReady
-     ?castPreviewHtml(role,isOwn?(summary.name||('Игрок '+role)):'Гость под маской',isOwn?(summary.gender||''):'',isOwn?(summary.avatar||''):'',isOwn?'ваш персонаж из фотографий':'второй реальный участник · личность пока скрыта')
-     :isOwn
-       ?castPreviewHtml(role,'Ваш персонаж','','','сначала создайте его из фотографий')
-       :storyAiCastPreviewHtml(role,slot);
-   html+='<div class="castSlot"><strong>'+esc(isOwn?(slot.narrative_function||('Главная роль '+(i+1))):'Неизвестный герой')+'</strong><p>'+esc(isOwn?(slot.description||'Интерактивный герой истории'):'Его литературная роль будет раскрыта по сюжету.')+'</p>'+preview+createOwn+'<input type="hidden" data-cast-slot="'+esc(slot.slot_key)+'" value="'+(humanReady?'player:'+role:'story:auto')+'"></div>';
- });
- support.forEach((slot)=>{
-   html+='<div class="castSlot"><strong>'+esc(slot.narrative_function||'AI-персонаж')+'</strong><p>'+esc(slot.description||'Дополнительная роль истории')+'</p><div class="hint">Будет создан только для этого романа: характер, биография и Visual DNA выводятся из его функции в сюжете.</div><input type="hidden" data-cast-slot="'+esc(slot.slot_key)+'" value="story:auto"></div>';
- });
- const footer=ownReady
-   ?'Ваш персонаж зафиксирован по фото. Все отсутствующие интерактивные и второстепенные герои будут созданы AI только сейчас — из Story Blueprint этого романа.'
-   :'Игрок '+esc(ownRole)+' — это вы. Сначала создайте его по своим фотографиям. AI не заменяет вашего героя и создаётся только для ролей, которые требует конкретная история.';
- app.innerHTML='<section class="storySetup"><div class="kicker">STORY FIRST · CAST SECOND</div><h1>'+esc(storyDraft.title||bp.title||'Новая история')+'</h1><p>'+esc(storyDraft.logline||bp.logline||'')+'</p><div class="storyMeta">'+esc(bp.genre_tone||'')+'</div><div class="libraryTitle">Каст этой истории</div>'+html+'<div class="actions"><button class="primary" id="launchDraft" '+(ownReady?'':'disabled')+'>'+(ownReady?'Создать каст и начать роман':'Сначала создайте своего персонажа')+'</button><button class="secondary" id="backToMenu">Вернуться в меню</button></div><div class="hint">'+footer+'</div></section>';
+ // Actor-first presentation: the private story blueprint and its entire cast
+ // remain backstage. Never print role count, hints, genders or descriptions.
+ const bp=storyDraft.blueprint||{};
+ const role=String(state?.role||'A'),actor=state?.characters?.[role]||{};
+ const ready=Boolean(actor.ready&&!actor.synthetic&&actor.character_card?.passport);
+ const actorName='Ваша карточка актёра';
+ const actorImage=String(actor.avatar||'');
+ const actorPreview='<div class="privateActorCard">'+avatarHtml(actorImage,actorName,'castAvatar')+
+   '<div><b>'+actorName+'</b><small>'+(
+     ready?'Внешность зафиксирована по фотографиям':'Загрузите фотографии и подтвердите карточку актёра'
+   )+'</small></div></div>';
+ const button=ready?'Начать роман':'Создать карточку актёра';
+ app.innerHTML='<section class="storySetup privateStorySetup"><div class="kicker">ВАША ИСТОРИЯ</div>'+
+   '<h1>'+esc(storyDraft.title||bp.title||'Новая история')+'</h1>'+
+   '<p>'+esc(storyDraft.logline||bp.logline||'')+'</p>'+
+   (bp.genre_tone?'<div class="storyMeta">'+esc(bp.genre_tone)+'</div>':'')+
+   '<div class="libraryTitle">Ваш актёр</div>'+actorPreview+
+   '<div class="actions"><button class="primary" id="launchDraft">'+button+'</button>'+
+   '<button class="secondary" id="backToMenu">Вернуться в меню</button></div></section>';
  document.getElementById('backToMenu').onclick=()=>{storyDraft=null;menuMode=true;renderMainMenu()};
- const createOwn=document.querySelector('[data-create-own-character]');if(createOwn)createOwn.onclick=beginOwnCharacterForDraft;
- document.getElementById('launchDraft').onclick=ownReady?launchStoryDraft:beginOwnCharacterForDraft;
+ document.getElementById('launchDraft').onclick=ready?launchStoryDraft:beginOwnCharacterForDraft;
 }
 function beginOwnCharacterForDraft(){
  if(!storyDraft)return;
@@ -832,12 +836,11 @@ async function resumeDraftAfterIdentity(){
 }
 async function launchStoryDraft(){
  if(busy||!storyDraft)return;
- const assignments={};
- document.querySelectorAll('[data-cast-slot]').forEach(el=>assignments[el.dataset.castSlot]=el.value);
+ // Server generates the story-scoped cast privately, never via browser assignments.
  if(state?.mode==='reader'&&!await askConfirm('Начать новый роман? Текущий роман будет сохранён в архиве.'))return;
- busy=true;loading('Помещаем выбранных персонажей в готовую историю…','story',900);
+ busy=true;loading('История оживает…','story',900);
  try{
-   const j=await api('story/draft/launch',{draft_id:storyDraft.id,assignments},900000);
+   const j=await api('story/draft/launch',{draft_id:storyDraft.id},900000);
    state=j.state;storyDraft=null;menuMode=false;libraryBooks=[];libraryDrafts=[];render();
  }catch(e){if(isCancelled(e))return;alert(e.message);renderStoryDraft()}finally{busy=false}
 }
