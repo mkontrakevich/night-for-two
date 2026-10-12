@@ -2,100 +2,113 @@ import {WorkflowEntrypoint} from 'cloudflare:workers';
 import {handleStranger,runStrangerWorld} from './stranger.js';
 import {handleNativeActor,runNativeActor} from './native-actor.js';
 import {handleMigrationAdmin,runLegacyMigration} from './migrate-legacy.js';
+import {ACTOR_VIEW_SPEC,actorViewPrompt,bytesFromAiImage,base64FromBytes,compositeActorSvg} from './actor-sheet-compose.js';
 
 export class ActorSheetWorkflow extends WorkflowEntrypoint {
-  async run(event,step){
-    if(event?.payload?.cloud_guest)return runNativeActor(this.env,event.payload,step);
-    const role=String(event?.payload?.role||'');
-    const jobId=String(event?.payload?.job_id||'');
-    if(!['A','B'].includes(role)||!/^[a-f0-9-]{36}$/i.test(jobId))return{status:'invalid'};
-    const env=this.env;
-    if(!env.NOVEL2_THEATRE||!env.AI?.run)return{status:'cloudflare_bindings_missing'};
-    const origin='http://'+env.NOVEL2_ORIGIN_HOST+':'+(env.NOVEL2_ORIGIN_PORT||'5690');
-    const key=String(env.NOVEL2_SERVICE_SECRET||'');
-    const call=async(route,payload)=>{
-      const res=await env.NOVEL2_VPC.fetch(new Request(origin+route,{
-        method:'POST',headers:{'content-type':'application/json','x-novel2-service-key':key},
-        body:JSON.stringify(payload)
-      }));
-      const body=await res.json();
-      if(!res.ok||!body?.ok)throw new Error('NOVEL2_ACTOR_CALLBACK_'+res.status);
-      return body;
-    };
-    const stagedKey='stranger/actor-jobs/'+role+'/'+jobId+'.jpg';
-    // Only this stage invokes chargeable Workers AI. A failed origin callback
-    // MUST NEVER trigger a second inference for the same Workflow.
-    const generated=await step.do('render actor sheet once and checkpoint to private R2',{
+ async run(event,step){
+  if(event?.payload?.cloud_guest)return runNativeActor(this.env,event.payload,step);
+  const role=String(event?.payload?.role||'');
+  const jobId=String(event?.payload?.job_id||'');
+  if(!['A','B'].includes(role)||!/^[a-f0-9-]{36}$/i.test(jobId))return{status:'invalid'};
+  const env=this.env;
+  if(!env.NOVEL2_THEATRE||!env.AI?.run)return{status:'cloudflare_bindings_missing'};
+  const origin='http://'+env.NOVEL2_ORIGIN_HOST+':'+(env.NOVEL2_ORIGIN_PORT||'5690');
+  const key=String(env.NOVEL2_SERVICE_SECRET||'');
+  const call=async(route,payload)=>{
+    const res=await env.NOVEL2_VPC.fetch(new Request(origin+route,{
+      method:'POST',headers:{'content-type':'application/json','x-novel2-service-key':key},
+      body:JSON.stringify(payload)
+    }));
+    const body=await res.json();
+    if(!res.ok||!body?.ok)throw new Error('NOVEL2_ACTOR_CALLBACK_'+res.status);
+    return body;
+  };
+  const stagedKey='stranger/actor-jobs/'+role+'/'+jobId+'.svg';
+  const panels=[];
+  // Four isolated jobs. A panel's R2 checkpoint is committed in its own
+  // durable step; retrying the callback never causes any new inference.
+  try{
+   for(const view of ACTOR_VIEW_SPEC){
+    const staged=await step.do('render isolated '+view.key,{
       retries:{limit:0,delay:'5 seconds',backoff:'constant'},timeout:'5 minutes'
     },async()=>{
-      try{
-        const prepared=await call('/novel2/api/identity/calibrate/work',{role,job_id:jobId});
-        const work=prepared.work||{};
-        const refs=Array.isArray(work.refs)?work.refs.slice(0,3):[];
-        if(!refs.length)throw new Error('NOVEL2_ACTOR_NO_REFERENCES');
-        const prompt=String(work.prompt||'').slice(0,16000);
-        if(!prompt)throw new Error('NOVEL2_ACTOR_NO_PROMPT');
-        const form=new FormData();
-        form.append('prompt',prompt);
-        form.append('width',String(work.width||832));
-        form.append('height',String(work.height||1344));
-        for(let i=0;i<refs.length;i++){
-          const blob=dataUrlBlob(refs[i]);
-          if(!blob)throw new Error('NOVEL2_ACTOR_REFERENCE_INVALID');
-          form.append('input_image_'+i,blob,'reference-'+i+'.jpg');
-        }
-        const encoded=new Response(form);
-        const inference=await env.AI.run(AI_IMAGE_MODEL,{
-          multipart:{body:encoded.body,contentType:encoded.headers.get('content-type')||'multipart/form-data'}
-        });
-        const raw=String(inference?.image||'').replace(/^data:image\/[\w.+-]+;base64,/,'');
-        if(raw.length<1500||!/^[A-Za-z0-9+/=]+$/.test(raw))throw new Error('NOVEL2_ACTOR_IMAGE_EMPTY');
-        const decoded=atob(raw),bytes=new Uint8Array(decoded.length);
-        for(let i=0;i<decoded.length;i++)bytes[i]=decoded.charCodeAt(i);
-        await env.NOVEL2_THEATRE.put(stagedKey,bytes,{
-          httpMetadata:{contentType:'image/jpeg'},
-          customMetadata:{kind:'actor-sheet',job_id:jobId,role}
-        });
-        // Durable workflow output contains only a private R2 key, never photos/image bytes.
-        return {status:'staged',key:stagedKey,prompt,model:AI_IMAGE_MODEL};
-      }catch(error){
-        try{
-          await call('/novel2/api/identity/calibrate/complete',
-            {role,job_id:jobId,status:'failed'});
-        }catch{}
-        console.error('NOVEL2_ACTOR_GENERATION_FAILED',{kind:'generation_or_staging'});
-        return{status:'failed'};
+      const prepared=await call('/novel2/api/identity/calibrate/work',{role,job_id:jobId});
+      const work=prepared.work||{},refs=Array.isArray(work.refs)?work.refs.slice(0,3):[];
+      if(!refs.length)throw new Error('NOVEL2_ACTOR_NO_REFERENCES');
+      const basePrompt=String(work.prompt||'').slice(0,16000);
+      if(!basePrompt)throw new Error('NOVEL2_ACTOR_NO_PROMPT');
+      const prompt=actorViewPrompt({view,role,identityLock:basePrompt});
+      const form=new FormData();
+      form.append('prompt',prompt);
+      form.append('width',String(view.width));
+      form.append('height',String(view.height));
+      for(let i=0;i<refs.length;i++){
+        const blob=dataUrlBlob(refs[i]);
+        if(!blob)throw new Error('NOVEL2_ACTOR_REFERENCE_INVALID');
+        form.append('input_image_'+i,blob,'reference-'+i+'.jpg');
       }
-    });
-    if(generated.status!=='staged')return generated;
-    try{
-      // This stage is network-only and can retry WITHOUT spending AI credits.
-      return await step.do('sync previously staged sheet to canonical identity store',{
-        retries:{limit:9,delay:'20 seconds',backoff:'exponential'},
-        timeout:'3 minutes'
-      },async()=>{
-        const object=await env.NOVEL2_THEATRE.get(generated.key);
-        if(!object)throw new Error('NOVEL2_ACTOR_STAGED_RESULT_MISSING');
-        if(object.size<1000||object.size>12_000_000)throw new Error('NOVEL2_ACTOR_STAGED_RESULT_INVALID');
-        const bytes=new Uint8Array(await object.arrayBuffer());
-        let binary='';
-        for(let i=0;i<bytes.length;i+=32768)
-          binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
-        await call('/novel2/api/identity/calibrate/complete',{
-          role,job_id:jobId,status:'ready',image:btoa(binary),
-          model:generated.model,prompt:generated.prompt
-        });
-        // Canonical identity now owns the approved-result lifecycle.
-        try{await env.NOVEL2_THEATRE.delete(generated.key)}catch{}
-        return{status:'ready'};
+      const encoded=new Response(form);
+      const inference=await env.AI.run(AI_IMAGE_MODEL,{multipart:{
+        body:encoded.body,contentType:encoded.headers.get('content-type')||'multipart/form-data'
+      }});
+      const bytes=bytesFromAiImage(inference?.image);
+      if(!bytes)throw Error('NOVEL2_ACTOR_PANEL_MALFORMED_'+view.key);
+      const panelKey='stranger/actor-jobs/'+role+'/'+jobId+'/'+view.key+'.jpg';
+      await env.NOVEL2_THEATRE.put(panelKey,bytes,{
+        httpMetadata:{contentType:'image/jpeg'},
+        customMetadata:{kind:'isolated-actor-view',job_id:jobId,role,view:view.key}
       });
-    }catch{
-      // The paid result remains private in R2 for controlled recovery.
-      // Do not mark a successfully generated result as a failed AI inference.
-      console.warn('NOVEL2_ACTOR_SYNC_PENDING',{code:'ORIGIN_UNAVAILABLE'});
-      return{status:'sync_pending'};
+      return{key:panelKey,view:view.key};
+    });
+    panels.push(staged);
+   }
+   await step.do('assemble four clipped views without AI',{
+     retries:{limit:5,delay:'5 seconds',backoff:'exponential'},timeout:'2 minutes'
+   },async()=>{
+    const sources=[];
+    for(let i=0;i<ACTOR_VIEW_SPEC.length;i++){
+     const obj=await env.NOVEL2_THEATRE.get(panels[i].key);
+     if(!obj||obj.size<100||obj.size>10_000_000)throw Error('NOVEL2_ACTOR_PANEL_LOST');
+     sources.push({key:ACTOR_VIEW_SPEC[i].key,bytes:new Uint8Array(await obj.arrayBuffer())});
     }
+    const svg=compositeActorSvg(sources);
+    const blob=new TextEncoder().encode(svg);
+    if(blob.length>15_000_000)throw Error('NOVEL2_ACTOR_SHEET_TOO_LARGE');
+    await env.NOVEL2_THEATRE.put(stagedKey,blob,{
+      httpMetadata:{contentType:'image/svg+xml'},
+      customMetadata:{kind:'composed-actor-sheet',job_id:jobId,role}
+    });
+    return{key:stagedKey};
+   });
+  }catch(error){
+   try{await call('/novel2/api/identity/calibrate/complete',
+    {role,job_id:jobId,status:'failed'});}catch{}
+   console.error('NOVEL2_ACTOR_GENERATION_FAILED',{kind:'isolated_panel_or_composition'});
+   return{status:'failed'};
   }
+  try{
+    return await step.do('sync isolated actor sheet to canonical identity store',{
+      retries:{limit:9,delay:'20 seconds',backoff:'exponential'},timeout:'3 minutes'
+    },async()=>{
+      const object=await env.NOVEL2_THEATRE.get(stagedKey);
+      if(!object||object.size<1000||object.size>15_000_000)
+        throw Error('NOVEL2_ACTOR_STAGED_RESULT_MISSING');
+      const bytes=new Uint8Array(await object.arrayBuffer());
+      await call('/novel2/api/identity/calibrate/complete',{
+        role,job_id:jobId,status:'ready',image:base64FromBytes(bytes),
+        model:AI_IMAGE_MODEL,prompt:'Four independently generated isolated actor views; deterministic SVG 2x2 composition'
+      });
+      try{
+        await env.NOVEL2_THEATRE.delete(stagedKey);
+        for(const p of panels)await env.NOVEL2_THEATRE.delete(p.key);
+      }catch{}
+      return{status:'ready'};
+    });
+  }catch{
+    console.warn('NOVEL2_ACTOR_SYNC_PENDING',{code:'ORIGIN_UNAVAILABLE'});
+    return{status:'sync_pending'};
+  }
+ }
 }
 
 export class LegacyMigrationWorkflow extends WorkflowEntrypoint {
