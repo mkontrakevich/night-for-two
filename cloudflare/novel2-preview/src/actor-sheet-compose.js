@@ -54,7 +54,8 @@ export function compositeActorSvg(panels) {
   // The JPEG is embedded as base64 data; it cannot contribute SVG/HTML markup.
   const src='data:image/jpeg;base64,'+base64FromBytes(p.bytes);
   // Containment is enforced by viewport clips, not by probabilistic AI directions.
-  const scale=v.key.startsWith('face')?'xMidYMid slice':'xMidYMid meet';
+  // Contain, never crop: every head, hairline and foot remains inside its tile.
+  const scale='xMidYMid meet';
   return '<g clip-path="url(#clip'+i+')"><image x="'+v.x+'" y="'+v.y+
    '" width="'+v.w+'" height="'+v.h+'" preserveAspectRatio="'+scale+
    '" href="'+src+'"/></g>';
