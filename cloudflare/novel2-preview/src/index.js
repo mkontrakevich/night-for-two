@@ -35,9 +35,9 @@ export class ActorSheetWorkflow extends WorkflowEntrypoint {
       const prepared=await call('/novel2/api/identity/calibrate/work',{role,job_id:jobId});
       const work=prepared.work||{},refs=Array.isArray(work.refs)?work.refs.slice(0,3):[];
       if(!refs.length)throw new Error('NOVEL2_ACTOR_NO_REFERENCES');
-      const basePrompt=String(work.prompt||'').slice(0,16000);
-      if(!basePrompt)throw new Error('NOVEL2_ACTOR_NO_PROMPT');
-      const prompt=actorViewPrompt({view,role,identityLock:basePrompt});
+      // Older origin contracts still contain contradictory 4-up prompt text.
+      // Never forward it to an individual view. The references are canonical.
+      const prompt=actorViewPrompt({view,role,identityLock:String(work.identity_lock||'').slice(0,5000)});
       const form=new FormData();
       form.append('prompt',prompt);
       form.append('width',String(view.width));
