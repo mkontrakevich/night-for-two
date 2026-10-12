@@ -66,6 +66,28 @@ jobs:
           cfg=json.loads(Path('wrangler.jsonc').read_text())
           cfg['vars']['NOVEL2_ORIGIN_HOST']=host
           cfg['vpc_networks'][0]['tunnel_id']=vpc['tunnel_id']
+          # D1 is provisioned once, then reused by UUID. No per-deploy clone.
+          d1root=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database'
+          d1headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN'],'Content-Type':'application/json'}
+          d1list=urllib.request.Request(d1root+'?per_page=100',headers=d1headers)
+          with urllib.request.urlopen(d1list,timeout=30) as response:
+              available=json.load(response)
+          if not available.get('success'): raise SystemExit('NOVEL2_D1_LIST_FAILED')
+          existing=next((db for db in available.get('result',[]) if db.get('name')=='novel2-secret-noir'),None)
+          if existing is None:
+              create=urllib.request.Request(d1root,headers=d1headers,method='POST',
+                  data=json.dumps({'name':'novel2-secret-noir'}).encode())
+              with urllib.request.urlopen(create,timeout=30) as response:
+                  fresh=json.load(response)
+              if not fresh.get('success'): raise SystemExit('NOVEL2_D1_CREATE_FAILED')
+              existing=fresh['result']
+              print('NOVEL2_D1_CREATED=true')
+          else:
+              print('NOVEL2_D1_REUSED=true')
+          database_id=existing.get('uuid') or existing.get('id') or ''
+          if not re.fullmatch(r'[a-fA-F0-9-]{36}',database_id):
+              raise SystemExit('NOVEL2_D1_UUID_INVALID')
+          cfg['d1_databases'][0]['database_id']=database_id
           Path('wrangler.deploy.json').write_text(json.dumps(cfg,indent=2)+'\n')
           PY
       - name: Provision private R2 theatre bucket
@@ -91,6 +113,11 @@ jobs:
                   if not created.get('success'): raise RuntimeError('R2_CREATE_FAILED')
               print('NOVEL2_R2_CREATED=true')
           PY
+      - name: Apply versioned D1 schema remotely
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 d1 migrations apply NOVEL2_DB --remote --config wrangler.deploy.json
       - name: Deploy preview Worker
         run: npx --yes wrangler@4 deploy --config wrangler.deploy.json
       - name: Bind OpenRouter key securely when available
@@ -270,6 +297,19 @@ jobs:
 
           echo "NOVEL2_WORKERS_AI_READY=true"
                     echo "NOVEL2_PREVIEW_READY=$base/novel2/"
+      - name: Start idempotent private legacy snapshot migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://novel2-preview.kontrakevich.workers.dev'
+          key="$(printf 'novel2-ai-v1:%s' "$NOVEL2_SERVICE_SECRET" | sha256sum | awk '{print $1}')"
+          code=$(curl -sS --max-time 35 -o /tmp/novel2-migration-start.json -w '%{http_code}' \
+            -H 'content-type: application/json' -H "x-novel2-service-key: $key" \
+            --data '{"confirm":"COPY_PRIVATE_LEGACY_DATA_TO_CLOUDFLARE"}' \
+            "$base/novel2-ai/migration/start")
+          test "$code" = 202 -o "$code" = 200 || { echo 'NOVEL2_MIGRATION_START_FAILED'; exit 1; }
+          jq -e '.ok == true and (.job_id | type == "string")' /tmp/novel2-migration-start.json >/dev/null
+          echo 'NOVEL2_PRIVATE_MIGRATION_SCHEDULED=true'
       - name: Verify native Stranger with signed Telegram request
         shell: bash
         run: python scripts/probe_stranger.py
