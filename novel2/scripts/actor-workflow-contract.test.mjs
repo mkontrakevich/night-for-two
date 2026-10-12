@@ -54,7 +54,7 @@ const env={
  }},
  AI:{run:async(_model,opts)=>{
    inferCount++;
-   const request=new Response(opts.multipart.body);
+   const request=new Response(opts.multipart.body,{headers:{'content-type':opts.multipart.contentType}});
    const form=await request.formData();
    const prompt=String(form.get('prompt')||'');
    assert.match(prompt,/ONE AND ONLY ONE PERSON/);
