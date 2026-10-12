@@ -13,8 +13,8 @@ function decodeJpeg(value,maxBytes){
  const match=/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(text);
  if(!match||match[1].length>Math.ceil(maxBytes*4/3)+20)throw Error('NOVEL2_ACTOR_JPEG_REQUIRED');
  const binary=atob(match[1]),bytes=new Uint8Array(binary.length);
- if(bytes.length<40||bytes.length>maxBytes||bytes[0]!==255||bytes[1]!==216)throw Error('NOVEL2_ACTOR_IMAGE_INVALID');
  for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+ if(bytes.length<40||bytes.length>maxBytes||bytes[0]!==255||bytes[1]!==216)throw Error('NOVEL2_ACTOR_IMAGE_INVALID');
  return bytes;
 }
 // JPEG SOF reader: reject oversized thumbnails before calling FLUX.2's <512px ref input.
