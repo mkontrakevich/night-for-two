@@ -24,8 +24,8 @@ export function actorViewPrompt({view,role='A',identityLock=''}) {
   'The face and physique MUST match the supplied personal reference photographs. Keep apparent age, nose contour, eye placement, jaw, hairline and proportions stable.',
   identityLock,
   'Neutral warm-gray studio background, credible editorial studio photo, even clean studio lighting, no harsh cast shadows or artistic double exposure.',
-  'Wardrobe: fully opaque flesh-neutral body suit with a light IVORY SILK DRAPE resting naturally on shoulders. Face and entire hair visible. Never obscure body outline with bulky fabric.',
-  'No bare skin except uncovered face and ordinary hands. No sexual staging.',
+  'Wardrobe: refined natural IVORY SILK fabric, wrapped as a secure, elegantly draped studio garment with flowing sculptural folds. Its opaque layers cover chest, torso, hips and intimate areas in every view, including from behind. Keep the subject comfortably and fully covered; silhouette and normal anatomy remain readable without exaggerated contours. Face, neck and entire hair visible, no bulky fabric across the face.',
+  'Only the face, neck and hands may remain uncovered. No nudity, see-through fabric, suggestive posing, lingerie or costume accessories. Neutral studio casting, not fashion styling.',
   'Leave all content contained inside a single image frame. No overlap, no mirror, no reflection, no silhouettes, no duplicates, no extras.',
   'No text, no watermark, no props, no decorative border, no logo.'
  ].filter(Boolean).join('\n');
