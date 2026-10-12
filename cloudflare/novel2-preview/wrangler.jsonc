@@ -26,6 +26,11 @@
       "name": "novel2-purgatory-world",
       "binding": "LOBBY_WORLD_WORKFLOW",
       "class_name": "PurgatoryWorldWorkflow"
+    },
+    {
+      "name": "novel2-legacy-migration",
+      "binding": "LEGACY_MIGRATION_WORKFLOW",
+      "class_name": "LegacyMigrationWorkflow"
     }
   ],
   "assets": {
@@ -40,6 +45,14 @@
     {
       "binding": "NOVEL2_THEATRE",
       "bucket_name": "novel2-secret-noir-theatre"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "NOVEL2_DB",
+      "database_name": "novel2-secret-noir",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
     }
   ]
 }

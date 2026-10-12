@@ -1,8 +1,11 @@
 import {WorkflowEntrypoint} from 'cloudflare:workers';
 import {handleStranger,runStrangerWorld} from './stranger.js';
+import {handleNativeActor,runNativeActor} from './native-actor.js';
+import {handleMigrationAdmin,runLegacyMigration} from './migrate-legacy.js';
 
 export class ActorSheetWorkflow extends WorkflowEntrypoint {
   async run(event,step){
+    if(event?.payload?.cloud_guest)return runNativeActor(this.env,event.payload,step);
     const role=String(event?.payload?.role||'');
     const jobId=String(event?.payload?.job_id||'');
     if(!['A','B'].includes(role)||!/^[a-f0-9-]{36}$/i.test(jobId))return{status:'invalid'};
@@ -93,6 +96,10 @@ export class ActorSheetWorkflow extends WorkflowEntrypoint {
       return{status:'sync_pending'};
     }
   }
+}
+
+export class LegacyMigrationWorkflow extends WorkflowEntrypoint {
+  async run(event,step){return runLegacyMigration(this.env,event.payload,step)}
 }
 
 export class PurgatoryWorldWorkflow extends WorkflowEntrypoint {
@@ -627,6 +634,12 @@ export default{
   async fetch(request,env){
     const incoming=new URL(request.url);
     if(incoming.pathname==='/') return Response.redirect(new URL('/novel2/',incoming).toString(),302);
+    if(incoming.pathname.startsWith('/novel2-ai/migration/')){
+      const authorized=await aiAuthorized(request,env);
+      return await handleMigrationAdmin(request,env,incoming,authorized);
+    }
+    if(incoming.pathname.startsWith('/novel2/api/cloud/actor/'))
+      return await handleNativeActor(request,env,incoming);
     if(incoming.pathname.startsWith('/novel2-ai/'))return handleAi(request,env,incoming);
     // Native Cloudflare prologue. Existing casting/story API remains behind VPC until migrated.
     const stranger=await handleStranger(request,env,incoming);

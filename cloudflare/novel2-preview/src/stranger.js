@@ -88,9 +88,9 @@ export async function guestFromRequest(request,env){
  const t=Number(q.get('auth_date')||0);
  if(!Number.isSafeInteger(t)||Math.abs(Date.now()/1000-t)>86400)return null;
  let user;try{user=JSON.parse(q.get('user')||'null')}catch{return null}
- const id=String(user?.id||'');if(!allowed.includes(id))return null;
+ const id=String(user?.id||'');const index=allowed.indexOf(id);if(index<0||index>1)return null;
  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('novel2-stranger:'+id));
- return {key:toHex(digest)};
+ return {key:toHex(digest),role:index===0?'A':'B'};
 }
 const stateKey=guest=>'stranger/worlds/'+guest.key+'/state.json';
 async function getState(env,guest){
