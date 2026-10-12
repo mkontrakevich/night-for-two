@@ -1,0 +1,43 @@
+name: Novel 2 Private Migration Verification
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/novel2-migration-verify.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      NOVEL2_SERVICE_SECRET: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+    steps:
+      - name: Poll protected Cloudflare D1 migration status
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$NOVEL2_SERVICE_SECRET" || { echo "::error::MISSING_SERVICE_SECRET"; exit 1; }
+          service_key="$(printf 'novel2-ai-v1:%s' "$NOVEL2_SERVICE_SECRET" | sha256sum | awk '{print $1}')"
+          base='https://novel2-preview.kontrakevich.workers.dev'
+          for attempt in $(seq 1 18); do
+            http=$(curl -sS --max-time 20 -o /tmp/migration.json -w '%{http_code}' \
+              -H 'content-type: application/json' -H "x-novel2-service-key: $service_key" \
+              --data '{}' "$base/novel2-ai/migration/status" || true)
+            if [ "$http" != 200 ]; then echo "::error::MIGRATION_STATUS_HTTP_$http"; exit 1; fi
+            state=$(jq -r '.migration.state // "unknown"' /tmp/migration.json)
+            records=$(jq -r '.migration.records // 0' /tmp/migration.json)
+            code=$(jq -r '.migration.error_code // ""' /tmp/migration.json)
+            echo "MIGRATION_STATE=$state RECORDS=$records CHECK=$attempt"
+            if [ "$state" = snapshotted ]; then
+              echo 'MIGRATION_SNAPSHOT_COMPLETE=true'
+              exit 0
+            fi
+            if [ "$state" = failed ]; then
+              echo "::error::MIGRATION_SOURCE_BLOCKED:$code"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo '::warning::MIGRATION_STILL_IN_PROGRESS'
