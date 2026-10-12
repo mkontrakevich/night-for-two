@@ -35,6 +35,7 @@
     "night-cloudflare-inspect-20260929.yml",
     "night-product-deploy.yml",
     "novel2-ci.yml",
+    "novel2-migration-verify.yml",
     "novel2-preview-worker.yml",
     "novel2-validation.yml",
     "pages.yml",

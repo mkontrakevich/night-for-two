@@ -30,7 +30,7 @@ const htmlPath=path.resolve(__dirname,'../public/index.html');
 // after the HTTP request ends; re-opening the Mini App can reconnect to it.
 // The canonical result is committed to PostgreSQL before reporting success.
 const actorSheetJobs=new Map();
-const ACTOR_SHEET_MAX_MS=210000;
+const ACTOR_SHEET_MAX_MS=1200000;
 
 function serviceAuthenticated(req){
   const got=String(req.headers['x-novel2-service-key']||'');
@@ -271,30 +271,38 @@ function isAiControlled(ids,role,bookCast=[]){
   if(castEntry)return castEntry.control_mode==='ai';
   return Boolean(ids?.[role]?.approved&&ids?.[role]?.builder_meta?.synthetic&&ids?.[role]?.builder_meta?.control_mode==='ai');
 }
+// The private blueprint and complete cast never leave the story backend.
+// Character appearances occur only in narrative scenes when the director reveals them.
+function publicStoryDraft(draft){
+ if(!draft)return null;
+ const bp=draft.blueprint||{};
+ return {
+   id:draft.id,title:String(draft.title||bp.title||''),
+   logline:'',
+   status:String(draft.status||'draft'),
+   created_at:draft.created_at,updated_at:draft.updated_at,
+   blueprint:{
+     title:String(bp.title||draft.title||''),
+     logline:'',
+     genre_tone:String(bp.genre_tone||'')
+   }
+ };
+}
 async function publicState(book,auth,ids={},bookCast=[]){
-  const [a,b]=await Promise.all([characterSummary(ids.A,'A'),characterSummary(ids.B,'B')]);
-  const summaries={A:a,B:b};
-  const otherRole=auth.role==='A'?'B':'A';
-  // Never transmit another human's uploaded reference photo or identity
-  // description to the first guest. Fictional role reveal is separate from
-  // user account disclosure and consent.
-  const otherSummary=summaries[otherRole]||{};
-  summaries[otherRole]={
-    ready:Boolean(otherSummary.ready),synthetic:Boolean(otherSummary.synthetic),
-    name:'Неизвестный герой',story_role:'',gender:'',avatar:'',
-    identity_only:false,control_mode:otherSummary.control_mode||'human',
-    character_card:{},hidden:true
-  };
+  const own=await characterSummary(ids[auth.role],auth.role);
   const base={
     role:auth.role,
-    identity:{A:Boolean(summaries.A.ready),B:Boolean(summaries.B.ready)},
-    characters:summaries,
+    identity:{[auth.role]:Boolean(own.ready)},
+    characters:{[auth.role]:own},
     my_character:ids[auth.role]?.profile
       ?buildBaseActorCard({role:auth.role,profile:ids[auth.role].profile,sourcePhotoCount:ids[auth.role]?.reference_images?.length||0})
       :null
   };
   if(!book)return{mode:'home',...base};
   const scene=book.current_scene||{};
+  const ownCast=(Array.isArray(bookCast)?bookCast:[]).filter(
+    entry=>String(entry.interactive_role||'')===String(auth.role)
+  );
   return{
     mode:'reader',
     ...base,
@@ -302,14 +310,7 @@ async function publicState(book,auth,ids={},bookCast=[]){
     scene,
     active_role:book.active_role,
     active_control_mode:isAiControlled(ids,book.active_role,bookCast)?'ai':'human',
-    cast:(await Promise.all((Array.isArray(bookCast)?bookCast:[]).map(castCharacterSummary))).map(entry=>{
-      if(String(entry.interactive_role||'')===String(auth.role))return entry;
-      const reveal=scene.noir_progress?.partner_reveal_phase==='fictional_reveal';
-      return reveal
-        ?{...entry,avatar:'',source_id:'',character_card:{},hidden:false}
-        :{...entry,name:'Незнакомец',story_role:'',gender:'',avatar:'',
-          source_id:'',character_card:{},hidden:true};
-    }),
+    cast:await Promise.all(ownCast.map(castCharacterSummary)),
     can_reply:!Boolean(scene.noir_progress?.finale)&&String(book.active_role)===String(auth.role)&&!isAiControlled(ids,book.active_role,bookCast)
   };
 }
@@ -476,7 +477,7 @@ async function main(){
         const refs=await resizeReferences(references,480,4);
         if(!refs.length||refs.length!==references.length)
           return send(res,422,{ok:false,error:'NOVEL2_ACTOR_REFERENCES_INVALID'});
-        return send(res,200,{ok:true,work:{job_id:jobId,role,prompt,refs,width:832,height:1344}});
+        return send(res,200,{ok:true,work:{job_id:jobId,role,prompt,identity_lock:identity.identity_lock,refs,width:832,height:1344}});
       }
       if(url.pathname==='/novel2/api/identity/calibrate/complete'){
         if(req.method!=='POST'||!serviceAuthenticated(req))
@@ -528,7 +529,7 @@ async function main(){
       if(url.pathname==='/novel2/api/books'){
         const books=await listBooks(30);
         const drafts=await listStoryDrafts(12);
-        return send(res,200,{ok:true,books,drafts});
+        return send(res,200,{ok:true,books,drafts:drafts.map(publicStoryDraft)});
       }
 
       if(url.pathname==='/novel2/api/story/draft/delete'){
@@ -564,14 +565,16 @@ async function main(){
       }
 
       if(url.pathname==='/novel2/api/story/draft/new'){
+        if(!hasPersistentHumanIdentity(ids[auth.role]))
+          return send(res,409,{ok:false,error:'NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED'});
         const blueprint=await createStoryBlueprint({creativeBrief:input.creative_brief||''});
         const draft=await createStoryDraft({title:blueprint.title,logline:blueprint.logline,blueprint});
-        return send(res,200,{ok:true,draft});
+        return send(res,200,{ok:true,draft:publicStoryDraft(draft)});
       }
 
       if(url.pathname==='/novel2/api/story/drafts'){
         const drafts=await listStoryDrafts(12);
-        return send(res,200,{ok:true,drafts});
+        return send(res,200,{ok:true,drafts:drafts.map(publicStoryDraft)});
       }
 
       if(url.pathname==='/novel2/api/host/turn'){
@@ -968,8 +971,9 @@ async function main(){
         ids=await identities();
         const identity=ids[auth.role];
         if(!identity?.identity_lock)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_NOT_FOUND'});
-        const job=launchActorSheetJob(auth.role,identity,{force:input.force===true});
-        return send(res,200,{ok:true,job:actorSheetJobView(job)});
+        // Four isolated views must be scheduled through the Cloudflare Worker.
+        // Do not allow the old one-pass multi-head renderer to run on the origin.
+        return send(res,409,{ok:false,error:'NOVEL2_EDGE_ACTOR_WORKFLOW_REQUIRED'});
       }
 
       if(url.pathname==='/novel2/api/identity/calibrate/status'){
@@ -989,21 +993,8 @@ async function main(){
       }
 
       if(url.pathname==='/novel2/api/identity/calibrate'){
-        if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
-        ids=await identities();
-        const identity=ids[auth.role];
-        if(!identity)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_NOT_FOUND'});
-        const calibration=await generateCalibration({identity,role:auth.role});
-        await saveCharacterLook({
-          role:auth.role,
-          lookKey:'canonical',
-          title:'Нейтральная карточка актёра',
-          prompt:calibration.prompt,
-          model:calibration.model,
-          imageBase64:calibration.base64,
-          isPrimary:true
-        });
-        return send(res,200,{ok:true,calibration:'data:image/jpeg;base64,'+calibration.base64,identity_only:true});
+        // Never run a one-shot four-person collage. The public Worker owns actor casting.
+        return send(res,409,{ok:false,error:'NOVEL2_EDGE_ACTOR_WORKFLOW_REQUIRED'});
       }
 
       if(url.pathname==='/novel2/api/visual'){
