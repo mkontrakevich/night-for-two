@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 
 const text=await fs.readFile(new URL('../../cloudflare/novel2-preview/src/index.js',import.meta.url),'utf8');
 const a=text.indexOf('export class ActorSheetWorkflow extends WorkflowEntrypoint {');
-const b=text.indexOf('export class PurgatoryWorldWorkflow extends WorkflowEntrypoint {',a);
+const b=text.indexOf('export class LegacyMigrationWorkflow extends WorkflowEntrypoint {',a);
 assert.ok(a>=0&&b>a);
 const classCode=text.slice(a,b).replace('export class ActorSheetWorkflow','class ActorSheetWorkflow');
 const makeClass=new Function('WorkflowEntrypoint','dataUrlBlob','AI_IMAGE_MODEL',
