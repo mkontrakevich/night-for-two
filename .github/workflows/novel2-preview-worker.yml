@@ -310,6 +310,25 @@ jobs:
           test "$code" = 202 -o "$code" = 200 || { echo 'NOVEL2_MIGRATION_START_FAILED'; exit 1; }
           jq -e '.ok == true and (.job_id | type == "string")' /tmp/novel2-migration-start.json >/dev/null
           echo 'NOVEL2_PRIVATE_MIGRATION_SCHEDULED=true'
+      - name: Verify protected legacy migration progress
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://novel2-preview.kontrakevich.workers.dev'
+          key="$(printf 'novel2-ai-v1:%s' "$NOVEL2_SERVICE_SECRET" | sha256sum | awk '{print $1}')"
+          status_code=$(curl -sS --max-time 30 -o /tmp/novel2-migration-status.json -w '%{http_code}' \
+            -H 'content-type: application/json' -H "x-novel2-service-key: $key" \
+            --data '{}' "$base/novel2-ai/migration/status")
+          test "$status_code" = 200 || { echo "::error::NOVEL2_MIGRATION_STATUS_UNAVAILABLE:$status_code"; exit 1; }
+          jq -e '.ok == true and (.migration.state | type=="string")' /tmp/novel2-migration-status.json >/dev/null
+          state=$(jq -r '.migration.state' /tmp/novel2-migration-status.json)
+          records=$(jq -r '.migration.records // 0' /tmp/novel2-migration-status.json)
+          echo "NOVEL2_MIGRATION_STATE=$state"
+          echo "NOVEL2_MIGRATION_RECORDS_INDEXED=$records"
+          if [ "$state" = failed ]; then
+            code=$(jq -r '.migration.error_code // "UNKNOWN"' /tmp/novel2-migration-status.json)
+            echo "::warning::NOVEL2_LEGACY_EXPORT_BLOCKED:$code"
+          fi
       - name: Verify native Stranger with signed Telegram request
         shell: bash
         run: python scripts/probe_stranger.py
