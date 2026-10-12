@@ -44,7 +44,7 @@ const cleanRow=value=>value?{role:value.role,version:value.version,approved:!!va
 async function readActorImage(env,key){
  if(!key)return'';
  const obj=await env.NOVEL2_THEATRE.get(key);
- if(!obj||obj.size>9_000_000)return'';
+ if(!obj||obj.size>15_000_000)return'';
  const bytes=new Uint8Array(await obj.arrayBuffer());
  let binary='';
  for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
