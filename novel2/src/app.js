@@ -477,7 +477,7 @@ async function main(){
         const refs=await resizeReferences(references,480,4);
         if(!refs.length||refs.length!==references.length)
           return send(res,422,{ok:false,error:'NOVEL2_ACTOR_REFERENCES_INVALID'});
-        return send(res,200,{ok:true,work:{job_id:jobId,role,prompt,refs,width:832,height:1344}});
+        return send(res,200,{ok:true,work:{job_id:jobId,role,prompt,identity_lock:identity.identity_lock,refs,width:832,height:1344}});
       }
       if(url.pathname==='/novel2/api/identity/calibrate/complete'){
         if(req.method!=='POST'||!serviceAuthenticated(req))
