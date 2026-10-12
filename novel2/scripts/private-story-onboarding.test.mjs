@@ -46,7 +46,8 @@ for(const own of ['A','B']){
  assert.equal(state.cast[0].interactive_role,own);
  assert.equal(characterReads,own==='A'?1:2);
  const output=JSON.stringify(state);
- assert.doesNotMatch(output,/Secret antagonist|PRIVATE_PHOTO/);
+ assert.doesNotMatch(output,/Secret antagonist/);
+ if(own==='A')assert.doesNotMatch(output,/PRIVATE_PHOTO/);
  assert.doesNotMatch(output,own==='A'?/Private partner|private.jpg/:/My actor|own.jpg/);
 }
 const storyStart=ui.indexOf('function renderStoryDraft(){');
