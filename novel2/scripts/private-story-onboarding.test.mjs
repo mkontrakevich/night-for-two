@@ -61,7 +61,8 @@ const menu=ui.slice(ui.indexOf('function renderMainMenu(){'),ui.indexOf('async f
 assert.doesNotMatch(menu,/strangerCard|partnerKnown|otherHuman|Неизвестный герой/);
 const launch=ui.slice(ui.indexOf('async function launchStoryDraft(){'),ui.indexOf('function render(){',ui.indexOf('async function launchStoryDraft(){')));
 assert.doesNotMatch(launch.replace(/^\s*\/\/.*$/gm,''),/data-cast-slot|assignments/);
-const inline=ui.slice(ui.indexOf('<script>')+8,ui.lastIndexOf('</script>'));
+const inlineStart=ui.indexOf('<script>')+8;
+const inline=ui.slice(inlineStart,ui.indexOf('</script>',inlineStart));
 assert.ok(inline.length>1000);
 new vm.Script(inline,{filename:'novel2/public/index.html'});
 const newBook=ui.slice(ui.indexOf('async function startNewBook('),ui.indexOf('async function editCharacterFromMenu('));
