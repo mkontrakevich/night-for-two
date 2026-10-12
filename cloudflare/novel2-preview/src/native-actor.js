@@ -183,7 +183,8 @@ export async function handleNativeActor(request,env,url){
 export async function runNativeActor(env,payload,step){
  const guest={key:String(payload.cloud_guest||'')},job=slug(payload.job_id);
  if(!/^[a-f0-9]{64}$/.test(guest.key)||job.length!==36)return{status:'invalid'};
- const stage=await step.do('render native casting once and store in R2',{
+ let stage;
+ try{stage=await step.do('render native casting once and store in R2',{
    retries:{limit:0,delay:'5 seconds',backoff:'constant'},timeout:'5 minutes'
  },async()=>{
    const current=await row(env,guest);
@@ -208,7 +209,14 @@ export async function runNativeActor(env,payload,step){
    const imageKey=prefix(guest)+'renders/'+job+'.jpg';
    await env.NOVEL2_THEATRE.put(imageKey,bytes,{httpMetadata:{contentType:'image/jpeg'}});
    return{status:'staged',imageKey,prompt:actorPrompt(current.role)};
- });
+ });}catch{
+   // Report failure without exposing personal images, prompt, or model responses.
+   await env.NOVEL2_DB.prepare(
+     'UPDATE actor_identity SET status=?,error_code=?,updated_at=? WHERE guest_key=? AND job_id=? AND status=?'
+   ).bind('failed','GENERATION_FAILED',now(),guest.key,job,'working').run().catch(()=>{});
+   console.error('NOVEL2_NATIVE_CASTING_FAILED',{code:'GENERATION_FAILED'});
+   return{status:'failed'};
+ }
  if(stage.status!=='staged')return stage;
  return step.do('commit R2 actor result to D1 without AI retry',{
    retries:{limit:7,delay:'15 seconds',backoff:'exponential'},timeout:'90 seconds'
