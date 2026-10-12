@@ -28,6 +28,8 @@ export async function handleMigrationAdmin(request,env,url,authorized){
  // of accidentally copying private legacy records in a routine health probe.
  if(body.confirm!=='COPY_PRIVATE_LEGACY_DATA_TO_CLOUDFLARE')
    return answer(422,{ok:false,error:'NOVEL2_MIGRATION_CONFIRMATION_REQUIRED'});
+ const previous=await env.NOVEL2_DB.prepare("SELECT id,state FROM migration_runs WHERE state IN ('working','snapshotted') ORDER BY updated_at DESC LIMIT 1").first();
+ if(previous)return answer(200,{ok:true,job_id:previous.id,state:previous.state,reused:true});
  const jobId=crypto.randomUUID();
  await env.NOVEL2_DB.prepare('INSERT INTO migration_runs(id,state,updated_at) VALUES(?,?,?)')
    .bind(jobId,'working',new Date().toISOString()).run();
