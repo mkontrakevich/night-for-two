@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0909">
-<meta name="novel2-ui-release" content="noir-isolated-actor-20261012-r6">
+<meta name="novel2-ui-release" content="noir-ivory-four-angle-20261012-r7">
 <title>Interactive Novel 2.0</title>
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <link rel="stylesheet" href="/novel2/noir-experience.css?v=1">
@@ -106,6 +106,18 @@
 .privateStorySetup .actions{margin:28px 0 0;gap:10px}
 .privateStorySetup .primary,.privateStorySetup .secondary{border-radius:0;min-height:54px}
 .privateStorySetup .primary{background:#f5eee8;color:#17120f}
+
+/* One input per camera angle; never merge photos in the browser. */
+.actorPhotoIntro{margin:14px 0;color:#d4c7bf;font-size:13px;line-height:1.5}
+.actorAngleGrid{display:grid;gap:10px;margin:14px 0}
+.actorAngleField{display:grid;grid-template-columns:28px minmax(0,1fr);gap:7px 12px;align-items:start;padding:13px 12px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.03);cursor:pointer}
+.actorAngleNumber{grid-row:1 / span 2;display:grid;place-items:center;width:26px;height:26px;border:1px solid rgba(255,255,255,.3);font-size:12px;color:#eee1d8}
+.actorAngleCopy b{display:block;font:500 16px/1.3 Georgia,serif;color:#f5eae2}
+.actorAngleCopy small{display:block;margin-top:4px;color:#ae9d94;font-size:11px;line-height:1.4}
+.actorAngleField input[type=file]{grid-column:2;display:block;min-width:0;width:100%;font-size:12px;color:#c4b5aa}
+.actorAngleField input[type=file]::file-selector-button{background:#eee4dc;color:#17120f;border:0;padding:7px 10px;margin-right:7px}
+.actorAngleOptional{grid-column:2;color:#93847b;font-size:10px;line-height:1.3}
+.builder .actorAngleField,.photoIdentityPanel .actorAngleField{border-radius:0}
 </style>
 </head>
 <body><main id="app"></main>
@@ -424,6 +436,21 @@ function bindCharacterLooks(role,active){
  document.querySelectorAll('[data-look-generate]').forEach(el=>el.onclick=()=>generateCharacterLookFromDetail(role,el.dataset.lookGenerate));
  document.querySelectorAll('[data-look-select]').forEach(el=>el.onclick=()=>selectCharacterLookFromDetail(role,el.dataset.lookSelect));
 }
+function actorReferenceFields(){
+ const angles=[
+  {title:'Анфас',detail:'Лицо прямо в камеру, без фильтров. Лоб, нос и подбородок открыты.',required:true},
+  {title:'Профиль · 90°',detail:'Чёткий боковой ракурс лица и носа, без поворота к камере.',required:false},
+  {title:'Полный рост · спереди',detail:'В полный рост: голова и обе ступни целиком в кадре.',required:false},
+  {title:'Полный рост · сзади',detail:'В полный рост со спины. Помогает сохранить силуэт и причёску.',required:false}
+ ];
+ return '<p class="actorPhotoIntro">Лучше всего подходят 3–4 фото одного человека в контрольных ракурсах. Если есть только 1–2, можно начать с них — сходство может быть ниже.</p>'+
+  '<div class="actorAngleGrid" role="group" aria-label="Контрольные ракурсы фотографии">'+
+  angles.map((a,i)=>'<label class="actorAngleField"><span class="actorAngleNumber">'+(i+1)+'</span><span class="actorAngleCopy"><b>'+a.title+'</b><small>'+a.detail+'</small></span><input data-actor-angle="'+i+'" type="file" accept="image/*" aria-label="'+a.title+'"><span class="actorAngleOptional">'+(a.required?'Главный ракурс':'По возможности')+'</span></label>').join('')+'</div>'+
+  '<p class="hint">Один человек на фото, хорошее освещение, без ретуши и закрытого лица. Файлы используются только для вашей Actor Sheet.</p>';
+}
+function chosenActorPhotos(){
+ return [...document.querySelectorAll('[data-actor-angle]')].map(el=>el.files?.[0]).filter(Boolean);
+}
 function renderCharacterDetail(role){
  stopLoading();
  role=String(role||'').toUpperCase();
@@ -441,7 +468,7 @@ function renderCharacterDetail(role){
    const actorSheetReady=rows.some(x=>x?.key==='canonical'&&x?.image&&x?.model!=='existing');
    const status=actorSheetReady?'ГОТОВА':actorSheetTask.status==='failed'&&String(actorSheetTask.role)===role?'ОШИБКА ГЕНЕРАЦИИ':hasIdentity?'НУЖНА КАРТОЧКА':'НЕ СОЗДАНА';
    const looks=characterLooksHtml(role,actorSheetReady,false,true);
-   const uploadFields='<div class="field"><label>Фотографии · 1–3</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Портреты и, по возможности, полный рост. Фотографии используются только как источник внешности.</div></div><button class="photoBuild" id="characterPhotoBuild" type="button">'+(hasIdentity?'Заменить фото и пересобрать':'Создать карточку актёра')+'</button>';
+   const uploadFields=actorReferenceFields()+'<button class="photoBuild" id="characterPhotoBuild" type="button">'+(hasIdentity?'Заменить фото и пересобрать':'Создать карточку актёра')+'</button>';
    const failedNotice=!actorSheetReady&&actorSheetTask.status==='failed'&&String(actorSheetTask.role)===role
      ?'<div class="actorFailure" role="alert"><strong>Карточка актёра не создана</strong><p>'+esc(actorSheetTask.error||'Генерация прервана.')+'</p><p>'+(hasIdentity?'Внешность сохранена. Повторно выбирать фотографии не нужно.':'Сохранение фотографий не подтвердилось. Попробуйте ещё раз.')+'</p>'+(actorSheetTask.errorCode?'<small class="actorDiag">Код: '+esc(actorSheetTask.errorCode)+'</small>':'')+'</div>'
      :'';
@@ -500,9 +527,9 @@ async function buildCharacterFromDetail(role){
  if(busy)return;
  role=String(role||'').toUpperCase();
  if(role!==String(state?.role||'A'))return;
- const input=document.getElementById('characterFiles'),files=input?.files;
- if(!files||files.length<1){alert('Загрузите хотя бы одну фотографию.');return}
- if(files.length>3){alert('Выберите не более трёх фотографий.');return}
+ const files=chosenActorPhotos();
+ if(files.length<1){alert('Выберите минимум одно фото. Для лучшего сходства добавьте анфас и профиль.');return}
+ if(files.length>4){alert('Не более четырёх фотографий.');return}
  actorTaskStart(role,'analysis',180);
  busy=true;loading('Сохраняем фотографии и фиксируем внешность…','character',180,true);
  try{
@@ -814,7 +841,7 @@ function render(){
    if(!forceBuilder){menuMode=true;renderMainMenu();void loadLibrary();return}
    const mySynthetic=Boolean(mineSummary.ready&&mineSummary.synthetic);
    const hasDraft=Boolean(card?.passport)&&!mine&&!mySynthetic;
-   const builderHtml='<div class="builder"><h2>Создайте нейтральную базу по фото</h2><p>Загрузите до 3 фотографий. Мы зафиксируем только внешность и создадим actor sheet в непрозрачном телесном трико. Характер, профессия и биография здесь не создаются.</p><div class="field"><label>Фотографии · 1–3</label><input id="characterFiles" type="file" accept="image/*" multiple><div class="hint">Портрет, селфи, профиль и полный рост можно смешивать. Несколько ракурсов повышают точность identity lock.</div></div><button class="primary" id="buildCharacter">Создать actor sheet</button></div>';
+   const builderHtml='<div class="builder"><h2>Создайте карточку актёра по фото</h2><p>Нужны ваши реальные ракурсы для фиксации внешности. Характер и роль в сюжете пока не создаются.</p>'+actorReferenceFields()+'<button class="primary" id="buildCharacter">Создать карточку актёра</button></div>';
    const draftHtml='<div class="builder"><h2>Карточка актёра</h2><div class="actions"><button class="primary" id="continueCalibration">Создать actor sheet</button><button class="secondary" id="showBuilder">Другие фото</button></div></div>';
    const setup=forceBuilder
      ? builderHtml
@@ -888,7 +915,7 @@ async function fileToReference(file){
  }catch{return fallback()}
 }
 async function filesToDataUrls(files){
- const out=[];for(const file of [...files].slice(0,3))out.push(await fileToReference(file));return out;
+ const out=[];for(const file of [...files].slice(0,4))out.push(await fileToReference(file));return out;
 }
 // Legacy entry points use the same isolated Cloudflare Workflow as the actor detail.
 async function buildCharacter(){
