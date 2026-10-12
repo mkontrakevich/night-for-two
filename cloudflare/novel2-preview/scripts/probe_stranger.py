@@ -56,3 +56,12 @@ assert status==200,(status,body.get("error"))
 assert {k.lower():v for k,v in headers.items()}.get("x-secret-stranger")=="2.0.0",{k.lower():v for k,v in headers.items()}.get("x-secret-stranger")
 assert body.get("ok") is True
 print("STRANGER_R2_PRIVATE_READ=PASS")
+
+status,headers,body=post("/novel2/api/cloud/actor/status",{})
+assert status==200,(status,body.get("error"),body.get("content_type"))
+assert body.get("ok") is True
+assert {k.lower():v for k,v in headers.items()}.get("x-novel2-actor-cloud")=="1"
+print("NOVEL2_NATIVE_ACTOR_D1_READ=PASS")
+status,headers,body=post("/novel2/api/cloud/actor/status",{},False)
+assert status in (401,403),(status,body.get("error"))
+print("NOVEL2_NATIVE_ACTOR_PRIVATE_AUTH=PASS")
