@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0909">
-<meta name="novel2-ui-release" content="noir-private-story-onboarding-20261012-r5">
+<meta name="novel2-ui-release" content="noir-isolated-actor-20261012-r6">
 <title>Interactive Novel 2.0</title>
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <link rel="stylesheet" href="/novel2/noir-experience.css?v=1">
@@ -511,13 +511,13 @@ async function buildCharacterFromDetail(role){
    characterDraft=j.character||null;
    characterLooks[role]=[];characterLooksLoaded[role]=false;
    forceBuilder=false;characterDetailRole='';
-   actorTaskPhase('actor_sheet',600);
-   if(actorSheetTask.detached){menuMode=true;renderMainMenu()}else{menuMode=false;loading('Создаём нейтральную actor sheet…','image',600,true)}
+   actorTaskPhase('actor_sheet',1200);
+   if(actorSheetTask.detached){menuMode=true;renderMainMenu()}else{menuMode=false;loading('Создаём нейтральную actor sheet…','image',1200,true)}
    try{
      const started=await api('identity/calibrate/start',{},180000);
      const job=started?.job||{};
      if(job.status==='working'&&job.started_at)actorSheetTask.phaseStartedAt=Number(job.started_at);
-     actorSheetTask.maxSeconds=600;
+     actorSheetTask.maxSeconds=1200;
      void watchActorSheet(role);
      return;
    }catch(calError){
@@ -546,14 +546,14 @@ async function watchActorSheet(role){
  actorPollActive=true;
  let connectionMisses=0;
  try{
-   for(let check=0;check<300;check++){
+   for(let check=0;check<800;check++){
      await new Promise(resolve=>setTimeout(resolve,2200));
      let j;
      try{j=await api('identity/calibrate/status',{},20000);connectionMisses=0}
      catch(error){if(isCancelled(error))return;if(++connectionMisses<7)continue;throw new Error('GENERATION_CONNECTION_INTERRUPTED')}
      const task=j?.job||{};
      if(task.status==='working'){
-       if(!actorSheetTask.active){actorTaskStart(role,'actor_sheet',600);actorSheetTask.detached=true;if(menuMode)renderMainMenu()}
+       if(!actorSheetTask.active){actorTaskStart(role,'actor_sheet',1200);actorSheetTask.detached=true;if(menuMode)renderMainMenu()}
        if(task.phase&&task.phase!==actorSheetTask.phase){
          actorSheetTask.phase=task.phase;
          updateActorProgressUi();
@@ -592,7 +592,7 @@ async function restoreActorSheetJob(){
    const role=String(state?.role||'A');
    const j=await api('identity/calibrate/status',{},12000),job=j?.job||{};
    if(job.status==='working'){
-     actorTaskStart(role,'actor_sheet',600);
+     actorTaskStart(role,'actor_sheet',1200);
      actorSheetTask.phaseStartedAt=Number(job.started_at)||Date.now();
      actorSheetTask.detached=true;busy=true;menuMode=true;renderMainMenu();
      void watchActorSheet(role);
@@ -613,9 +613,9 @@ async function continueCalibrationFromDetail(role,force=false){
  if(busy)return;
  role=String(role||'').toUpperCase();
  if(role!==String(state?.role||'A'))return;
- actorTaskStart(role,'actor_sheet',600);
+ actorTaskStart(role,'actor_sheet',1200);
  busy=true;characterDraft=state?.my_character||characterDraft;menuMode=false;characterDetailRole='';
- loading('Создаём нейтральную actor sheet…','image',600,true);
+ loading('Создаём нейтральную actor sheet…','image',1200,true);
  try{
    const j=await api('identity/calibrate/start',{force:Boolean(force)},180000);
    const job=j?.job||{};
@@ -890,39 +890,12 @@ async function fileToReference(file){
 async function filesToDataUrls(files){
  const out=[];for(const file of [...files].slice(0,3))out.push(await fileToReference(file));return out;
 }
+// Legacy entry points use the same isolated Cloudflare Workflow as the actor detail.
 async function buildCharacter(){
- if(busy)return;
- const input=document.getElementById('characterFiles'),files=input?.files;
- if(!files||files.length<1){alert('Загрузите хотя бы одну фотографию.');return}
- if(files.length>3){alert('Выберите не более трёх фотографий.');return}
- busy=true;loading('Сохраняем фотографии и фиксируем внешность…','character',180);
- try{
-   const refs=await filesToDataUrls(files);
-   const j=await api('character/build',{reference_images:refs},180000);
-   characterDraft=j.character||null;forceBuilder=false;
-   loading('Внешность сохранена. Создаём нейтральную actor sheet…','image',180);
-   try{
-     const cal=await api('identity/calibrate');
-     calibrationImage=cal.calibration||'';
-     render();
-   }catch(calError){
-     state=(await api('state')).state;
-     render();
-     alert('Карточка персонажа уже сохранена. Не удалось получить только калибровочное изображение — нажмите «Продолжить калибровку».');
-   }
- }catch(e){alert(e.message);refresh()}finally{busy=false}
+ return buildCharacterFromDetail(String(state?.role||'A'));
 }
 async function continueCalibration(){
- if(busy)return;
- busy=true;characterDraft=state?.my_character||characterDraft;loading('Создаём нейтральную actor sheet','image',180);
- try{
-   const j=await api('identity/calibrate');
-   calibrationImage=j.calibration||'';
-   render();
- }catch(e){
-   alert('Связь с генератором изображения прервалась. Карточка сохранена — можно повторить калибровку без повторной загрузки фото.');
-   refresh();
- }finally{busy=false}
+ return continueCalibrationFromDetail(String(state?.role||'A'));
 }
 async function approveIdentity(){
  if(busy)return;busy=true;loading('Фиксируем Visual Identity…','generic',60);
@@ -930,9 +903,7 @@ async function approveIdentity(){
  catch(e){alert(e.message);render()}finally{busy=false}
 }
 async function regenerateCalibration(){
- if(busy)return;busy=true;loading('Пересобираем actor sheet…','image',180);
- try{const j=await api('identity/calibrate');calibrationImage=j.calibration||'';render()}
- catch(e){alert(e.message);render()}finally{busy=false}
+ return continueCalibrationFromDetail(String(state?.role||'A'),true);
 }
 async function startNewBook({resume=false}={}){
  if(busy&&!resume)return;
