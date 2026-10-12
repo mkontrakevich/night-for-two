@@ -18,10 +18,14 @@ export async function handleMigrationAdmin(request,env,url,authorized){
  const body=await request.json().catch(()=>({}));
  if(url.pathname.endsWith('/status')){
    const jobId=String(body.job_id||'');
-   if(!/^[a-f0-9-]{36}$/i.test(jobId))return answer(422,{ok:false,error:'NOVEL2_MIGRATION_JOB_INVALID'});
-   const state=await env.NOVEL2_DB.prepare(
-     'SELECT id,state,table_index,row_offset,records,error_code,updated_at FROM migration_runs WHERE id=?'
-   ).bind(jobId).first();
+   if(jobId&&!/^[a-f0-9-]{36}$/i.test(jobId))return answer(422,{ok:false,error:'NOVEL2_MIGRATION_JOB_INVALID'});
+   const state=jobId
+     ?await env.NOVEL2_DB.prepare(
+       'SELECT id,state,table_index,row_offset,records,error_code,updated_at FROM migration_runs WHERE id=?'
+     ).bind(jobId).first()
+     :await env.NOVEL2_DB.prepare(
+       'SELECT id,state,table_index,row_offset,records,error_code,updated_at FROM migration_runs ORDER BY updated_at DESC LIMIT 1'
+     ).first();
    return answer(state?200:404,state?{ok:true,migration:state}:{ok:false,error:'NOVEL2_MIGRATION_NOT_FOUND'});
  }
  // Requires a second explicit declaration in the request to reduce the risk
