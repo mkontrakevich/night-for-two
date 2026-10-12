@@ -81,6 +81,9 @@ export class ActorSheetWorkflow extends WorkflowEntrypoint {
     return{key:stagedKey};
    });
   }catch(error){
+   // A failed panel must not strand personally identifiable preview shots.
+   for(const panel of panels)await env.NOVEL2_THEATRE.delete(panel.key).catch(()=>{});
+   await env.NOVEL2_THEATRE.delete(stagedKey).catch(()=>{});
    try{await call('/novel2/api/identity/calibrate/complete',
     {role,job_id:jobId,status:'failed'});}catch{}
    console.error('NOVEL2_ACTOR_GENERATION_FAILED',{kind:'isolated_panel_or_composition'});
