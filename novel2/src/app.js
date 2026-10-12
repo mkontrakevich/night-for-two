@@ -30,7 +30,7 @@ const htmlPath=path.resolve(__dirname,'../public/index.html');
 // after the HTTP request ends; re-opening the Mini App can reconnect to it.
 // The canonical result is committed to PostgreSQL before reporting success.
 const actorSheetJobs=new Map();
-const ACTOR_SHEET_MAX_MS=210000;
+const ACTOR_SHEET_MAX_MS=1200000;
 
 function serviceAuthenticated(req){
   const got=String(req.headers['x-novel2-service-key']||'');
@@ -971,8 +971,9 @@ async function main(){
         ids=await identities();
         const identity=ids[auth.role];
         if(!identity?.identity_lock)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_NOT_FOUND'});
-        const job=launchActorSheetJob(auth.role,identity,{force:input.force===true});
-        return send(res,200,{ok:true,job:actorSheetJobView(job)});
+        // Four isolated views must be scheduled through the Cloudflare Worker.
+        // Do not allow the old one-pass multi-head renderer to run on the origin.
+        return send(res,409,{ok:false,error:'NOVEL2_EDGE_ACTOR_WORKFLOW_REQUIRED'});
       }
 
       if(url.pathname==='/novel2/api/identity/calibrate/status'){
@@ -992,21 +993,8 @@ async function main(){
       }
 
       if(url.pathname==='/novel2/api/identity/calibrate'){
-        if(book)return send(res,409,{ok:false,error:'NOVEL2_CHARACTER_REBUILD_ONLY_BEFORE_START'});
-        ids=await identities();
-        const identity=ids[auth.role];
-        if(!identity)return send(res,400,{ok:false,error:'NOVEL2_IDENTITY_NOT_FOUND'});
-        const calibration=await generateCalibration({identity,role:auth.role});
-        await saveCharacterLook({
-          role:auth.role,
-          lookKey:'canonical',
-          title:'Нейтральная карточка актёра',
-          prompt:calibration.prompt,
-          model:calibration.model,
-          imageBase64:calibration.base64,
-          isPrimary:true
-        });
-        return send(res,200,{ok:true,calibration:'data:image/jpeg;base64,'+calibration.base64,identity_only:true});
+        // Never run a one-shot four-person collage. The public Worker owns actor casting.
+        return send(res,409,{ok:false,error:'NOVEL2_EDGE_ACTOR_WORKFLOW_REQUIRED'});
       }
 
       if(url.pathname==='/novel2/api/visual'){
