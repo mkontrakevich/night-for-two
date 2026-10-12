@@ -743,59 +743,7 @@ async function openStoryDraft(id){
  storyDraft=draft;menuMode=false;
  renderStoryDraft();
 }
-function genderLabel(value=''){
- return ({female:'женщина',male:'мужчина',nonbinary:'небинарный персонаж'})[String(value)]||'гендер не указан';
-}
-function aiOptions(selected='',preferredGender=''){
- const list=[...aiCharacters].sort((a,b)=>{
-   const ap=preferredGender&&a.gender===preferredGender?0:1,bp=preferredGender&&b.gender===preferredGender?0:1;
-   return ap-bp||String(a.name).localeCompare(String(b.name),'ru');
- });
- return list.map(x=>'<option value="ai:'+esc(x.id)+'" '+(selected==='ai:'+x.id?'selected':'')+'>'+esc(x.name)+' · '+esc(genderLabel(x.gender))+' · '+esc((x.tags||[]).slice(0,2).join(', '))+'</option>').join('');
-}
-function defaultAi(index=0,preferredGender=''){
- const preferred=preferredGender?aiCharacters.filter(x=>x.gender===preferredGender):[];
- const pool=preferred.length?preferred:aiCharacters;
- return pool[index%Math.max(1,pool.length)]?.id||'';
-}
-async function loadAiAvatar(id){
- const ai=aiCharacters.find(x=>String(x.id)===String(id));
- if(!ai)return'';
- if(ai.avatar)return ai.avatar;
- try{
-   const j=await api('ai-character/avatar',{id});
-   ai.avatar=String(j.image||'');
-   return ai.avatar;
- }catch{return''}
-}
-function castPreviewHtml(role,name='',gender='',avatar='',note=''){
- return '<div class="castPreview">'+avatarHtml(avatar,name,'castAvatar')+'<div><small>Игрок '+esc(role)+' будет играть этим персонажем</small><b>'+esc(name||'Персонаж')+'</b><small>'+esc([gender?genderLabel(gender):'',note].filter(Boolean).join(' · '))+'</small></div></div>';
-}
-async function refreshCastPreview(select){
- const role=String(select?.dataset?.runtimeRole||'');
- const target=document.getElementById(String(select?.dataset?.previewId||''));
- if(!role||!target)return;
- const token=String(select.value||'');
- if(token.startsWith('player:')){
-   const summary=state?.characters?.[role]||{};
-   target.innerHTML=castPreviewHtml(role,summary.name||('Игрок '+role),summary.gender||'',summary.avatar||'',summary.synthetic?'временный герой':'свой персонаж');
-   return;
- }
- if(token.startsWith('ai:')){
-   const id=token.slice(3),ai=aiCharacters.find(x=>String(x.id)===id);
-   if(!ai){target.innerHTML='';return}
-   target.innerHTML=castPreviewHtml(role,ai.name||'Готовый герой',ai.gender||'',ai.avatar||'','готовый герой библиотеки');
-   if(!ai.avatar){
-     const avatar=await loadAiAvatar(id);
-     if(String(select.value||'')===token)target.innerHTML=castPreviewHtml(role,ai.name||'Готовый герой',ai.gender||'',avatar,'готовый герой библиотеки');
-   }
- }
-}
-function storyAiCastPreviewHtml(role,slot={}){
- const title=String(slot.narrative_function||'Персонаж истории');
- const description=String(slot.description||'AI создаст внешность, характер и биографию из требований этой истории.');
- return '<div class="castPreview"><div class="avatarFallback">AI</div><div><small>Интерактивная роль '+esc(role)+' · создастся при запуске</small><b>'+esc(title)+'</b><small>'+esc(description)+'</small></div></div>';
-}
+// Cast generation is server-only. No client-side options, preview or character roster.
 function renderStoryDraft(){
  stopLoading();
  if(!storyDraft){menuMode=true;renderMainMenu();return}
