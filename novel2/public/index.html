@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0909">
-<meta name="novel2-ui-release" content="noir-ivory-four-angle-20261012-r7">
+<meta name="novel2-ui-release" content="noir-background-launch-20261026-r1">
 <title>Interactive Novel 2.0</title>
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <link rel="stylesheet" href="/novel2/noir-experience.css?v=1">
@@ -121,6 +121,7 @@
 </style>
 </head>
 <body><main id="app"></main>
+<script src="/novel2/story-launch-client.js?v=20261026"></script>
 <script>
 const app=document.getElementById('app');
 const tg=window.Telegram?.WebApp;try{tg?.ready();tg?.expand()}catch{}
@@ -279,6 +280,7 @@ async function refresh(){
    render();
    if(state?.role&&!characterLooksLoaded[state.role])void loadCharacterLooks(state.role);
    void restoreActorSheetJob();
+   void storyLaunch.check();
  }catch(e){
    if(isCancelled(e))return;
    stopLoading();
@@ -710,6 +712,7 @@ function renderMainMenu(){
  const heroNewBook=document.getElementById('heroNewBook');if(heroNewBook){heroNewBook.disabled=actorBlocked;heroNewBook.onclick=actorBlocked?null:startNewBook}
  const newBookButton=document.getElementById('newBook');if(newBookButton)newBookButton.disabled=actorBlocked;
  ensureActorMenuTicker();
+ attachLaunchBanner();
 }
 async function openMainMenu(){
  storyDraft=null;menuMode=true;
@@ -815,15 +818,48 @@ async function resumeDraftAfterIdentity(){
  if(draft){storyDraft=draft;menuMode=false;forceBuilder=false;renderStoryDraft();return}
  menuMode=true;renderMainMenu();
 }
+let launchDetached=false;
+const launchStages={context:'Подготавливаем запуск',first_chapter:'Создаём первую главу',publishing:'Сохраняем роман',queued:'Запуск принят'};
+function launchStageLabel(job){
+ if(job.stage.startsWith('player:'))return 'Готовим роль Вашего персонажа';
+ if(job.stage.startsWith('synthetic:'))return 'Создаём персонажа истории';
+ if(job.stage.startsWith('reference:'))return 'Создаём образ персонажа';
+ return launchStages[job.stage]||'Создаём историю';
+}
+function launchMenu(){launchDetached=true;busy=false;stopLoading();menuMode=true;renderMainMenu();void loadLibrary();}
+function attachLaunchBanner(){
+ const id=storyLaunch.remembered();if(!id||document.getElementById('launchBanner'))return;
+ const root=app.querySelector('.mainMenu');if(!root)return;
+ const button=document.createElement('button');button.id='launchBanner';button.type='button';button.className='secondary';button.textContent='Проверить запуск романа';
+ button.onclick=()=>{launchDetached=false;void storyLaunch.check(id,{requireJob:true});};root.prepend(button);
+}
+function showLaunchJob(job,error=''){
+ if(launchDetached){attachLaunchBanner();return;}
+ stopLoading();busy=false;menuMode=false;characterDetailRole='';
+ const paused=job?.status==='failed'||job?.stalled;
+ const text=error|| (paused?'Запуск остановился. Завершённые этапы сохранены.':'Задача выполняется на сервере. Можно закрыть окно и вернуться позже.');
+ app.innerHTML='<section class="loading"><div class="processCard"><div class="kicker">СОЗДАНИЕ ИСТОРИИ</div><h2 class="processTitle">'+esc(job?launchStageLabel(job):'Проверяем запуск')+'</h2><p class="processMeta" role="status">'+esc(text)+'</p>'+(paused?'<p class="processMeta">Продолжение может повторить последний незавершённый запрос к AI. Уже сохранённые этапы повторяться не будут.</p><button id="resumeLaunch" class="processCancel" type="button">Продолжить с сохранённого этапа</button>':'')+'<button id="checkLaunch" class="processCancel" type="button">Проверить статус</button><button id="launchMenu" class="processCancel" type="button">В главное меню</button></div></section>';
+ document.getElementById('launchMenu').onclick=launchMenu;
+ document.getElementById('checkLaunch').onclick=()=>{void storyLaunch.check(undefined,{requireJob:true});};
+ const resume=document.getElementById('resumeLaunch');if(resume)resume.onclick=async()=>{if(!await askConfirm('Продолжить создание? Последний незавершённый этап может потребовать повторного AI-запроса.'))return;resume.disabled=true;void storyLaunch.start(job.draft_id,{resume:true});};
+}
+const storyLaunch=new Novel2StoryLaunchClient({api,role:()=>String(state?.role||'A'),storage:{getItem:key=>localStorage.getItem(key),setItem:(key,value)=>localStorage.setItem(key,value),removeItem:key=>localStorage.removeItem(key)},
+ onJob:job=>showLaunchJob(job),
+ onReady:result=>{
+   state=result.state;storyDraft=null;libraryBooks=[];libraryDrafts=[];busy=false;
+   if(launchDetached){menuMode=true;renderMainMenu();void loadLibrary();return;}
+   menuMode=false;render();
+ },
+ onError:error=>showLaunchJob(storyLaunch.job,'Не удалось проверить соединение. Генерация не запущена повторно. Нажмите «Проверить статус».')
+});
 async function launchStoryDraft(){
  if(busy||!storyDraft)return;
- // Server generates the story-scoped cast privately, never via browser assignments.
  if(state?.mode==='reader'&&!await askConfirm('Начать новый роман? Текущий роман будет сохранён в архиве.'))return;
- busy=true;loading('История оживает…','story',900);
- try{
-   const j=await api('story/draft/launch',{draft_id:storyDraft.id},900000);
-   state=j.state;storyDraft=null;menuMode=false;libraryBooks=[];libraryDrafts=[];render();
- }catch(e){if(isCancelled(e))return;alert(e.message);renderStoryDraft()}finally{busy=false}
+ launchDetached=false;busy=true;
+ const id=storyDraft.id;
+ showLaunchJob({stage:'queued',status:'working',draft_id:String(id)});
+ busy=true;
+ try{await storyLaunch.start(id);}finally{busy=false;}
 }
 function render(){
  stopLoading();
@@ -985,3 +1021,4 @@ refresh();
 <script src="/novel2/noir-host.js?v=secret-host-r4"></script>
 </body>
 </html>
+

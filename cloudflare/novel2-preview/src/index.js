@@ -665,7 +665,7 @@ export default{
     if(request.method==='GET'&&env.ASSETS&&typeof env.ASSETS.fetch==='function'){
       const uiPath=incoming.pathname==='/novel2'||incoming.pathname==='/novel2/'
         ?'/index.html'
-        :['/noir-experience.js','/noir-experience.css','/noir-host.js','/noir-host.css']
+        :['/noir-experience.js','/noir-experience.css','/noir-host.js','/noir-host.css','/story-launch-client.js']
             .find(p=>incoming.pathname==='/novel2'+p);
       if(uiPath){
         const assetUrl=new URL(uiPath,incoming);
@@ -700,16 +700,24 @@ export default{
       '/novel2/api/identity/calibrate/start',
       '/novel2/api/identity/calibrate/status',
       '/novel2/api/lobby/world/status',
-      '/novel2/api/books'
+      '/novel2/api/books',
+      '/novel2/api/story/draft/launch',
+      '/novel2/api/story/draft/launch/status'
     ].includes(incoming.pathname);
     const smallBody=isSmallApi?await request.clone().text():null;
     if(isSmallApi&&new TextEncoder().encode(smallBody).byteLength>16384){
       return json(413,{ok:false,error:'NOVEL2_EDGE_SMALL_API_BODY_TOO_LARGE'});
     }
 
-    // Clone the request before retries so POST bodies remain replayable.
+    // Retry reads only. A transport failure cannot prove that a mutation did
+    // not complete; replaying generation can charge twice and create duplicates.
+    const readOnly=request.method==='GET'||request.method==='HEAD'||(request.method==='POST'&&[
+      '/novel2/api/state','/novel2/api/books','/novel2/api/story/drafts',
+      '/novel2/api/story/draft/launch/status','/novel2/api/identity/calibrate/status','/novel2/api/lobby/world/status'
+    ].includes(incoming.pathname));
+    const maxAttempts=readOnly?5:1;
     const sources=[];
-    for(let i=0;i<5;i++) sources.push(request.clone());
+    for(let i=0;i<maxAttempts;i++) sources.push(request.clone());
 
     const retryDelays=[250,600,1200,2200];
     let lastError=null;
@@ -750,3 +758,4 @@ export default{
     },{'retry-after':'2'});
   }
 };
+
