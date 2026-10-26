@@ -835,7 +835,7 @@ function attachLaunchBanner(){
 }
 function showLaunchJob(job,error=''){
  if(launchDetached){attachLaunchBanner();return;}
- stopLoading();busy=false;
+ stopLoading();busy=false;menuMode=false;characterDetailRole='';
  const paused=job?.status==='failed'||job?.stalled;
  const text=error|| (paused?'Запуск остановился. Завершённые этапы сохранены.':'Задача выполняется на сервере. Можно закрыть окно и вернуться позже.');
  app.innerHTML='<section class="loading"><div class="processCard"><div class="kicker">СОЗДАНИЕ ИСТОРИИ</div><h2 class="processTitle">'+esc(job?launchStageLabel(job):'Проверяем запуск')+'</h2><p class="processMeta" role="status">'+esc(text)+'</p>'+(paused?'<p class="processMeta">Продолжение может повторить последний незавершённый запрос к AI. Уже сохранённые этапы повторяться не будут.</p><button id="resumeLaunch" class="processCancel" type="button">Продолжить с сохранённого этапа</button>':'')+'<button id="checkLaunch" class="processCancel" type="button">Проверить статус</button><button id="launchMenu" class="processCancel" type="button">В главное меню</button></div></section>';

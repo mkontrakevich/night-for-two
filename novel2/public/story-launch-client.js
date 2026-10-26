@@ -29,7 +29,7 @@ globalThis.Novel2StoryLaunchClient=class {
     if(!this.job)return;
     this.remember(this.job.draft_id);
     if(this.job.status==='ready'&&result.state){
-      this.onReady(result);this.forget();return;
+      this.forget();this.onReady(result);return;
     }
     this.onJob(this.job);
     if(this.job.status==='working'&&!this.job.stalled)
