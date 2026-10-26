@@ -20,7 +20,10 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://novel2:${NOVEL2_DB_PASSWORD:-novel2-local}@postgres:5432/novel2
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      # Auth-only API: never advertise a polling-bot token to sibling deployers.
+      NOVEL2_TELEGRAM_AUTH_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_TOKEN: ""
+      BOT_TOKEN: ""
       PRIMARY_OWNER_ID: ${PRIMARY_OWNER_ID:-}
       PARTNER_TELEGRAM_ID: ${PARTNER_TELEGRAM_ID:-}
       NOVEL2_EDGE_AI_URL: ${NOVEL2_EDGE_AI_URL:-https://novel2-preview.kontrakevich.workers.dev/novel2-ai}
@@ -47,3 +50,4 @@ networks:
   night_context:
     external: true
     name: night_for_two_context
+
