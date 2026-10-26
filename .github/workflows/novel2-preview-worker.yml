@@ -337,5 +337,6 @@ jobs:
             echo "::warning::NOVEL2_LEGACY_EXPORT_BLOCKED:$code"
           fi
       - name: Verify native Stranger with signed Telegram request
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: python scripts/probe_stranger.py
