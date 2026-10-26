@@ -1,7 +1,7 @@
 export const config = Object.freeze({
   port: Number(process.env.NOVEL2_PORT || 5690),
   databaseUrl: String(process.env.DATABASE_URL || ''),
-  botToken: String(process.env.TELEGRAM_BOT_TOKEN || ''),
+  botToken: String(process.env.NOVEL2_TELEGRAM_AUTH_TOKEN || process.env.TELEGRAM_BOT_TOKEN || ''),
   ownerId: String(process.env.PRIMARY_OWNER_ID || ''),
   partnerId: String(process.env.PARTNER_TELEGRAM_ID || ''),
   edgeAiUrl: String(process.env.NOVEL2_EDGE_AI_URL || '').replace(/\/+$/,''),
@@ -22,3 +22,4 @@ export function assertProductionConfig() {
   })) if (!value) missing.push(key);
   if (missing.length && !config.localTest) throw new Error('NOVEL2_CONFIG_MISSING:' + missing.join(','));
 }
+
