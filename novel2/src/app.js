@@ -1,3 +1,4 @@
+import {createStoryLaunchQueue,publicLaunchJob,publishStoryLaunch} from './story-launch.js';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import sharp from 'sharp';
@@ -145,25 +146,26 @@ async function createStoryAiCastEntry({
   counterpartCard={},
   relationshipContext={},
   genderHint='',
-  generateReference=false
+  generateReference=false,
+  memo=(_key,work)=>work()
 }={}){
   const slotKey=String(slot?.slot_key||runtimeRole||'story-character').slice(0,60);
   const roleKey=String(runtimeRole||slotKey);
-  const synthetic=await buildSyntheticCharacter({
+  const synthetic=await memo(`synthetic:${roleKey}`,()=>buildSyntheticCharacter({
     role:roleKey,
     counterpartCard,
     relationshipContext,
     genderHint,
     storyContext:storyContextForCast(draft,blueprint),
     roleBrief:slot
-  });
+  }));
   const identityLock=buildLock('story:'+String(draft?.id||'draft')+':'+roleKey,synthetic.visualProfile);
   let references=[];
   if(generateReference){
-    const generated=await generateSyntheticReference({
+    const generated=await memo(`reference:${roleKey}`,()=>generateSyntheticReference({
       identity:{identity_lock:identityLock,character_card:synthetic.characterCard,reference_images:[]},
       role:synthetic.characterCard?.passport?.fiction_name||roleKey
-    });
+    }));
     references=['data:image/jpeg;base64,'+generated.base64];
   }
   return{
@@ -352,11 +354,141 @@ async function driveAiTurns(book,ids,bookCast=[],maxTurns=4){
   return current;
 }
 
+const launchQueue=createStoryLaunchQueue({db,pairKey,
+  validate:async(role,draftId)=>{
+    const draft=await getStoryDraft(draftId);
+    if(!draft)throw new Error('NOVEL2_STORY_DRAFT_NOT_FOUND');
+    const ids=await identities();
+    if(!hasPersistentHumanIdentity(ids[role]))throw new Error('NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED');
+  },
+  execute:async({role,draftId,checkpoint,save,client})=>{
+    const step=async(key,work)=>{
+      if(Object.hasOwn(checkpoint,key))return checkpoint[key];
+      await save(key);
+      const result=await work();
+      await save(key,{[key]:result});checkpoint[key]=result;
+      return result;
+    };
+    const context=await step('context',async()=>({draft:await getStoryDraft(draftId),ids:await identities(),relationship:await fetchRelationshipContext()}));
+    const {draft}=context,auth={role};
+    const blueprint=draft.blueprint||{};
+    const slots=Array.isArray(blueprint.cast_slots)?blueprint.cast_slots:[];
+    const interactive=slots.filter(x=>x?.interactive).slice(0,2);
+    const support=slots.filter(x=>!x?.interactive).slice(0,6);
+    if(interactive.length!==2)throw new Error('NOVEL2_STORY_INTERACTIVE_SLOTS_INVALID');
+
+    const {ids,relationship}=context;
+    const assignments={};
+    const castEntries=[];
+    const playerCards={};
+    const runtimeRoles=['A','B'];
+
+    for(let i=0;i<2;i++){
+      const slot=interactive[i];
+      const runtimeRole=runtimeRoles[i];
+      const identity=ids[runtimeRole];
+      const humanReady=hasPersistentHumanIdentity(identity);
+      let entry;
+
+      if(runtimeRole===auth.role||humanReady){
+        if(runtimeRole===auth.role&&!humanReady)throw new Error('NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED');
+        if(!humanReady){
+          entry=await createStoryAiCastEntry({
+            runtimeRole,
+            slot,
+            draft,
+            blueprint,
+            counterpartCard:playerCards[auth.role]||{},
+            relationshipContext:sliceRelationshipContext(relationship,runtimeRole),
+            genderHint:explicitGenderForRole(relationship,runtimeRole),
+            generateReference:true, memo:step
+          });
+        }else{
+          const identityOnly=Boolean(identity?.profile&&identity?.identity_lock&&!identity?.builder_meta?.synthetic);
+          const storyCard=identityOnly
+            ?await step(`player:${runtimeRole}`,()=>buildCharacterCard({
+                role:runtimeRole,
+                visualProfile:identity.profile||{},
+                userFacts:{},
+                referenceCount:Array.isArray(identity.reference_images)?identity.reference_images.length:1,
+                relationshipContext:sliceRelationshipContext(relationship,runtimeRole),
+                storyContext:storyContextForCast(draft,blueprint),
+                roleBrief:slot
+              }))
+            :normalizeCharacterCard(identity.character_card,runtimeRole);
+          entry={
+            slot_key:runtimeRole,
+            narrative_function:String(slot.narrative_function||slot.description||'').slice(0,500),
+            source_type:'player',
+            source_id:runtimeRole,
+            interactive_role:runtimeRole,
+            display_name:storyCard?.passport?.fiction_name||('Игрок '+runtimeRole),
+            character_card:storyCard,
+            visual_profile:identity.profile||{},
+            identity_lock:identity.identity_lock||'',
+            reference_images:identity.reference_images||[],
+            control_mode:'human'
+          };
+        }
+      }else{
+        entry=await createStoryAiCastEntry({
+          runtimeRole,
+          slot,
+          draft,
+          blueprint,
+          counterpartCard:ids[auth.role]?.character_card||playerCards[auth.role]||{},
+          relationshipContext:sliceRelationshipContext(relationship,runtimeRole),
+          genderHint:explicitGenderForRole(relationship,runtimeRole),
+          generateReference:true, memo:step
+        });
+      }
+
+      castEntries.push(entry);
+      playerCards[runtimeRole]=entry.character_card;
+      assignments[slot.slot_key]=entry.source_type==='player'?'player:'+runtimeRole:'story_ai:'+runtimeRole;
+    }
+
+    for(let i=0;i<support.length;i++){
+      const slot=support[i];
+      const entry=await createStoryAiCastEntry({
+        slot,
+        draft,
+        blueprint,
+        counterpartCard:playerCards.A||playerCards.B||{},
+        relationshipContext:{},
+        genderHint:'',
+        generateReference:false, memo:step
+      });
+      castEntries.push(entry);
+      assignments[slot.slot_key]='story_ai:'+entry.slot_key;
+    }
+
+    const supportingCast=castEntries.filter(x=>!x.interactive_role).map(x=>({
+      slot_key:x.slot_key,
+      narrative_function:x.narrative_function,
+      character_card:x.character_card
+    }));
+    const bible=await step('first_chapter',()=>createStoryBible({
+      characters:{A:playerCards.A,B:playerCards.B},
+      supportingCast,
+      blueprint,
+      relationshipContext:relationship
+    }));
+
+
+    bible.title=bible.title||draft.title;
+    await save('publishing');
+    await publishStoryLaunch(client,{pair:pairKey(),draftId,bible,castEntries,assignments});
+  }
+});
+
 async function main(){
   assertProductionConfig();
   await initDb();
   await initLobbyWorldStore();
+  await launchQueue.init();
   const html=await fs.readFile(htmlPath,'utf8');
+  const launchClientJs=await fs.readFile(path.resolve(__dirname,'../public/story-launch-client.js'),'utf8');
   const noirJs=await fs.readFile(path.resolve(__dirname,'../public/noir-experience.js'),'utf8');
   const noirCss=await fs.readFile(path.resolve(__dirname,'../public/noir-experience.css'),'utf8');
   const noirGatewayJs=await fs.readFile(path.resolve(__dirname,'../public/noir-gateway.js'),'utf8');
@@ -373,6 +505,7 @@ async function main(){
       if(req.method==='GET'&&url.pathname==='/novel2/noir-experience.css')return send(res,200,noirCss,'text/css; charset=utf-8');
       if(req.method==='GET'&&url.pathname==='/novel2/noir-gateway.js')return send(res,200,noirGatewayJs,'text/javascript; charset=utf-8');
       if(req.method==='GET'&&url.pathname==='/novel2/noir-gateway.css')return send(res,200,noirGatewayCss,'text/css; charset=utf-8');
+      if(req.method==='GET'&&url.pathname==='/novel2/story-launch-client.js')return send(res,200,launchClientJs,'text/javascript; charset=utf-8');
       if(req.method==='GET'&&url.pathname==='/novel2/noir-host.js')return send(res,200,hostJs,'text/javascript; charset=utf-8');
       if(req.method==='GET'&&url.pathname==='/novel2/noir-host.css')return send(res,200,hostCss,'text/css; charset=utf-8');
 
@@ -514,6 +647,22 @@ async function main(){
       }
       const auth=authenticate(req);if(!auth)return send(res,403,{ok:false,error:'NOVEL2_ACCESS_DENIED'});
       const input=await bodyJson(req);
+      if(url.pathname==='/novel2/api/story/draft/launch'){
+        if(req.method!=='POST'||input.background!==true)return send(res,409,{ok:false,error:'NOVEL2_LAUNCH_RELOAD_REQUIRED'});
+        try{return send(res,202,{ok:true,job:await launchQueue.start(auth.role,input.draft_id,{resume:input.resume===true})});}
+        catch(error){return send(res,409,{ok:false,error:/^NOVEL2_/.test(error.message)?error.message:'NOVEL2_LAUNCH_START_FAILED'});}
+      }
+      if(url.pathname==='/novel2/api/story/draft/launch/status'){
+        if(req.method!=='POST')return send(res,405,{ok:false,error:'METHOD_NOT_ALLOWED'});
+        if(input.draft_id&&!/^\d+$/.test(String(input.draft_id)))return send(res,400,{ok:false,error:'NOVEL2_LAUNCH_INPUT_INVALID'});
+        const job=input.draft_id?await launchQueue.get(auth.role,input.draft_id):await launchQueue.latest(auth.role);
+        let resultState=null;
+        if(job?.status==='ready'&&job.book_id){
+          const {rows}=await db.query('SELECT * FROM novel2_books WHERE id=$1 AND pair_key=$2',[job.book_id,pairKey()]);
+          if(rows[0])resultState=await publicState(rows[0],auth,await identities(),await getBookCast(job.book_id));
+        }
+        return send(res,200,{ok:true,job:publicLaunchJob(job),state:resultState});
+      }
       let book=await latestBook();
       let ids=await identities();
       let bookCast=book?await getBookCast(book.id):[];
@@ -618,127 +767,6 @@ async function main(){
         book=await driveAiTurns(book,ids,bookCast);
         bookCast=await getBookCast(book.id);
         return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast),advanced:true});
-      }
-
-      if(url.pathname==='/novel2/api/story/draft/launch'){
-        const draft=await getStoryDraft(input.draft_id);
-        if(!draft)return send(res,404,{ok:false,error:'NOVEL2_STORY_DRAFT_NOT_FOUND'});
-        const blueprint=draft.blueprint||{};
-        const slots=Array.isArray(blueprint.cast_slots)?blueprint.cast_slots:[];
-        const interactive=slots.filter(x=>x?.interactive).slice(0,2);
-        const support=slots.filter(x=>!x?.interactive).slice(0,6);
-        if(interactive.length!==2)return send(res,400,{ok:false,error:'NOVEL2_STORY_INTERACTIVE_SLOTS_INVALID'});
-
-        ids=await identities();
-        const relationship=await fetchRelationshipContext();
-        const assignments=input.assignments&&typeof input.assignments==='object'?input.assignments:{};
-        const castEntries=[];
-        const playerCards={};
-        const runtimeRoles=['A','B'];
-
-        for(let i=0;i<2;i++){
-          const slot=interactive[i];
-          const runtimeRole=runtimeRoles[i];
-          const identity=ids[runtimeRole];
-          const humanReady=hasPersistentHumanIdentity(identity);
-          let entry;
-
-          if(runtimeRole===auth.role||humanReady){
-            if(runtimeRole===auth.role&&!humanReady)return send(res,409,{ok:false,error:'NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED'});
-            if(!humanReady){
-              entry=await createStoryAiCastEntry({
-                runtimeRole,
-                slot,
-                draft,
-                blueprint,
-                counterpartCard:playerCards[auth.role]||{},
-                relationshipContext:sliceRelationshipContext(relationship,runtimeRole),
-                genderHint:explicitGenderForRole(relationship,runtimeRole),
-                generateReference:true
-              });
-            }else{
-              const identityOnly=Boolean(identity?.profile&&identity?.identity_lock&&!identity?.builder_meta?.synthetic);
-              const storyCard=identityOnly
-                ?await buildCharacterCard({
-                    role:runtimeRole,
-                    visualProfile:identity.profile||{},
-                    userFacts:{},
-                    referenceCount:Array.isArray(identity.reference_images)?identity.reference_images.length:1,
-                    relationshipContext:sliceRelationshipContext(relationship,runtimeRole),
-                    storyContext:storyContextForCast(draft,blueprint),
-                    roleBrief:slot
-                  })
-                :normalizeCharacterCard(identity.character_card,runtimeRole);
-              entry={
-                slot_key:runtimeRole,
-                narrative_function:String(slot.narrative_function||slot.description||'').slice(0,500),
-                source_type:'player',
-                source_id:runtimeRole,
-                interactive_role:runtimeRole,
-                display_name:storyCard?.passport?.fiction_name||('Игрок '+runtimeRole),
-                character_card:storyCard,
-                visual_profile:identity.profile||{},
-                identity_lock:identity.identity_lock||'',
-                reference_images:identity.reference_images||[],
-                control_mode:'human'
-              };
-            }
-          }else{
-            entry=await createStoryAiCastEntry({
-              runtimeRole,
-              slot,
-              draft,
-              blueprint,
-              counterpartCard:ids[auth.role]?.character_card||playerCards[auth.role]||{},
-              relationshipContext:sliceRelationshipContext(relationship,runtimeRole),
-              genderHint:explicitGenderForRole(relationship,runtimeRole),
-              generateReference:true
-            });
-          }
-
-          castEntries.push(entry);
-          playerCards[runtimeRole]=entry.character_card;
-          assignments[slot.slot_key]=entry.source_type==='player'?'player:'+runtimeRole:'story_ai:'+runtimeRole;
-        }
-
-        for(let i=0;i<support.length;i++){
-          const slot=support[i];
-          const entry=await createStoryAiCastEntry({
-            slot,
-            draft,
-            blueprint,
-            counterpartCard:playerCards.A||playerCards.B||{},
-            relationshipContext:{},
-            genderHint:'',
-            generateReference:false
-          });
-          castEntries.push(entry);
-          assignments[slot.slot_key]='story_ai:'+entry.slot_key;
-        }
-
-        const supportingCast=castEntries.filter(x=>!x.interactive_role).map(x=>({
-          slot_key:x.slot_key,
-          narrative_function:x.narrative_function,
-          character_card:x.character_card
-        }));
-        const bible=await createStoryBible({
-          characters:{A:playerCards.A,B:playerCards.B},
-          supportingCast,
-          blueprint,
-          relationshipContext:relationship
-        });
-
-        if(book)await archiveBook(book.id,'new_book');
-        book=await createBook({
-          title:bible.title||draft.title,
-          storyBible:bible,
-          scene:bible.first_scene,
-          activeRole:bible.first_scene.target_role
-        });
-        await saveBookCast(book.id,castEntries);
-        await markStoryDraftUsed(draft.id,assignments);
-        bookCast=await getBookCast(book.id);
-        return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast)});
       }
 
       if(url.pathname==='/novel2/api/book/new'){
@@ -1057,3 +1085,4 @@ main().catch(async error=>{
   try{await db.end();}catch{}
   process.exit(1);
 });
+
