@@ -1,9 +1,9 @@
 // Only status reads are retried. Starting/resuming generation always requires
 // an explicit action; a lost start response is reconciled with persisted state.
 globalThis.Novel2StoryLaunchClient=class {
-  constructor({api,role,storage,onJob,onReady,onError,interval=3000,schedule=setTimeout,cancel=clearTimeout}){
+  constructor({api,role,storage,onJob,onReady,onError,interval=3000,schedule=(fn,ms)=>setTimeout(fn,ms),cancel=timer=>clearTimeout(timer)}){
     Object.assign(this,{api,role,storage,onJob,onReady,onError,interval,schedule,cancel});
-    this.timer=null;this.reading=false;this.job=null;
+    this.timer=null;this.reading=false;this.job=null;this.readFailures=0;
   }
   key(){return 'novel2_story_launch:'+this.role();}
   remembered(){try{return this.storage.getItem(this.key())||'';}catch{return '';}}
@@ -11,7 +11,7 @@ globalThis.Novel2StoryLaunchClient=class {
   forget(){try{this.storage.removeItem(this.key());}catch{}}
   stop(){if(this.timer!==null)this.cancel(this.timer);this.timer=null;}
   async start(id,{resume=false}={}){
-    this.stop();this.remember(id);this.job=null;
+    this.stop();this.remember(id);this.job=null;this.readFailures=0;
     try{
       // Capability check also prevents new UI from calling the old synchronous
       // launch handler while the origin deployment is still rolling out.
@@ -25,7 +25,7 @@ globalThis.Novel2StoryLaunchClient=class {
     }
   }
   accept(result){
-    this.stop();this.job=result.job||null;
+    this.stop();this.readFailures=0;this.job=result.job||null;
     if(!this.job)return;
     this.remember(this.job.draft_id);
     if(this.job.status==='ready'&&result.state){
@@ -33,7 +33,7 @@ globalThis.Novel2StoryLaunchClient=class {
     }
     this.onJob(this.job);
     if(this.job.status==='working'&&!this.job.stalled)
-      this.timer=this.schedule(()=>{void this.check(this.job.draft_id);},this.interval);
+      this.timer=this.schedule(()=>this.check(this.job.draft_id),this.interval);
   }
   async check(id=this.remembered(),{requireJob=false}={}){
     if(this.reading)return;
@@ -48,7 +48,15 @@ globalThis.Novel2StoryLaunchClient=class {
       this.accept(result);return result;
     }catch(error){
       this.stop();
-      this.onError(error);return null;
+      // Read-only recovery cannot start or resume a paid generation. Bound the
+      // retries and stop on authentication, permission and invalid-input errors.
+      this.readFailures++;
+      const retrying=this.readFailures<=5&&error?.message!=='REQUEST_CANCELLED'&&![400,401,403,404,409,422].includes(Number(error?.status));
+      const retryIn=retrying?Math.min(30000,this.interval*2**(this.readFailures-1)):0;
+      if(error?.message!=='REQUEST_CANCELLED')this.onError(error,{retrying,retryIn});
+      if(retrying)this.timer=this.schedule(()=>this.check(id,{requireJob}),retryIn);
+      return null;
     }finally{this.reading=false;}
   }
 };
+
