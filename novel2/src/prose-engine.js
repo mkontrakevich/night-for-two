@@ -241,6 +241,13 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
     system:PROSE_SYSTEM,
     temperature:.86,
     maxTokens:7600,
+    responseSchema:{type:'object',required:['first_scene'],properties:{
+      title:{type:'string'},canon:{type:'object'},
+      first_scene:{type:'object',required:['prose','target_role','primary_interaction'],properties:{
+        prose:{type:'string',minLength:500,maxLength:18000},target_role:{type:'string',enum:['A','B']},
+        primary_interaction:{type:'object',required:['prompt'],properties:{prompt:{type:'string'}}}
+      }}
+    }},
     user:{
       task:'Теперь засели уже готовую историю конкретными персонажами. Архитектура истории первична: не переписывай основной конфликт под характеры, а найди для каждого назначенного героя естественный способ выполнить его сюжетную функцию.',
       story_blueprint:storyBlueprint,
@@ -297,8 +304,11 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
       ]
     }
   });
-  let first=cleanScene(data.first_scene||{});
-  if(!data.title||first.prose.length<500) throw new Error('NOVEL2_BIBLE_INVALID');
+  if(!data?.first_scene||typeof data.first_scene!=='object'||Array.isArray(data.first_scene))throw new Error('NOVEL2_BIBLE_SCENE_MISSING');
+  if(typeof data.first_scene.prose!=='string'||!data.first_scene.prose.trim())throw new Error('NOVEL2_BIBLE_PROSE_MISSING');
+  data.title=String(data.title||storyBlueprint.title||'').trim().slice(0,140);
+  if(!data.title)throw new Error('NOVEL2_BIBLE_TITLE_MISSING');
+  let first=cleanScene(data.first_scene);
   const bible={...data,...storyBlueprint,title:data.title,noir_dialogue_contract:{version:2,episodes:6,beats_per_episode:5,partner_reveal:'progressive',consent_first:true,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
   first=await ensureLongScene(first,{storyBible:bible,reason:'first_scene'});
   if(first.prose.length<2500) throw new Error('NOVEL2_BIBLE_TOO_SHORT');
@@ -430,4 +440,5 @@ export async function generateAiCharacterReply({book,recentTurns,role,characterC
   if(!reply) throw new Error('NOVEL2_AI_REPLY_EMPTY');
   return {reply,actionKey:String(data?.action_key||'').trim().slice(0,80)};
 }
+
 

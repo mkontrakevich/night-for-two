@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0909">
-<meta name="novel2-ui-release" content="noir-status-recovery-20261027-r1">
+<meta name="novel2-ui-release" content="noir-structured-result-20261028-r1">
 <title>Interactive Novel 2.0</title>
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <link rel="stylesheet" href="/novel2/noir-experience.css?v=1">
@@ -837,7 +837,10 @@ function showLaunchJob(job,error=''){
  if(launchDetached){attachLaunchBanner();return;}
  stopLoading();busy=false;menuMode=false;characterDetailRole='';
  const paused=job?.status==='failed'||job?.stalled;
- const text=error|| (paused?'Запуск остановился. Завершённые этапы сохранены.':'Задача выполняется на сервере. Можно закрыть окно и вернуться позже.');
+ const failure=String(job?.error_code||'');
+ const formatFailure=/BIBLE_(?:INVALID|SCENE_MISSING|PROSE_MISSING|TITLE_MISSING|TOO_SHORT)|AI_JSON_INVALID/.test(failure);
+ const pausedText=formatFailure?'AI не вернул полноценную первую главу. Персонажи сохранены; готового романа пока нет.':'Запуск остановился. Завершённые этапы сохранены.';
+ const text=error|| (paused?pausedText:'Задача выполняется на сервере. Можно закрыть окно и вернуться позже.');
  app.innerHTML='<section class="loading"><div class="processCard"><div class="kicker">СОЗДАНИЕ ИСТОРИИ</div><h2 class="processTitle">'+esc(job?launchStageLabel(job):'Проверяем запуск')+'</h2><p class="processMeta" role="status">'+esc(text)+'</p>'+(paused?'<p class="processMeta">Продолжение может повторить последний незавершённый запрос к AI. Уже сохранённые этапы повторяться не будут.</p><button id="resumeLaunch" class="processCancel" type="button">Продолжить с сохранённого этапа</button>':'')+'<button id="checkLaunch" class="processCancel" type="button">Проверить статус</button><button id="launchMenu" class="processCancel" type="button">В главное меню</button></div></section>';
  document.getElementById('launchMenu').onclick=launchMenu;
  document.getElementById('checkLaunch').onclick=()=>{void storyLaunch.check(undefined,{requireJob:true});};
@@ -1021,5 +1024,6 @@ refresh();
 <script src="/novel2/noir-host.js?v=secret-host-r4"></script>
 </body>
 </html>
+
 
 
