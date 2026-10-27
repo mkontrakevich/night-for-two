@@ -299,7 +299,7 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
   });
   let first=cleanScene(data.first_scene||{});
   if(!data.title||first.prose.length<500) throw new Error('NOVEL2_BIBLE_INVALID');
-  const bible={...storyBlueprint,...data,noir_dialogue_contract:{version:2,episodes:6,beats_per_episode:5,partner_reveal:'progressive',consent_first:true,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
+  const bible={...data,...storyBlueprint,title:data.title,noir_dialogue_contract:{version:2,episodes:6,beats_per_episode:5,partner_reveal:'progressive',consent_first:true,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
   first=await ensureLongScene(first,{storyBible:bible,reason:'first_scene'});
   if(first.prose.length<2500) throw new Error('NOVEL2_BIBLE_TOO_SHORT');
   return {...bible,first_scene:attachNoirScene(first,noirBeatPlan(1))};

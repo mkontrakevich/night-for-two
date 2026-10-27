@@ -4,7 +4,7 @@ import {launchFailureCode} from '../src/story-launch.js';
 let calls=0,request;
 const source=fs.readFileSync(new URL('../src/prose-engine.js',import.meta.url),'utf8').replace(/\r\n?/g,'\n').replace(/^import .*;\n/gm,'').replace(/^export /gm,'');
 const create=new Function('jsonCompletion','noirBeatPlan','attachNoirScene',source+'\nreturn createStoryBible;')(
- async args=>{calls++;request=args;return {title:'Fixture',canon:{step:1},first_scene:{prose:'A neutral fixture passage. '.repeat(250),target_role:'A',primary_interaction:{prompt:'Continue?'}}};},()=>({}),scene=>scene);
+ async args=>{calls++;request=args;return {title:'Fixture',canon:{step:1},logline:'Unexpected replacement',world_bible:{place:'Unexpected replacement'},master_plot:[],threads:[],first_scene:{prose:'A neutral fixture passage. '.repeat(250),target_role:'A',primary_interaction:{prompt:'Continue?'}}};},()=>({}),scene=>scene);
 const A={passport:{fiction_name:'Fixture A'}},B={passport:{fiction_name:'Fixture B'}};
 const blueprint={title:'Fixture',logline:'Source logline',world_bible:{place:'Source setting'},master_plot:[{key:'Source plot'}],threads:['Source thread']};
 const result=await create({characters:{A,B},blueprint});
