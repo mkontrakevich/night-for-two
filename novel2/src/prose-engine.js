@@ -1,6 +1,14 @@
 import {jsonCompletion} from './ai.js';
 import {noirBeatPlan,attachNoirScene,cleanNoirAnalysis,noirPartnerPlan,noirTrialPlan} from './noir-director.js';
 
+export const FIRST_CHAPTER_RESPONSE_SCHEMA={type:'object',required:['first_scene'],properties:{
+  title:{type:'string'},canon:{type:'object'},
+  first_scene:{type:'object',required:['prose','target_role','primary_interaction'],properties:{
+    prose:{type:'string',minLength:500,maxLength:18000},target_role:{type:'string',enum:['A','B']},
+    primary_interaction:{type:'object',required:['prompt'],properties:{prompt:{type:'string'}}}
+  }}
+}};
+
 const PROSE_SYSTEM = `
 Ты — литературный движок оригинального интерактивного романа для двух совершеннолетних игроков.
 
@@ -241,13 +249,7 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
     system:PROSE_SYSTEM,
     temperature:.86,
     maxTokens:7600,
-    responseSchema:{type:'object',required:['first_scene'],properties:{
-      title:{type:'string'},canon:{type:'object'},
-      first_scene:{type:'object',required:['prose','target_role','primary_interaction'],properties:{
-        prose:{type:'string',minLength:500,maxLength:18000},target_role:{type:'string',enum:['A','B']},
-        primary_interaction:{type:'object',required:['prompt'],properties:{prompt:{type:'string'}}}
-      }}
-    }},
+    responseSchema:FIRST_CHAPTER_RESPONSE_SCHEMA,
     user:{
       task:'Теперь засели уже готовую историю конкретными персонажами. Архитектура истории первична: не переписывай основной конфликт под характеры, а найди для каждого назначенного героя естественный способ выполнить его сюжетную функцию.',
       story_blueprint:storyBlueprint,
