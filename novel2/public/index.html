@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0909">
-<meta name="novel2-ui-release" content="noir-structured-result-20261028-r1">
+<meta name="novel2-ui-release" content="noir-pipeline-20261028-r1">
 <title>Interactive Novel 2.0</title>
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <link rel="stylesheet" href="/novel2/noir-experience.css?v=1">
@@ -171,6 +171,9 @@ async function api(path,body={},timeoutMs=600000){
        throw new Error('Не удалось собрать корректную структуру истории. Повторите создание — исходные данные не потеряны.');
      }
      if(technical==='NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED')throw new Error('Сначала создайте и сохраните своего персонажа из фотографий.');
+     if(technical==='NOVEL2_PIPELINE_STALE_TURN')throw new Error('Сцена уже изменилась. Обновите историю, чтобы увидеть сохранённое продолжение.');
+     if(technical==='NOVEL2_PIPELINE_TURN_CONFLICT')throw new Error('Ответ для этого хода уже сохранён. Обновите историю и продолжите его обработку.');
+     if(technical==='NOVEL2_PIPELINE_BUSY')throw new Error('Этот ход уже обрабатывается. Вернитесь к истории через несколько секунд — повторная генерация не запущена.');
      throw Object.assign(new Error(technical||'REQUEST_FAILED'),{status:r.status,code:technical});
    }
    return j;
@@ -905,8 +908,12 @@ function render(){
      ?'<div class="aiTurnStatus"><span class="aiTurnDot"></span><span id="aiStatus">'+esc(waitingText)+'</span>'+(aiAdvanceError?'<button class="aiRetry" id="retryAiTurn" type="button">Повторить</button>':'')+'</div>'
      :esc(waitingText);
  app.innerHTML='<section class="reader"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><button class="exitStory" id="mainMenu">Меню</button></div><img id="sceneImage" class="sceneImage" alt=""><article class="prose">'+esc(s.prose||'')+'</article><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(actions?'<div class="choiceRow">'+actions+'</div>':'')+'<div class="status">'+statusHtml+'</div></section><div class="replyDock"><textarea id="reply" placeholder="'+(state.can_reply?'Ответить от лица героя…':aiTurn?'AI-персонаж формирует ответ…':'Ожидаем второго героя…')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить</button></div></div>';
- document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>{selectedAction=x.dataset.action;document.getElementById('selected').textContent='Выбрано: '+x.textContent});
+ document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>{if(state.pending_reply)return;selectedAction=x.dataset.action;document.getElementById('selected').textContent='Выбрано: '+x.textContent});
  document.getElementById('send').onclick=sendReply;
+ if(state.pending_reply){
+   const savedReply=document.getElementById('reply');savedReply.value=state.pending_reply.reply;savedReply.readOnly=true;
+   selectedAction=state.pending_reply.action_key||'';document.getElementById('send').textContent='Продолжить обработку ответа';
+ }
  document.getElementById('mainMenu').onclick=openMainMenu;
  const retryAi=document.getElementById('retryAiTurn');if(retryAi)retryAi.onclick=()=>{aiAdvanceError='';aiAdvanceKey='';render()};
  void loadVisual();
@@ -924,7 +931,7 @@ async function advanceAiTurn(){
  };
  update();const timer=setInterval(update,1000);
  try{
-   const j=await api('ai/advance',{},180000);
+   const j=await api('ai/advance',{book_id:state.book.id,turn_no:Number(state.book.turn_no)},180000);
    if(menuMode)return;
    state=j.state||state;
    aiAdvanceError='';aiAdvanceKey='';
@@ -1015,12 +1022,12 @@ async function exitStory(ask=true){
 async function sendReply(){
  if(busy||!state?.can_reply)return;const box=document.getElementById('reply'),reply=box.value.trim();if(!reply&&!selectedAction)return;
  busy=true;loading('Продолжаем роман из вашей реплики…','story',600);
- try{state=(await api('reply',{reply,action_key:selectedAction},600000)).state;selectedAction='';render()}catch(e){if(isCancelled(e))return;alert(e.message);refresh()}finally{busy=false}
+ try{state=(await api('reply',{reply,action_key:selectedAction,book_id:state.book.id,turn_no:Number(state.book.turn_no)},600000)).state;selectedAction='';render()}catch(e){if(isCancelled(e))return;alert(e.message);refresh()}finally{busy=false}
 }
 async function loadVisual(){try{const j=await api('visual');const img=document.getElementById('sceneImage');if(img&&j.image){img.src=j.image;img.classList.add('on')}}catch{}}
 refresh();
 </script>
-<script src="/novel2/noir-experience.js?v=1"></script>
+<script src="/novel2/noir-experience.js?v=pipeline-r1"></script>
 <script src="/novel2/noir-host.js?v=secret-host-r4"></script>
 </body>
 </html>

@@ -90,12 +90,13 @@
     const finalDelay=seen?0:Math.min(6100,paragraphs.length*360+360);
     app.innerHTML='<section class="reader noirReader '+(seen?'revealed':'entering')+'"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">'+esc(stageText)+'</div></div><button class="exitStory" id="mainMenu" type="button">Главное меню</button></div><header class="noirConnection"><div class="noirSignal">НЕЗНАКОМЕЦ · AI-ВЕДУЩИЙ</div><h1>'+esc(title)+'</h1><p>'+(hiddenPartner?'Партнёр пока остаётся загадкой. ':'')+'История открывается в словах, взглядах и решениях.</p></header><div class="noirTranscript"><div class="noirTranscriptHead"><span>ГОЛОС ИЗ ТЕМНОТЫ</span><button type="button" class="noirSkip" id="noirSkip" '+(seen?'hidden':'')+'>Показать всю сцену</button></div>'+whisperHtml+beats+trialHtml+'<div class="noirInteraction" style="--beat-delay:'+finalDelay+'ms"><div class="noirSignal">ВАШЕ РЕШЕНИЕ</div><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(options?'<div class="choiceRow">'+options+'</div>':'')+'<div class="status">'+status+'</div></div></div></section><div class="replyDock noirDock"><div class="noirDockLabel">ВАША РЕПЛИКА</div><textarea id="reply" aria-label="Реплика вашего героя" placeholder="'+(finale?'История завершена':state.can_reply?'Ответить от лица героя…':aiTurn?'AI-персонаж формирует ответ…':'Ожидаем второго героя…')+'" '+(state.can_reply&&!finale?'':'disabled')+'></textarea><div class="replyRow"><div id="selected" aria-live="polite"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить →</button></div></div>';
     document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>{
+      if(state.pending_reply)return;
       selectedAction=x.dataset.action;
       document.querySelectorAll('[data-action]').forEach(y=>y.setAttribute('aria-pressed',String(y===x)));
       document.getElementById('selected').textContent='Действие: '+x.textContent;
     });
     document.querySelectorAll('[data-trial-choice]').forEach(btn=>btn.onclick=()=>{
-      if(!state.can_reply)return;
+      if(!state.can_reply||state.pending_reply)return;
       const kind=btn.dataset.trialChoice;
       const code={accept:'noir_trial_accept',softer:'noir_trial_soft',decline:'noir_trial_decline'}[kind];
       const words={accept:'Я принимаю приглашение.',softer:'Я выбираю более мягкий вариант.',decline:'Я отказываюсь от испытания и продолжаю историю.'};
@@ -106,6 +107,10 @@
       document.querySelectorAll('[data-trial-choice]').forEach(x=>x.setAttribute('aria-pressed',String(x===btn)));
     });
     document.getElementById('send').onclick=sendReply;
+    if(state.pending_reply){
+      const saved=document.getElementById('reply');saved.value=state.pending_reply.reply;saved.readOnly=true;
+      selectedAction=state.pending_reply.action_key||'';document.getElementById('send').textContent='Продолжить обработку ответа';
+    }
     document.getElementById('mainMenu').onclick=()=>{clearTimeout(revealTimer);openMainMenu()};
     const skip=document.getElementById('noirSkip');if(skip)skip.onclick=finishReveal;
     const retry=document.getElementById('retryAiTurn');if(retry)retry.onclick=()=>{aiAdvanceError='';aiAdvanceKey='';render()};

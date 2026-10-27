@@ -68,6 +68,9 @@ jobs:
       - run: node novel2/scripts/story-launch-postgres.test.mjs
         env:
           NOVEL2_LAUNCH_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/launch_test
+      - run: node novel2/scripts/pipeline-transaction.test.mjs
+        env:
+          NOVEL2_LAUNCH_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/launch_test
       - run: node --experimental-vm-modules novel2/scripts/story-launch-gateway.test.mjs
 
 
@@ -84,3 +87,4 @@ jobs:
           name: novel2-launch-recovery-ui
           path: /tmp/novel2-launch-qa
           if-no-files-found: ignore
+

@@ -314,7 +314,7 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
   let first=cleanScene(data.first_scene);
   const bible={...data,...storyBlueprint,title:data.title,noir_dialogue_contract:{version:2,episodes:6,beats_per_episode:5,partner_reveal:'progressive',consent_first:true,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
   first=await ensureLongScene(first,{storyBible:bible,reason:'first_scene'});
-  if(first.prose.length<2500) throw new Error('NOVEL2_BIBLE_TOO_SHORT');
+  if(first.prose.length<LONG_SCENE_MIN_CHARS) throw new Error('NOVEL2_BIBLE_TOO_SHORT');
   return {...bible,first_scene:attachNoirScene(first,noirBeatPlan(1))};
 }
 
@@ -397,7 +397,7 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
   let scene=cleanScene(data.scene||{});
   if(scene.prose.length<350) throw new Error('NOVEL2_SCENE_INVALID');
   scene=await ensureLongScene(scene,{storyBible:bible,recentTurns,reason:'between_player_decisions'});
-  if(scene.prose.length<2500) throw new Error('NOVEL2_SCENE_TOO_SHORT');
+  if(scene.prose.length<LONG_SCENE_MIN_CHARS) throw new Error('NOVEL2_SCENE_TOO_SHORT');
   const analysis=cleanNoirAnalysis(data.response_analysis||{});
   const mergedCanon=data.canon&&typeof data.canon==='object'?data.canon:canon;
   const nextCanon=noirEnabled?{...mergedCanon,

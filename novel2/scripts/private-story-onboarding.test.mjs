@@ -12,6 +12,7 @@ const {publicState,publicStoryDraft}=vm.runInNewContext(app.slice(a,b)+'\n({publ
  characterSummary:async(identity,role)=>{characterReads++;return {ready:!!identity?.approved,name:role==='A'?'My actor':'Private partner',avatar:'',character_card:{passport:{fiction_name:'Player '+role}}}},
  buildBaseActorCard:({role})=>({role,kind:'base_actor_identity'}),
  castCharacterSummary:async(entry)=>({...entry,from_cast:true}),
+ pendingReply:async(bookId,turnNo,role)=>({reply:'Saved reply for '+role,action_key:''}),
  isAiControlled:()=>false
 });
 const blueprint={
@@ -43,6 +44,7 @@ for(const own of ['A','B']){
  assert.equal(Object.keys(state.identity).length,1);
  assert.ok(state.characters[own]);
  assert.equal(state.cast.length,1);
+ assert.equal(state.pending_reply.reply,'Saved reply for '+own);
  assert.equal(state.cast[0].interactive_role,own);
  assert.equal(characterReads,own==='A'?1:2);
  const output=JSON.stringify(state);

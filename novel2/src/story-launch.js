@@ -1,3 +1,5 @@
+import {assertBookArtifact} from './pipeline-contract.js';
+
 const schema=`CREATE TABLE IF NOT EXISTS novel2_story_launch_jobs(
   pair_key text NOT NULL, draft_id bigint NOT NULL, role text NOT NULL,
   status text NOT NULL, stage text NOT NULL DEFAULT 'queued',
@@ -95,6 +97,7 @@ export function createStoryLaunchQueue({db,pairKey,execute,validate}){
 // Book, first scene, cast, consumed draft and ready job are one atomic commit.
 // A crash before COMMIT leaves the previous book and draft untouched.
 export async function publishStoryLaunch(client,{pair,draftId,bible,castEntries,assignments}){
+  assertBookArtifact(bible);
   await client.query('BEGIN');
   try{
     const {rows:jobs}=await client.query('SELECT book_id FROM novel2_story_launch_jobs WHERE pair_key=$1 AND draft_id=$2 FOR UPDATE',[pair,draftId]);
@@ -120,4 +123,5 @@ export async function publishStoryLaunch(client,{pair,draftId,bible,castEntries,
     await client.query('COMMIT');return bookId;
   }catch(error){await client.query('ROLLBACK');throw error;}
 }
+
 
