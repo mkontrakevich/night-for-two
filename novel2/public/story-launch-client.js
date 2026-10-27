@@ -1,7 +1,7 @@
 // Only status reads are retried. Starting/resuming generation always requires
 // an explicit action; a lost start response is reconciled with persisted state.
 globalThis.Novel2StoryLaunchClient=class {
-  constructor({api,role,storage,onJob,onReady,onError,interval=3000,schedule=setTimeout,cancel=clearTimeout}){
+  constructor({api,role,storage,onJob,onReady,onError,interval=3000,schedule=(fn,ms)=>setTimeout(fn,ms),cancel=timer=>clearTimeout(timer)}){
     Object.assign(this,{api,role,storage,onJob,onReady,onError,interval,schedule,cancel});
     this.timer=null;this.reading=false;this.job=null;this.readFailures=0;
   }
