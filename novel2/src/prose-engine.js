@@ -262,15 +262,6 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
       ],
       output:{
         title:storyBlueprint.title,
-        logline:storyBlueprint.logline,
-        controlling_idea:storyBlueprint.controlling_idea,
-        genre_tone:storyBlueprint.genre_tone,
-        world_bible:storyBlueprint.world_bible,
-        master_plot:storyBlueprint.master_plot,
-        threads:storyBlueprint.threads,
-        story_blueprint:storyBlueprint,
-        player_characters:{A,B},
-        supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card])),
         canon:{},
         first_scene:{
           chapter_no:1,chapter_title:'',prose:'',noir_whisper:'',visual_after_paragraph:0,target_role:'A',
@@ -293,6 +284,7 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
         }
       },
       rules:[
+        'Верни только поля output. Сохранённые story_blueprint и assigned_cast не копируй в ответ: сервер добавит их без изменений.',
         'Начни с opening_situation story_blueprint и конкретного действия, а не с анкеты.',
         'Первая сцена должна быть полноценным литературным эпизодом: ориентир 5500–9500 знаков, 8–14 абзацев, 3–5 драматургических битов.',
         'Используй дополнительные AI-роли уже в первой сцене, если это естественно для opening_situation.',
@@ -307,7 +299,7 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
   });
   let first=cleanScene(data.first_scene||{});
   if(!data.title||first.prose.length<500) throw new Error('NOVEL2_BIBLE_INVALID');
-  const bible={...data,noir_dialogue_contract:{version:2,episodes:6,beats_per_episode:5,partner_reveal:'progressive',consent_first:true,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
+  const bible={...data,...storyBlueprint,title:data.title,noir_dialogue_contract:{version:2,episodes:6,beats_per_episode:5,partner_reveal:'progressive',consent_first:true,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
   first=await ensureLongScene(first,{storyBible:bible,reason:'first_scene'});
   if(first.prose.length<2500) throw new Error('NOVEL2_BIBLE_TOO_SHORT');
   return {...bible,first_scene:attachNoirScene(first,noirBeatPlan(1))};
@@ -438,3 +430,4 @@ export async function generateAiCharacterReply({book,recentTurns,role,characterC
   if(!reply) throw new Error('NOVEL2_AI_REPLY_EMPTY');
   return {reply,actionKey:String(data?.action_key||'').trim().slice(0,80)};
 }
+

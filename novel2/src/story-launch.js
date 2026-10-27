@@ -6,6 +6,13 @@ const schema=`CREATE TABLE IF NOT EXISTS novel2_story_launch_jobs(
   PRIMARY KEY(pair_key,draft_id)
 );`;
 
+export function launchFailureCode(error){
+  // Preserve a useful diagnostic category without retaining provider bodies,
+  // prompts, credentials, character data or arbitrary exception messages.
+  const known=String(error?.message||'').match(/^(NOVEL2_[A-Z0-9_]{1,100})(?=:|$)/);
+  return known?.[1]||'NOVEL2_LAUNCH_STEP_FAILED';
+}
+
 export function publicLaunchJob(row){
   if(!row)return null;
   return {draft_id:String(row.draft_id),status:row.status,stage:row.stage,
@@ -65,8 +72,9 @@ export function createStoryLaunchQueue({db,pairKey,execute,validate}){
           // Publication sets the book ID and ready state in its own transaction.
           await execute({role,draftId,checkpoint,save,client});
         }catch(error){
-          console.error('NOVEL2_STORY_LAUNCH_FAILED',{draft_id:String(draftId),code:String(error?.code||'GENERATION_FAILED')});
-          await client.query("UPDATE novel2_story_launch_jobs SET status='failed',error_code='NOVEL2_LAUNCH_STEP_FAILED',updated_at=now() WHERE pair_key=$1 AND draft_id=$2 AND status<>'ready'",[pair(),draftId]).catch(()=>{});
+          const code=launchFailureCode(error);
+          console.error('NOVEL2_STORY_LAUNCH_FAILED',{draft_id:String(draftId),code});
+          await client.query("UPDATE novel2_story_launch_jobs SET status='failed',error_code=$3,updated_at=now() WHERE pair_key=$1 AND draft_id=$2 AND status<>'ready'",[pair(),draftId,code]).catch(()=>{});
         }finally{
           clearInterval(heartbeat);
           await client.query('SELECT pg_advisory_unlock(hashtext($1))',[lock()]).catch(()=>{});
@@ -112,3 +120,4 @@ export async function publishStoryLaunch(client,{pair,draftId,bible,castEntries,
     await client.query('COMMIT');return bookId;
   }catch(error){await client.query('ROLLBACK');throw error;}
 }
+
