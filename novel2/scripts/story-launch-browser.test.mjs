@@ -48,11 +48,12 @@ try{
     await fs.mkdir('/tmp/novel2-launch-qa',{recursive:true});
     await page.screenshot({path:'/tmp/novel2-launch-qa/recovery-'+viewport.width+'.png',fullPage:true});
     offline=false;ready=true;
-    await page.getByRole('button',{name:'Проверить статус',exact:true}).click();
     await page.getByText('Launch fixture chapter',{exact:true}).waitFor();
+    // The next read-only retry must recover without a manual click or a new launch.
     assert.equal(starts,1);assert.equal(errors.length,0,errors.join('\n'));
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'No horizontal overflow');
     await context.close();
   }
   console.log('NOVEL2_LAUNCH_BROWSER_OK mobile desktop reload disconnect recovery no_dialog no_resubmit');
 }finally{await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+

@@ -44,7 +44,23 @@ const ready={...working,status:'ready',book_id:'8'};
 }
 {
   const h=harness(async()=>{throw new TypeError('Load failed');});h.client.remember('7');
-  await h.client.check();assert.equal(h.client.remembered(),'7');assert.equal(h.scheduled.length,0);assert.equal(h.events.at(-1)[0],'error');
+  await h.client.check();assert.equal(h.client.remembered(),'7');assert.equal(h.scheduled.length,1);assert.equal(h.events.at(-1)[0],'error');
+  for(let i=0;i<5;i++)await h.scheduled.shift()();
+  assert.equal(h.scheduled.length,0,'Repeated read failures must stop after a bounded recovery window');
+}
+{
+  let checks=0;
+  const h=harness(async path=>{assert.equal(path,'story/draft/launch/status','Recovery must only read status');if(++checks===1)throw new TypeError('Load failed');return {job:ready,state:{book:{id:'8'}}};});
+  h.client.remember('7');await h.client.check();await h.scheduled.shift()();
+  assert.equal(h.events.at(-1)[0],'ready');assert.equal(h.client.remembered(),'');assert.equal(h.client.readFailures,0);
+}
+for(const status of [400,401,403,404,409,422]){
+  const h=harness(async()=>{throw Object.assign(new Error('ACCESS_OR_INPUT_ERROR'),{status});});
+  await h.client.check('7');assert.equal(h.scheduled.length,0,'Permanent HTTP errors must not be retried');
+}
+{
+  const h=harness(async()=>{throw new Error('REQUEST_CANCELLED');});
+  await h.client.check('7');assert.equal(h.scheduled.length,0);assert.equal(h.events.length,0);
 }
 
 // Unit fixture for process concurrency. PostgreSQL transaction and advisory-lock
@@ -83,3 +99,4 @@ function fixture(){
   await q.start('A','7',{resume:true});await q.drain();assert.equal(calls,2);
 }
 console.log('NOVEL2_STORY_LAUNCH_OK lost_response reload explicit_resume no_paid_retry old_origin_gate concurrency privacy checkpoints');
+

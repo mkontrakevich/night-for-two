@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0909">
-<meta name="novel2-ui-release" content="noir-background-launch-20261026-r1">
+<meta name="novel2-ui-release" content="noir-status-recovery-20261027-r1">
 <title>Interactive Novel 2.0</title>
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <link rel="stylesheet" href="/novel2/noir-experience.css?v=1">
@@ -171,7 +171,7 @@ async function api(path,body={},timeoutMs=600000){
        throw new Error('Не удалось собрать корректную структуру истории. Повторите создание — исходные данные не потеряны.');
      }
      if(technical==='NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED')throw new Error('Сначала создайте и сохраните своего персонажа из фотографий.');
-     throw new Error(technical||'REQUEST_FAILED');
+     throw Object.assign(new Error(technical||'REQUEST_FAILED'),{status:r.status,code:technical});
    }
    return j;
  }catch(e){
@@ -850,7 +850,7 @@ const storyLaunch=new Novel2StoryLaunchClient({api,role:()=>String(state?.role||
    if(launchDetached){menuMode=true;renderMainMenu();void loadLibrary();return;}
    menuMode=false;render();
  },
- onError:error=>showLaunchJob(storyLaunch.job,'Не удалось проверить соединение. Генерация не запущена повторно. Нажмите «Проверить статус».')
+ onError:(error,recovery={})=>showLaunchJob(storyLaunch.job,[401,403].includes(Number(error?.status))?'Сеанс доступа истёк или недоступен. Закройте мини-приложение и откройте его из бота. Повторная генерация не запускалась.':recovery.retrying?'Связь с сервером временно прервалась. Повторно проверим статус через '+Math.ceil(recovery.retryIn/1000)+' сек. Генерация не запущена повторно.':'Не удалось проверить соединение. Генерация не запущена повторно. Нажмите «Проверить статус».')
 });
 async function launchStoryDraft(){
  if(busy||!storyDraft)return;
@@ -1021,4 +1021,5 @@ refresh();
 <script src="/novel2/noir-host.js?v=secret-host-r4"></script>
 </body>
 </html>
+
 
