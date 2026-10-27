@@ -10,6 +10,7 @@ const blueprint={title:'Fixture',logline:'Source logline',world_bible:{place:'So
 const result=await create({characters:{A,B},blueprint});
 assert.equal(calls,1);
 assert.equal(request.responseSchema.properties.first_scene.properties.prose.type,'string');
+assert.equal(request.responseSchema.properties.first_scene.properties.prose.minLength,4200,'Provider and publication must agree on the minimum scene length');
 assert(request.responseSchema.required.includes('first_scene'));
 for(const key of ['player_characters','supporting_characters','story_blueprint','world_bible','master_plot','threads'])assert(!Object.hasOwn(request.user.output,key),'Model must not spend output tokens repeating saved data: '+key);
 assert.equal(result.player_characters.A,A);assert.equal(result.player_characters.B,B);

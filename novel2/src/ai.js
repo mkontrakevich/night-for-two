@@ -128,7 +128,8 @@ async function chat(payload) {
     max_tokens:payload.max_tokens,
     json_mode:payload.json_mode===true,
     ...(payload.json_schema?{json_schema:payload.json_schema}:{})
-  },{timeoutMs:Number(process.env.NOVEL2_AI_TIMEOUT_MS||120000),label:'NOVEL2_EDGE_TEXT'});
+  },{timeoutMs:Number(process.env.NOVEL2_AI_TIMEOUT_MS||120000),label:'NOVEL2_EDGE_TEXT',attempts:1});
+  console.info('NOVEL2_AI_TEXT_RESULT',{provider:String(json?.provider||'workers-ai'),model:String(json?.model||'unknown'),characters:String(json?.content||'').length});
   return String(json?.content||'');
 }
 

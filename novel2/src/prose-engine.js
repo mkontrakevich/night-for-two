@@ -4,7 +4,7 @@ import {noirBeatPlan,attachNoirScene,cleanNoirAnalysis,noirPartnerPlan,noirTrial
 export const FIRST_CHAPTER_RESPONSE_SCHEMA={type:'object',required:['first_scene'],properties:{
   title:{type:'string'},canon:{type:'object'},
   first_scene:{type:'object',required:['prose','target_role','primary_interaction'],properties:{
-    prose:{type:'string',minLength:500,maxLength:18000},target_role:{type:'string',enum:['A','B']},
+    prose:{type:'string',minLength:4200,maxLength:18000},target_role:{type:'string',enum:['A','B']},
     primary_interaction:{type:'object',required:['prompt'],properties:{prompt:{type:'string'}}}
   }}
 }};
@@ -118,6 +118,7 @@ async function ensureLongScene(scene,{storyBible={},recentTurns=[],reason=''}={}
     system:PROSE_SYSTEM,
     temperature:.74,
     maxTokens:5600,
+    responseSchema:{type:'object',required:['scene'],properties:{scene:FIRST_CHAPTER_RESPONSE_SCHEMA.properties.first_scene}},
     user:{
       task:'Расширь уже написанную сцену до полноценного фрагмента романа. Не добавляй нового решения игрока раньше финала и не меняй смысл уже заданной точки выбора.',
       length_target:LONG_SCENE_TARGET,

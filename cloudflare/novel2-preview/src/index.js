@@ -305,6 +305,29 @@ async function handleAi(request,env,incoming){
     };
     if(body.json_mode)input.response_format=body.json_schema&&typeof body.json_schema==='object'&&!Array.isArray(body.json_schema)
       ?{type:'json_schema',json_schema:body.json_schema}:{type:'json_object'};
+    // Use the configured text provider for long structured results. No paid
+    // fallback is replayed after an uncertain provider response.
+    if(env.OPENROUTER_API_KEY){
+      const model=String(env.OPENROUTER_TEXT_MODEL||env.OPENROUTER_HOST_MODEL||'openai/gpt-4.1-mini');
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),100000);
+      const responseFormat=!body.json_mode?null:body.json_schema&&typeof body.json_schema==='object'&&!Array.isArray(body.json_schema)
+        ?{type:'json_schema',json_schema:{name:'novel2_result',strict:false,schema:body.json_schema}}:{type:'json_object'};
+      try{
+        const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+          method:'POST',signal:controller.signal,
+          headers:{authorization:'Bearer '+String(env.OPENROUTER_API_KEY),'content-type':'application/json','HTTP-Referer':'https://novel2-preview.kontrakevich.workers.dev','X-Title':'Novel2 Story Engine'},
+          body:JSON.stringify({model,messages,temperature:input.temperature,max_tokens:input.max_tokens,...(responseFormat?{response_format:responseFormat,provider:{require_parameters:true}}:{})})
+        });
+        if(!response.ok)return json(response.status,{ok:false,error:'NOVEL2_AI_TEXT_PROVIDER_'+response.status,provider:'openrouter',model});
+        const result=await response.json(),choice=result?.choices?.[0];
+        if(choice?.message?.refusal)return json(422,{ok:false,error:'NOVEL2_AI_TEXT_REFUSED',provider:'openrouter',model});
+        if(choice?.finish_reason==='length')return json(422,{ok:false,error:'NOVEL2_AI_TEXT_TRUNCATED',provider:'openrouter',model});
+        const content=workerTextContent(result);
+        if(!content)return json(502,{ok:false,error:'NOVEL2_AI_EDGE_EMPTY_TEXT',provider:'openrouter',model});
+        return json(200,{ok:true,content,provider:'openrouter',model,usage:result?.usage||null});
+      }catch(error){return json(controller.signal.aborted?504:502,{ok:false,error:controller.signal.aborted?'NOVEL2_AI_TEXT_PROVIDER_TIMEOUT':'NOVEL2_AI_TEXT_PROVIDER_TRANSPORT',provider:'openrouter',model});}
+      finally{clearTimeout(timer);}
+    }
     try{
       const result=await env.AI.run(AI_TEXT_MODEL,input);
       const content=workerTextContent(result);
