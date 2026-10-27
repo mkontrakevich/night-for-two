@@ -125,16 +125,20 @@ async function chat(payload) {
   const json=await edgeJson('text',{
     messages:payload.messages||[],
     temperature:payload.temperature,
-    max_tokens:payload.max_tokens
+    max_tokens:payload.max_tokens,
+    json_mode:payload.json_mode===true,
+    ...(payload.json_schema?{json_schema:payload.json_schema}:{})
   },{timeoutMs:Number(process.env.NOVEL2_AI_TIMEOUT_MS||120000),label:'NOVEL2_EDGE_TEXT'});
   return String(json?.content||'');
 }
 
-export async function textCompletion({system, user, temperature=.75, maxTokens=5000, model=config.textModel}) {
+export async function textCompletion({system, user, temperature=.75, maxTokens=5000, model=config.textModel,jsonMode=false,responseSchema=null}) {
   return chat({
     model,
     temperature,
     max_tokens:maxTokens,
+    json_mode:jsonMode,
+    json_schema:responseSchema,
     messages:[
       {role:'system',content:system},
       {role:'user',content:typeof user === 'string' ? user : JSON.stringify(user)}
@@ -155,7 +159,7 @@ export async function secretHostCompletion({system,user,temperature=.7,maxTokens
 }
 
 export async function jsonCompletion(args) {
-  const raw=await textCompletion(args);
+  const raw=await textCompletion({...args,jsonMode:true});
   try{return parseJson(raw);}
   catch(error){
     if(error?.message!=='NOVEL2_AI_JSON_INVALID')throw error;
@@ -163,6 +167,8 @@ export async function jsonCompletion(args) {
       system:'Ты восстанавливаешь повреждённый JSON. Верни только один валидный JSON-объект без markdown и пояснений. Сохрани исходные данные максимально точно; исправляй только синтаксис JSON.',
       user:{task:'Исправь синтаксис JSON.',broken_json:String(raw||'').slice(0,60000)},
       temperature:0,
+      jsonMode:true,
+      responseSchema:args?.responseSchema||null,
       maxTokens:args?.maxTokens||5000,
       model:args?.model||config.textModel
     });
@@ -217,3 +223,4 @@ export async function imageCompletion({prompt,inputReferences=[],width=null,heig
   if(!base64)throw new Error('NOVEL2_EDGE_IMAGE_EMPTY');
   return{base64,model:String(json?.model||'workers-ai')};
 }
+

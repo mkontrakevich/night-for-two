@@ -205,12 +205,13 @@ function dataUrlBlob(value=''){
   return new Blob([bytes],{type:m[1]});
 }
 function workerTextContent(result){
-  return String(
+  const content=(
     result?.choices?.[0]?.message?.content ??
     result?.response ??
     result?.result?.response ??
     ''
   );
+  return content&&typeof content==='object'?JSON.stringify(content):String(content);
 }
 async function handleAi(request,env,incoming){
   if(request.method!=='POST')return json(405,{ok:false,error:'METHOD_NOT_ALLOWED'});
@@ -302,7 +303,8 @@ async function handleAi(request,env,incoming){
       temperature:Number.isFinite(Number(body.temperature))?Math.max(0,Math.min(2,Number(body.temperature))):0.7,
       max_tokens:Math.max(32,Math.min(8000,Number(body.max_tokens||body.max_completion_tokens||5000)))
     };
-    if(body.json_mode)input.response_format={type:'json_object'};
+    if(body.json_mode)input.response_format=body.json_schema&&typeof body.json_schema==='object'&&!Array.isArray(body.json_schema)
+      ?{type:'json_schema',json_schema:body.json_schema}:{type:'json_object'};
     try{
       const result=await env.AI.run(AI_TEXT_MODEL,input);
       const content=workerTextContent(result);
@@ -758,4 +760,5 @@ export default{
     },{'retry-after':'2'});
   }
 };
+
 

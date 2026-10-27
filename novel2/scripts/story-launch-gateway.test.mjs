@@ -31,4 +31,10 @@ for(const path of ['/novel2/api/state','/novel2/api/story/draft/launch/status'])
 let assetPath='';
 const asset=await worker.fetch(new Request('https://example.test/novel2/story-launch-client.js'),{ASSETS:{fetch:async req=>{assetPath=new URL(req.url).pathname;return new Response('fixture');}}});
 assert.equal(asset.status,200);assert.equal(assetPath,'/story-launch-client.js');
+const schema={type:'object',required:['first_scene'],properties:{first_scene:{type:'object'}}};
+let aiInput;
+const structured=await worker.fetch(new Request('https://example.test/novel2-ai/text',{method:'POST',headers:{'content-type':'application/json','x-novel2-service-key':'fixture-key'},body:JSON.stringify({messages:[{role:'user',content:'Neutral fixture'}],json_mode:true,json_schema:schema})}),{NOVEL2_SERVICE_SECRET:'fixture-key',AI:{run:async(_model,input)=>{aiInput=input;return {response:{first_scene:{prose:'Neutral fixture'}}};}}});
+assert.equal(structured.status,200);assert.equal(aiInput.response_format.type,'json_schema');assert.equal(aiInput.response_format.json_schema.required[0],'first_scene');
+assert.equal(JSON.parse((await structured.json()).content).first_scene.prose,'Neutral fixture','Structured AI objects must not become [object Object]');
 console.log('NOVEL2_LAUNCH_GATEWAY_OK mutations_once status_read_retry buffered_status static_client');
+

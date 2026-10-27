@@ -9,10 +9,18 @@ const A={passport:{fiction_name:'Fixture A'}},B={passport:{fiction_name:'Fixture
 const blueprint={title:'Fixture',logline:'Source logline',world_bible:{place:'Source setting'},master_plot:[{key:'Source plot'}],threads:['Source thread']};
 const result=await create({characters:{A,B},blueprint});
 assert.equal(calls,1);
+assert.equal(request.responseSchema.properties.first_scene.properties.prose.type,'string');
+assert(request.responseSchema.required.includes('first_scene'));
 for(const key of ['player_characters','supporting_characters','story_blueprint','world_bible','master_plot','threads'])assert(!Object.hasOwn(request.user.output,key),'Model must not spend output tokens repeating saved data: '+key);
 assert.equal(result.player_characters.A,A);assert.equal(result.player_characters.B,B);
 assert.equal(result.logline,blueprint.logline);assert.deepEqual(result.world_bible,blueprint.world_bible);assert.deepEqual(result.master_plot,blueprint.master_plot);assert.deepEqual(result.threads,blueprint.threads);assert(result.first_scene.prose.length>4200);
 assert.equal(launchFailureCode(new Error('NOVEL2_AI_JSON_INVALID')),'NOVEL2_AI_JSON_INVALID');
 assert.equal(launchFailureCode(new Error('NOVEL2_EDGE_TEXT_502: private provider payload')),'NOVEL2_EDGE_TEXT_502');
 assert.equal(launchFailureCode(new Error('arbitrary private error message')),'NOVEL2_LAUNCH_STEP_FAILED');
+const withResult=value=>new Function('jsonCompletion','noirBeatPlan','attachNoirScene',source+'\nreturn createStoryBible;')(async()=>value,()=>({}),scene=>scene);
+const fallback=await withResult({first_scene:{prose:'Neutral fixture. '.repeat(400)}})({characters:{A,B},blueprint});
+assert.equal(fallback.title,blueprint.title,'Saved title must survive an omitted model title');
+await assert.rejects(withResult({title:'Fixture'})({characters:{A,B},blueprint}),/NOVEL2_BIBLE_SCENE_MISSING/);
+await assert.rejects(withResult({first_scene:{prose:{wrong:'type'}}})({characters:{A,B},blueprint}),/NOVEL2_BIBLE_PROSE_MISSING/);
 console.log('FIRST_CHAPTER_CONTRACT_OK compact_output=true saved_cast_preserved=true saved_world_preserved=true safe_error_category=true');
+
