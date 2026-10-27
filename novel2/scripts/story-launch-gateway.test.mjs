@@ -36,5 +36,17 @@ let aiInput;
 const structured=await worker.fetch(new Request('https://example.test/novel2-ai/text',{method:'POST',headers:{'content-type':'application/json','x-novel2-service-key':'fixture-key'},body:JSON.stringify({messages:[{role:'user',content:'Neutral fixture'}],json_mode:true,json_schema:schema})}),{NOVEL2_SERVICE_SECRET:'fixture-key',AI:{run:async(_model,input)=>{aiInput=input;return {response:{first_scene:{prose:'Neutral fixture'}}};}}});
 assert.equal(structured.status,200);assert.equal(aiInput.response_format.type,'json_schema');assert.equal(aiInput.response_format.json_schema.required[0],'first_scene');
 assert.equal(JSON.parse((await structured.json()).content).first_scene.prose,'Neutral fixture','Structured AI objects must not become [object Object]');
+let providerCalls=0,providerBody;
+context.fetch=async(_url,options)=>{providerCalls++;providerBody=JSON.parse(options.body);return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({first_scene:{prose:'Neutral provider fixture'}})}}]});};
+const providerEnv={NOVEL2_SERVICE_SECRET:'fixture-key',OPENROUTER_API_KEY:'fixture-provider-key',AI:{run:()=>{throw new Error('Unexpected provider fallback');}}};
+const providerRequest=()=>new Request('https://example.test/novel2-ai/text',{method:'POST',headers:{'content-type':'application/json','x-novel2-service-key':'fixture-key'},body:JSON.stringify({messages:[{role:'user',content:'Neutral fixture JSON'}],json_mode:true,json_schema:schema})});
+const providerResult=await worker.fetch(providerRequest(),providerEnv);
+assert.equal(providerResult.status,200);assert.equal((await providerResult.json()).provider,'openrouter');assert.equal(providerBody.response_format.json_schema.schema.required[0],'first_scene');assert.equal(providerBody.provider.require_parameters,true);assert.equal(providerCalls,1);
+context.fetch=async()=>{providerCalls++;return Response.json({error:'fixture'},{status:402});};
+assert.equal((await worker.fetch(providerRequest(),providerEnv)).status,402);assert.equal(providerCalls,2,'A provider failure must not invoke a second inference');
+context.fetch=async()=>Response.json({choices:[{finish_reason:'length',message:{content:'incomplete fixture'}}]});
+assert.equal((await worker.fetch(providerRequest(),providerEnv)).status,422,'Truncated JSON must never be presented as a complete result');
+context.fetch=async()=>Response.json({choices:[{finish_reason:'stop',message:{refusal:'Fixture refusal'}}]});
+assert.equal((await worker.fetch(providerRequest(),providerEnv)).status,422,'Provider refusals must remain explicit failures');
 console.log('NOVEL2_LAUNCH_GATEWAY_OK mutations_once status_read_retry buffered_status static_client');
 
