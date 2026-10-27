@@ -52,8 +52,13 @@ try{
     // The next read-only retry must recover without a manual click or a new launch.
     assert.equal(starts,1);assert.equal(errors.length,0,errors.join('\n'));
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'No horizontal overflow');
+    await page.evaluate(()=>showLaunchJob({draft_id:'7',status:'failed',stage:'first_chapter',error_code:'NOVEL2_BIBLE_SCENE_MISSING'}));
+    await page.getByRole('heading',{name:'Создание истории остановлено',exact:true}).waitFor();
+    await page.getByText('AI не вернул полноценную первую главу.',{exact:false}).waitFor();
+    assert.equal(starts,1,'Failure display must not start generation');
     await context.close();
   }
   console.log('NOVEL2_LAUNCH_BROWSER_OK mobile desktop reload disconnect recovery no_dialog no_resubmit');
 }finally{await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+
 
