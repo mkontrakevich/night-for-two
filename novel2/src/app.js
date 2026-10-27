@@ -1,4 +1,5 @@
 import {createStoryLaunchQueue,publicLaunchJob,publishStoryLaunch} from './story-launch.js';
+import {assertExpectedTurn} from './pipeline-contract.js';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import sharp from 'sharp';
@@ -8,7 +9,7 @@ import {fileURLToPath} from 'node:url';
 import {config,assertProductionConfig} from './config.js';
 import {authenticate} from './auth.js';
 import {
-  initDb,latestBook,listBooks,renameBook,deleteBook,activateBook,createBook,appendTurn,recentTurns,advanceBook,archiveBook,
+  initDb,latestBook,listBooks,renameBook,deleteBook,activateBook,createBook,appendTurn,pendingReply,withBookPipelineLock,recentTurns,advanceBook,archiveBook,
   identities,saveIdentity,approveIdentity,
   createStoryDraft,getStoryDraft,listStoryDrafts,deleteStoryDraft,markStoryDraftUsed,
   saveBookCast,getBookCast,claimBookCastControl,updateBookCastReference,
@@ -302,6 +303,7 @@ async function publicState(book,auth,ids={},bookCast=[]){
   };
   if(!book)return{mode:'home',...base};
   const scene=book.current_scene||{};
+  const canReply=!Boolean(scene.noir_progress?.finale)&&String(book.active_role)===String(auth.role)&&!isAiControlled(ids,book.active_role,bookCast);
   const ownCast=(Array.isArray(bookCast)?bookCast:[]).filter(
     entry=>String(entry.interactive_role||'')===String(auth.role)
   );
@@ -313,7 +315,8 @@ async function publicState(book,auth,ids={},bookCast=[]){
     active_role:book.active_role,
     active_control_mode:isAiControlled(ids,book.active_role,bookCast)?'ai':'human',
     cast:await Promise.all(ownCast.map(castCharacterSummary)),
-    can_reply:!Boolean(scene.noir_progress?.finale)&&String(book.active_role)===String(auth.role)&&!isAiControlled(ids,book.active_role,bookCast)
+    can_reply:canReply,
+    pending_reply:canReply?await pendingReply(book.id,book.turn_no,auth.role):null
   };
 }
 async function driveAiTurns(book,ids,bookCast=[],maxTurns=4){
@@ -322,7 +325,8 @@ async function driveAiTurns(book,ids,bookCast=[],maxTurns=4){
     const role=current.active_role;
     const humanRole=role==='A'?'B':'A';
     const history=await recentTurns(current.id,18);
-    const auto=await generateAiCharacterReply({
+    const savedReply=await pendingReply(current.id,current.turn_no,role);
+    const auto=savedReply?{reply:savedReply.reply,actionKey:savedReply.action_key}:await generateAiCharacterReply({
       book:current,
       recentTurns:history,
       role,
@@ -760,13 +764,16 @@ async function main(){
 
       if(url.pathname==='/novel2/api/ai/advance'){
         if(!book)return send(res,400,{ok:false,error:'NOVEL2_BOOK_REQUIRED'});
+        assertExpectedTurn(book,input);
         if(book.current_scene?.noir_progress?.finale)return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast),advanced:false});
         if(!isAiControlled(ids,book.active_role,bookCast)){
           return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast),advanced:false});
         }
+        return await withBookPipelineLock(book.id,book.turn_no,'ai_advance',async()=>{
         book=await driveAiTurns(book,ids,bookCast);
         bookCast=await getBookCast(book.id);
         return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast),advanced:true});
+        });
       }
 
       if(url.pathname==='/novel2/api/book/new'){
@@ -788,6 +795,7 @@ async function main(){
 
       if(url.pathname==='/novel2/api/reply'){
         if(!book)return send(res,400,{ok:false,error:'NOVEL2_BOOK_REQUIRED'});
+        assertExpectedTurn(book,input);
         if(book.current_scene?.noir_progress?.finale)return send(res,409,{ok:false,error:'NOVEL2_STORY_ALREADY_FINISHED'});
         if(String(book.active_role)!==auth.role||isAiControlled(ids,auth.role,bookCast))return send(res,409,{ok:false,error:'NOVEL2_NOT_YOUR_TURN'});
         const available=Array.isArray(book.current_scene?.optional_actions)?book.current_scene.optional_actions:[];
@@ -797,15 +805,18 @@ async function main(){
         const reply=String(input.reply||'').trim()||String(selected?.label||'').trim();
         if(reply.length<1||reply.length>3000)return send(res,400,{ok:false,error:'NOVEL2_REPLY_INVALID'});
 
+        return await withBookPipelineLock(book.id,book.turn_no,'reply',async()=>{
         const replyTurn=Number(book.turn_no||0)+1;
         await appendTurn(book.id,replyTurn,auth.role,'reply',reply,{action_key:actionKey});
         const history=await recentTurns(book.id,18);
         const next=await continueStory({book,recentTurns:history,playerRole:auth.role,playerReply:reply,actionKey});
         book=await advanceBook(book,{scene:next.scene,canon:next.canon,activeRole:next.scene.target_role});
+        // Return the committed scene immediately. Reader AI advancement is a
+        // separate action and cannot hide a successful player-turn publication.
         ids=await identities();
-        book=await driveAiTurns(book,ids,bookCast);
         bookCast=await getBookCast(book.id);
         return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast)});
+        });
       }
 
       if(url.pathname==='/novel2/api/character/looks'){
@@ -1072,6 +1083,11 @@ async function main(){
 
       return send(res,404,{ok:false,error:'NOT_FOUND'});
     }catch(error){
+      const pipelineCode=String(error?.message||'').match(/^NOVEL2_PIPELINE_[A-Z0-9_]+/)?.[0];
+      if(pipelineCode){
+        console.error('NOVEL2_REQUEST_FAILED',pipelineCode);
+        return send(res,/BUSY|STALE_TURN|TURN_CONFLICT/.test(pipelineCode)?409:502,{ok:false,error:pipelineCode});
+      }
       console.error('NOVEL2_REQUEST_FAILED',String(error?.stack||error));
       return send(res,500,{ok:false,error:String(error?.message||'NOVEL2_ERROR').slice(0,240)});
     }
@@ -1085,4 +1101,5 @@ main().catch(async error=>{
   try{await db.end();}catch{}
   process.exit(1);
 });
+
 

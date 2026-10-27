@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {assertSceneArtifact,assertBookArtifact,assertExpectedTurn,MIN_SCENE_CHARACTERS} from '../src/pipeline-contract.js';
+assertExpectedTurn({id:'8',turn_no:2},{book_id:'8',turn_no:2});
+for(const input of [{book_id:'7',turn_no:2},{book_id:'8',turn_no:1},{book_id:'8',turn_no:'2'},{}])assert.throws(()=>assertExpectedTurn({id:'8',turn_no:2},input),/STALE_TURN/);
+const scene={prose:'Neutral fixture. '.repeat(300),target_role:'A',primary_interaction:{prompt:'Continue?'}};
+assert.equal(MIN_SCENE_CHARACTERS,4200);assert.equal(assertSceneArtifact(scene),scene);
+assert.equal(assertBookArtifact({title:'Fixture',first_scene:scene}).title,'Fixture');
+assert.throws(()=>assertSceneArtifact({...scene,prose:'short'}),/SCENE_TOO_SHORT/);
+assert.throws(()=>assertSceneArtifact({...scene,target_role:'C'}),/TARGET_INVALID/);
+assert.throws(()=>assertSceneArtifact({...scene,primary_interaction:{prompt:''}}),/PROMPT_MISSING/);
+assert.throws(()=>assertBookArtifact({title:'',first_scene:scene}),/TITLE_MISSING/);
+console.log('PIPELINE_CONTRACT_OK validated_result=true minimum_length=true target_role=true actionable_prompt=true');

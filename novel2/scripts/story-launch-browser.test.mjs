@@ -56,6 +56,10 @@ try{
     await page.getByRole('heading',{name:'Создание истории остановлено',exact:true}).waitFor();
     await page.getByText('AI не вернул полноценную первую главу.',{exact:false}).waitFor();
     assert.equal(starts,1,'Failure display must not start generation');
+    await page.evaluate(()=>{state.pending_reply={reply:'Fixture saved answer',action_key:''};menuMode=false;render();});
+    assert.equal(await page.locator('#reply').inputValue(),'Fixture saved answer');
+    assert.equal(await page.locator('#reply').evaluate(el=>el.readOnly),true);
+    await page.getByRole('button',{name:'Продолжить обработку ответа',exact:true}).waitFor();
     await context.close();
   }
   console.log('NOVEL2_LAUNCH_BROWSER_OK mobile desktop reload disconnect recovery no_dialog no_resubmit');

@@ -12,7 +12,7 @@ const db=new pg.Pool({connectionString,options:`-c search_path=${schema}`,max:6}
 const raw=fs.readFileSync(new URL('../src/db.js',import.meta.url),'utf8');
 const databaseSchema=raw.match(/const schema = `([\s\S]*?)`;/)?.[1];assert(databaseSchema);
 const pair='isolated-test';
-const bible={title:'Fixture',canon:{},first_scene:{target_role:'A',prose:'Fixture scene'}};
+const bible={title:'Fixture',canon:{},first_scene:{target_role:'A',prose:'Neutral fixture scene. '.repeat(250),primary_interaction:{type:'free_reply',prompt:'Continue?'}}};
 const entry={slot_key:'A',source_type:'player',source_id:'A',interactive_role:'A',control_mode:'human'};
 const addDraft=async()=>{const {rows}=await db.query("INSERT INTO novel2_story_drafts(pair_key,title) VALUES($1,'Fixture') RETURNING id",[pair]);return rows[0].id;};
 try{
@@ -59,3 +59,4 @@ try{
 }finally{
   await db.end();await admin.query(`DROP SCHEMA ${schema} CASCADE`);await admin.end();
 }
+

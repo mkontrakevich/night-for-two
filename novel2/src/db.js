@@ -1,5 +1,6 @@
 import pg from 'pg';
 import {config} from './config.js';
+import {assertSceneArtifact,assertBookArtifact} from './pipeline-contract.js';
 
 const {Pool} = pg;
 export const db = new Pool(config.databaseUrl ? {
@@ -342,23 +343,57 @@ export async function getBookCast(bookId) {
 }
 
 export async function createBook({title='', storyBible={}, scene={}, activeRole='A'}) {
-  const {rows} = await db.query(
+  assertBookArtifact({title,first_scene:scene});
+  if(activeRole!==scene.target_role)throw new Error('NOVEL2_PIPELINE_TARGET_INVALID');
+  const client=await db.connect();
+  try{
+  await client.query('BEGIN');
+  const {rows} = await client.query(
     `INSERT INTO novel2_books(pair_key,title,story_bible,canon,current_scene,active_role,turn_no)
      VALUES($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,$6,1) RETURNING *`,
     [pairKey(), title, JSON.stringify(storyBible), JSON.stringify(storyBible?.canon || {}), JSON.stringify(scene), activeRole]
   );
   const book = rows[0];
-  await appendTurn(book.id, 1, 'AI', 'scene', String(scene?.prose || ''), scene);
+  await appendTurn(book.id,1,'AI','scene',scene.prose,scene,client);
+  await client.query('COMMIT');
   return book;
+  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }
 
-export async function appendTurn(bookId, turnNo, role, kind, content, payload={}) {
-  await db.query(
+export async function appendTurn(bookId, turnNo, role, kind, content, payload={},client=db) {
+  const args=[bookId,turnNo,role,kind,String(content||''),JSON.stringify(payload||{})];
+  const inserted=await client.query(
     `INSERT INTO novel2_turns(book_id,turn_no,role,kind,content,payload)
      VALUES($1,$2,$3,$4,$5,$6::jsonb)
-     ON CONFLICT(book_id,turn_no,role,kind) DO UPDATE SET content=EXCLUDED.content,payload=EXCLUDED.payload`,
-    [bookId, turnNo, role, kind, String(content || ''), JSON.stringify(payload || {})]
+     ON CONFLICT(book_id,turn_no,role,kind) DO NOTHING RETURNING id`,args
   );
+  if(!inserted.rowCount){
+    const {rows}=await client.query("SELECT (content=$5 AND CASE WHEN kind='reply' THEN coalesce(payload->>'action_key','')=coalesce(($6::jsonb)->>'action_key','') ELSE payload=$6::jsonb END) AS same FROM novel2_turns WHERE book_id=$1 AND turn_no=$2 AND role=$3 AND kind=$4",args);
+    if(!rows[0]?.same)throw new Error('NOVEL2_PIPELINE_TURN_CONFLICT');
+  }
+}
+
+export async function pendingReply(bookId,turnNo,role){
+  const {rows}=await db.query(`SELECT t.content,t.payload FROM novel2_turns t JOIN novel2_books b ON b.id=t.book_id WHERE b.pair_key=$1 AND t.book_id=$2 AND t.turn_no=$3 AND t.role=$4 AND t.kind='reply'`,[pairKey(),bookId,Number(turnNo)+1,role]);
+  return rows[0]?{reply:rows[0].content,action_key:String(rows[0].payload?.action_key||'')}:null;
+}
+
+export async function withBookPipelineLock(bookId,expectedTurn,stage,work){
+  const client=await db.connect(),key=`novel2-book:${pairKey()}:${bookId}`;
+  const processId=`book:${bookId}:turn:${Number(expectedTurn)+1}:${stage}`,started=Date.now();let locked=false;
+  try{
+    const attempt=await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS locked',[key]);
+    locked=attempt.rows[0]?.locked===true;
+    if(!locked)throw new Error('NOVEL2_PIPELINE_BUSY');
+    const current=await client.query("SELECT turn_no FROM novel2_books WHERE id=$1 AND pair_key=$2 AND status='active'",[bookId,pairKey()]);
+    if(!current.rows[0]||Number(current.rows[0].turn_no)!==Number(expectedTurn))throw new Error('NOVEL2_PIPELINE_STALE_TURN');
+    console.info('NOVEL2_PIPELINE',{process_id:processId,stage,status:'running'});
+    const result=await work();
+    console.info('NOVEL2_PIPELINE',{process_id:processId,stage,status:'ready',duration_ms:Date.now()-started});
+    return result;
+  }catch(error){
+    console.warn('NOVEL2_PIPELINE',{process_id:processId,stage,status:'failed',code:String(error.message).match(/^NOVEL2_[A-Z0-9_]+/)?.[0]||'NOVEL2_PIPELINE_FAILED',duration_ms:Date.now()-started});throw error;
+  }finally{if(locked)await client.query('SELECT pg_advisory_unlock(hashtext($1))',[key]).catch(()=>{});client.release();}
 }
 
 export async function recentTurns(bookId, limit=16) {
@@ -370,16 +405,25 @@ export async function recentTurns(bookId, limit=16) {
 }
 
 export async function advanceBook(book, {scene, canon={}, activeRole}) {
+  assertSceneArtifact(scene);
+  if(activeRole!==scene.target_role)throw new Error('NOVEL2_PIPELINE_TARGET_INVALID');
   const nextTurn = Number(book.turn_no || 0) + 1;
-  const {rows} = await db.query(
+  const client=await db.connect();
+  try{
+  await client.query('BEGIN');
+  const current=await client.query("SELECT turn_no FROM novel2_books WHERE id=$1 AND pair_key=$2 AND status='active' FOR UPDATE",[book.id,pairKey()]);
+  if(!current.rows[0]||Number(current.rows[0].turn_no)!==Number(book.turn_no))throw new Error('NOVEL2_PIPELINE_STALE_TURN');
+  const {rows} = await client.query(
     `UPDATE novel2_books
        SET current_scene=$2::jsonb,canon=$3::jsonb,active_role=$4,turn_no=$5,
            chapter_no=GREATEST(chapter_no,$6),updated_at=now()
      WHERE id=$1 RETURNING *`,
     [book.id, JSON.stringify(scene), JSON.stringify(canon), activeRole, nextTurn, Number(scene?.chapter_no || book.chapter_no || 1)]
   );
-  await appendTurn(book.id, nextTurn, 'AI', 'scene', String(scene?.prose || ''), scene);
+  await appendTurn(book.id,nextTurn,'AI','scene',scene.prose,scene,client);
+  await client.query('COMMIT');
   return rows[0];
+  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }
 
 export async function archiveBook(bookId, reason='user_exit') {
@@ -596,3 +640,4 @@ export async function updateBookCastReference(bookId,slotKey,referenceImages=[])
   );
   return rows[0]||null;
 }
+
