@@ -28,5 +28,14 @@ try{
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.deepEqual(errors,[]);
   await context.close();
  }
+ const blocked=await browser.newContext({viewport:{width:393,height:852}});const page=await blocked.newPage();
+ await page.route('https://telegram.org/**',r=>r.fulfill({body:'',contentType:'text/javascript'}));
+ await page.route('**/novel2/api/illustrations/configuration',r=>r.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,configured:true,authenticated:false,status:403})}));
+ await page.goto('http://127.0.0.1:'+port+'/novel2/illustrations.html');
+ await page.locator('#source').setInputFiles({name:'blocked.md',mimeType:'text/markdown',buffer:Buffer.from('A quiet archive room.\n\n[[IMAGE:frame]]')});
+ await page.locator('#instructions').setInputFiles({name:'instructions.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version:1,content_type:'editorial'}))});
+ await page.locator('#prepare').click();await page.locator('#jobPanel').waitFor({state:'visible'});
+ assert(await page.locator('#generate').isDisabled());assert((await page.locator('#providerStatus').innerText()).includes('OpenRouter'),'Provider denial remains visible after upload');
+ await blocked.close();
  console.log('ILLUSTRATION_WORKBENCH_BROWSER_OK upload instructions markers generation review export reload mobile desktop');
 }finally{await browser.close();child.kill();}
