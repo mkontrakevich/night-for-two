@@ -1,7 +1,7 @@
 export function openRouterFailureCategory(payload={}){
   const error=payload?.error||{};
   const message=(String(error.message||'')+' '+String(error.metadata?.raw||'')).slice(0,4000);
-  if(/credit|budget|limit.*(?:exceed|reach|exhaust)|insufficient/i.test(message))return 'LIMIT';
+  if(/credit|budget|limit.*(?:exceed|reach|exhaust)|insufficient.(?:funds|balance)/i.test(message))return 'LIMIT';
   if(/expired/i.test(message))return 'KEY_EXPIRED';
   if(/country|region|territor/i.test(message))return 'REGION';
   if(/disabled|suspend|account.*ban/i.test(message))return 'ACCOUNT';
