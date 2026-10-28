@@ -20,7 +20,7 @@ let job=null,poll=null,reading=false;
 const imageCache=new Map();
 const $=id=>document.getElementById(id);
 const errors={ACCESS_DENIED:'Откройте раздел из Telegram-бота.',NOVEL2_ACCESS_DENIED:'Откройте раздел из Telegram-бота.',NOVEL2_ILLUSTRATIONS_UNAVAILABLE:'Сервис иллюстраций пока недоступен.',DUPLICATE_MARKER:'В тексте повторяется имя метки.',MARKER_MUST_OCCUPY_ITS_OWN_PARAGRAPH:'Каждая метка должна находиться в отдельном абзаце.',MARKER_BEFORE_STORY:'Перед первой меткой должен быть текст сцены.',NO_IMAGE_MARKERS:'В тексте не найдено меток [[IMAGE:имя]].',INSTRUCTIONS_UNKNOWN_SCENE:'Инструкции содержат имя сцены, которого нет среди меток рукописи.',IMAGE_APPROVAL_REQUIRED:'Сначала утвердите все изображения.',JOB_BUSY:'Это задание уже обрабатывается.',CONTENT_NOT_SUPPORTED:'Запрошенный тип изображения не поддерживается.',GENERATOR_NOT_CONFIGURED:'Генератор не подключён.'};
-function explain(code){return errors[code]||('Операция остановлена: '+code)}
+function explain(code){if(/^NOVEL2_AI_TEXT_PROVIDER_403/.test(code))return 'OpenRouter отказал в доступе к модели'+(code.endsWith('_LIMIT')?': достигнут лимит.':code.endsWith('_REGION')?': ограничение региона.':code.endsWith('_MODEL_ACCESS')?': модель не разрешена для ключа.':'. Проверьте доступ и настройки ключа.');return errors[code]||('Операция остановлена: '+code)}
 function headers(){
  const init=window.Telegram?.WebApp?.initData||sessionStorage.getItem('novel2_illustrations_init')||'';
  if(init)sessionStorage.setItem('novel2_illustrations_init',init);
@@ -43,7 +43,7 @@ function render(){
  $('frames').replaceChildren();
  for(const item of job.images){
   const frame=document.createElement('article');frame.className='frame';const title=document.createElement('h3');title.textContent=item.scene_id;frame.append(title);
-  const status=document.createElement('p');status.className='status';const labels={planned:'Готово к генерации',planning:'Готовим описание сцены',generating:'Генерируем изображение',uncertain:'Запрос не завершён',blocked:'Генерация отклонена',review_required:'Проверьте изображение',approved:'Утверждено'};status.textContent=(labels[item.status]||item.status)+(item.error?' · '+explain(item.error):'');frame.append(status);
+  const status=document.createElement('p');status.className='status';const labels={planned:'Готово к генерации',planning:'Готовим описание сцены',generating:'Генерируем изображение',uncertain:'Запрос не завершён',blocked:'Генерация отклонена',rejected:'Кадр отклонён пользователем',review_required:'Проверьте изображение',approved:'Утверждено'};status.textContent=(labels[item.status]||item.status)+(item.error?' · '+explain(item.error):'');frame.append(status);
   if(['review_required','approved'].includes(item.status)){
    const img=document.createElement('img');img.alt='Иллюстрация '+item.scene_id;frame.append(img);
    const key=job.id+':'+item.scene_id+':'+item.sha256;
@@ -52,6 +52,8 @@ function render(){
    }
    if(item.status==='review_required'){const button=document.createElement('button');button.textContent='Кадр соответствует сцене';button.disabled=job.running;button.onclick=()=>action(async()=>{job=(await api('approve',{job_id:job.id,scene_id:item.scene_id})).job;render()});frame.append(button)}
   }
+  if(['review_required','approved'].includes(item.status)){const reject=document.createElement('button');reject.className='secondary';reject.textContent=item.status==='approved'?'Отменить утверждение':'Кадр не подходит';reject.disabled=job.running;reject.onclick=()=>action(async()=>{job=(await api('reject',{job_id:job.id,scene_id:item.scene_id})).job;render()});frame.append(reject)}
+  if(item.status==='rejected'){const again=document.createElement('button');again.textContent='Сгенерировать другой кадр';again.disabled=job.running;again.onclick=()=>action(async()=>{if(!confirm('Сгенерировать новый вариант только этого кадра? Это новый платный запрос.'))return;job=(await api('retry',{job_id:job.id,scene_id:item.scene_id,confirm_repeat:true})).job;job.running=true;render();watch()});frame.append(again)}
   $('frames').append(frame);
  }
 }

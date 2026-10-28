@@ -124,4 +124,18 @@ class MarkedSystemTest(unittest.TestCase):
             self.assertEqual(request.get_header('User-agent'),'Novel2-Illustration-Workbench/1.0')
             self.assertEqual(request.get_header('X-novel2-service-key'),'test-service-key')
 
+    def test_rejected_frame_can_be_replaced_without_replaying_others(self):
+        jid=self.create()['id'];self.engine.generate(jid,OWNER)
+        for scene in ['first','second']:self.engine.approve(jid,OWNER,scene)
+        self.engine.assemble(jid,OWNER)
+        self.engine.reject(jid,OWNER,'first')
+        with self.assertRaisesRegex(JobError,'DOCUMENT_NOT_READY'):self.engine.asset(jid,OWNER,document=True)
+        self.engine.generate(jid,OWNER)
+        self.assertEqual(self.edge.generations,2,'Rejecting is not a paid retry')
+        self.engine.generate(jid,OWNER,retry=True,scene_id='first')
+        self.assertEqual(self.edge.generations,3,'Only the selected frame is regenerated')
+        frames=self.engine.get(jid,OWNER)['images']
+        self.assertEqual(frames[0]['status'],'review_required');self.assertEqual(frames[1]['status'],'approved')
+        self.assertTrue((self.root/'jobs'/jid/frames[0]['history'][0]['path']).is_file())
+
 if __name__=='__main__':unittest.main()

@@ -1,3 +1,17 @@
+export function openRouterFailureCategory(payload={}){
+  const error=payload?.error||{};
+  const message=(String(error.message||'')+' '+String(error.metadata?.raw||'')).slice(0,4000);
+  if(/credit|budget|limit.*(?:exceed|reach|exhaust)|insufficient/i.test(message))return 'LIMIT';
+  if(/expired/i.test(message))return 'KEY_EXPIRED';
+  if(/country|region|territor/i.test(message))return 'REGION';
+  if(/disabled|suspend|account.*ban/i.test(message))return 'ACCOUNT';
+  if(/model.*(?:not allowed|restricted|permission)|allowlist|not permitted/i.test(message))return 'MODEL_ACCESS';
+  if(/privacy|retention|zero.data|zdr/i.test(message))return 'PRIVACY';
+  if(/guardrail|policy|moderation|injection|blocked/i.test(message))return 'POLICY';
+  if(/invalid.*key|unauthor|authentication/i.test(message))return 'KEY_AUTH';
+  return 'ACCESS';
+}
+
 import {WorkflowEntrypoint} from 'cloudflare:workers';
 import {handleStranger,runStrangerWorld} from './stranger.js';
 import {handleNativeActor,runNativeActor} from './native-actor.js';
@@ -217,6 +231,18 @@ async function handleAi(request,env,incoming){
   if(request.method!=='POST')return json(405,{ok:false,error:'METHOD_NOT_ALLOWED'});
   if(!await aiAuthorized(request,env))return json(401,{ok:false,error:'NOVEL2_AI_EDGE_UNAUTHORIZED'});
   if(!env.AI||typeof env.AI.run!=='function')return json(503,{ok:false,error:'NOVEL2_AI_BINDING_MISSING'});
+  if(incoming.pathname==='/novel2-ai/provider-status'){
+    const model=String(env.OPENROUTER_TEXT_MODEL||env.OPENROUTER_HOST_MODEL||'openai/gpt-4.1-mini');
+    if(!env.OPENROUTER_API_KEY)return json(200,{ok:true,configured:false,provider:'openrouter',model});
+    try{
+      const response=await fetch('https://openrouter.ai/api/v1/key',{headers:{authorization:'Bearer '+String(env.OPENROUTER_API_KEY)},signal:AbortSignal.timeout(15000)});
+      const result=await response.json().catch(()=>({})),data=result?.data||{};
+      return json(200,{ok:true,provider:'openrouter',model,configured:true,authenticated:response.ok,status:response.status,
+        expired:data.expires_at?Date.parse(data.expires_at)<Date.now():false,
+        limit_exhausted:typeof data.limit_remaining==='number'&&data.limit_remaining<=0,
+        management_key:data.is_management_key===true});
+    }catch{return json(502,{ok:false,error:'NOVEL2_PROVIDER_STATUS_UNAVAILABLE'});}
+  }
   if(incoming.pathname==='/novel2-ai/vpc-probe'){
     if(!env.NOVEL2_VPC||typeof env.NOVEL2_VPC.fetch!=='function')return json(503,{ok:false,error:'NOVEL2_VPC_BINDING_MISSING'});
     const host=env.NOVEL2_ORIGIN_HOST;
@@ -318,7 +344,10 @@ async function handleAi(request,env,incoming){
           headers:{authorization:'Bearer '+String(env.OPENROUTER_API_KEY),'content-type':'application/json','HTTP-Referer':'https://novel2-preview.kontrakevich.workers.dev','X-Title':'Novel2 Story Engine'},
           body:JSON.stringify({model,messages,temperature:input.temperature,max_tokens:input.max_tokens,...(responseFormat?{response_format:responseFormat,provider:{require_parameters:true}}:{})})
         });
-        if(!response.ok)return json(response.status,{ok:false,error:'NOVEL2_AI_TEXT_PROVIDER_'+response.status,provider:'openrouter',model});
+        if(!response.ok){
+          const rejected=await response.json().catch(()=>({}));
+          return json(response.status,{ok:false,error:'NOVEL2_AI_TEXT_PROVIDER_'+response.status,reason:openRouterFailureCategory(rejected),provider:'openrouter',model});
+        }
         const result=await response.json(),choice=result?.choices?.[0];
         if(choice?.message?.refusal)return json(422,{ok:false,error:'NOVEL2_AI_TEXT_REFUSED',provider:'openrouter',model});
         if(choice?.finish_reason==='length')return json(422,{ok:false,error:'NOVEL2_AI_TEXT_TRUNCATED',provider:'openrouter',model});

@@ -5,6 +5,7 @@ import json
 import urllib.request
 import urllib.error
 import time
+import re
 from content_profile import POLICY
 
 class ProviderError(RuntimeError):
@@ -34,6 +35,15 @@ class EdgeClient:
                 result = json.loads(raw)
         except urllib.error.HTTPError as error:
             # Never include provider bodies, source text or credentials in diagnostics.
+            try:
+                rejected=json.loads(error.read(8192))
+                code=rejected.get('error','')
+                reason=rejected.get('reason','')
+                if re.fullmatch('NOVEL2_[A-Z0-9_]{1,100}',str(code)):
+                    if reason in {'LIMIT','KEY_EXPIRED','REGION','ACCOUNT','MODEL_ACCESS','PRIVACY','POLICY','KEY_AUTH','ACCESS'}:
+                        code+='_'+reason
+                    raise ProviderError(code) from None
+            except (ValueError,AttributeError): pass
             raise ProviderError('PROVIDER_HTTP_'+str(error.code)) from None
         except (OSError, ValueError):
             raise ProviderError('PROVIDER_RESPONSE_UNCERTAIN') from None
