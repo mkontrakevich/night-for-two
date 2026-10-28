@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {expandSceneToTarget} from '../src/scene-expansion.js';
 import {launchFailureCode} from '../src/story-launch.js';
 let calls=0,request;
 const source=fs.readFileSync(new URL('../src/prose-engine.js',import.meta.url),'utf8').replace(/\r\n?/g,'\n').replace(/^import .*;\n/gm,'').replace(/^export /gm,'');
-const create=new Function('jsonCompletion','noirBeatPlan','attachNoirScene',source+'\nreturn createStoryBible;')(
- async args=>{calls++;request=args;return {title:'Fixture',canon:{step:1},logline:'Unexpected replacement',world_bible:{place:'Unexpected replacement'},master_plot:[],threads:[],first_scene:{prose:'A neutral fixture passage. '.repeat(250),target_role:'A',primary_interaction:{prompt:'Continue?'}}};},()=>({}),scene=>scene);
+const create=new Function('jsonCompletion','noirBeatPlan','attachNoirScene','expandSceneToTarget',source+'\nreturn createStoryBible;')(
+ async args=>{calls++;request=args;return {title:'Fixture',canon:{step:1},logline:'Unexpected replacement',world_bible:{place:'Unexpected replacement'},master_plot:[],threads:[],first_scene:{prose:'A neutral fixture passage. '.repeat(250),target_role:'A',primary_interaction:{prompt:'Continue?'}}};},()=>({}),scene=>scene,expandSceneToTarget);
 const A={passport:{fiction_name:'Fixture A'}},B={passport:{fiction_name:'Fixture B'}};
 const blueprint={title:'Fixture',logline:'Source logline',world_bible:{place:'Source setting'},master_plot:[{key:'Source plot'}],threads:['Source thread']};
 const result=await create({characters:{A,B},blueprint});
@@ -18,7 +19,7 @@ assert.equal(result.logline,blueprint.logline);assert.deepEqual(result.world_bib
 assert.equal(launchFailureCode(new Error('NOVEL2_AI_JSON_INVALID')),'NOVEL2_AI_JSON_INVALID');
 assert.equal(launchFailureCode(new Error('NOVEL2_EDGE_TEXT_502: private provider payload')),'NOVEL2_EDGE_TEXT_502');
 assert.equal(launchFailureCode(new Error('arbitrary private error message')),'NOVEL2_LAUNCH_STEP_FAILED');
-const withResult=value=>new Function('jsonCompletion','noirBeatPlan','attachNoirScene',source+'\nreturn createStoryBible;')(async()=>value,()=>({}),scene=>scene);
+const withResult=value=>new Function('jsonCompletion','noirBeatPlan','attachNoirScene','expandSceneToTarget',source+'\nreturn createStoryBible;')(async()=>value,()=>({}),scene=>scene,expandSceneToTarget);
 const fallback=await withResult({first_scene:{prose:'Neutral fixture. '.repeat(400)}})({characters:{A,B},blueprint});
 assert.equal(fallback.title,blueprint.title,'Saved title must survive an omitted model title');
 await assert.rejects(withResult({title:'Fixture'})({characters:{A,B},blueprint}),/NOVEL2_BIBLE_SCENE_MISSING/);

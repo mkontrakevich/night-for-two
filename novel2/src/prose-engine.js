@@ -1,4 +1,5 @@
 import {jsonCompletion} from './ai.js';
+import {expandSceneToTarget} from './scene-expansion.js';
 import {noirBeatPlan,attachNoirScene,cleanNoirAnalysis,noirPartnerPlan,noirTrialPlan} from './noir-director.js';
 
 export const FIRST_CHAPTER_RESPONSE_SCHEMA={type:'object',required:['first_scene'],properties:{
@@ -110,49 +111,8 @@ function cleanScene(value={}) {
 }
 
 const LONG_SCENE_MIN_CHARS=4200;
-const LONG_SCENE_TARGET='5500–9500 знаков, обычно 900–1500 слов';
-
 async function ensureLongScene(scene,{storyBible={},recentTurns=[],reason=''}={}){
-  if(scene.prose.length>=LONG_SCENE_MIN_CHARS)return scene;
-  const data=await jsonCompletion({
-    system:PROSE_SYSTEM,
-    temperature:.74,
-    maxTokens:5600,
-    responseSchema:{type:'object',required:['scene'],properties:{scene:FIRST_CHAPTER_RESPONSE_SCHEMA.properties.first_scene}},
-    user:{
-      task:'Расширь уже написанную сцену до полноценного фрагмента романа. Не добавляй нового решения игрока раньше финала и не меняй смысл уже заданной точки выбора.',
-      length_target:LONG_SCENE_TARGET,
-      short_scene:scene,
-      story_bible:storyBible,
-      recent_turns:recentTurns,
-      reason,
-      output:{
-        scene:{
-          chapter_no:scene.chapter_no,
-          chapter_title:scene.chapter_title,
-          prose:'',
-          target_role:scene.target_role,
-          primary_interaction:scene.primary_interaction,
-          optional_actions:scene.optional_actions,
-          visual_beat:scene.visual_beat,
-          visual_scene:scene.visual_scene,
-          continuity_updates:scene.continuity_updates,
-          hook:scene.hook
-        }
-      },
-      hard_rules:[
-        'Сохрани тот же target_role и ту же финальную точку взаимодействия.',
-        'Не пиши за героя, которым должен управлять пользователь, его решающую реплику или выбор.',
-        'Добавь 3–5 последовательных драматургических битов до точки решения.',
-        'Развивай локацию, предметную среду, действия, характерный диалог, внутреннее напряжение и причинность.',
-        'Не заполняй объём повторением эмоций, одинаковыми взглядами, паузами и абстрактным напряжением.',
-        'Сцена должна читаться как часть романа, а не как удлинённый игровой prompt.',
-        'visual_scene обнови так, чтобы он соответствовал итоговой расширенной сцене.'
-      ]
-    }
-  });
-  const expanded=cleanScene(data.scene||{});
-  return expanded.prose.length>=scene.prose.length?expanded:scene;
+  return expandSceneToTarget(scene,{complete:jsonCompletion,system:PROSE_SYSTEM,storyBible,recentTurns,reason});
 }
 
 function normalizeStoryBlueprint(raw={}) {
@@ -228,7 +188,7 @@ export async function createStoryBlueprint({creativeBrief=''}={}) {
   return blueprint;
 }
 
-export async function createStoryBible({characters={},supportingCast=[],blueprint={},relationshipContext={}}={}) {
+export async function createStoryBible({characters={},supportingCast=[],blueprint={},relationshipContext={},resumeCandidate=null,onCandidate=async()=>{}}={}) {
   const A=characters.A&&typeof characters.A==='object'?characters.A:null;
   const B=characters.B&&typeof characters.B==='object'?characters.B:null;
   if(!A?.passport||!B?.passport) throw new Error('NOVEL2_CHARACTER_CARDS_REQUIRED');
@@ -246,7 +206,7 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
     supporting:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))
   };
 
-  const data=await jsonCompletion({
+  const data=resumeCandidate||await jsonCompletion({
     system:PROSE_SYSTEM,
     temperature:.86,
     maxTokens:7600,
@@ -313,7 +273,9 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
   if(!data.title)throw new Error('NOVEL2_BIBLE_TITLE_MISSING');
   let first=cleanScene(data.first_scene);
   const bible={...data,...storyBlueprint,title:data.title,noir_dialogue_contract:{version:2,episodes:6,beats_per_episode:5,partner_reveal:'progressive',consent_first:true,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
+  await onCandidate({...bible,first_scene:first});
   first=await ensureLongScene(first,{storyBible:bible,reason:'first_scene'});
+  await onCandidate({...bible,first_scene:first});
   if(first.prose.length<LONG_SCENE_MIN_CHARS) throw new Error('NOVEL2_BIBLE_TOO_SHORT');
   return {...bible,first_scene:attachNoirScene(first,noirBeatPlan(1))};
 }

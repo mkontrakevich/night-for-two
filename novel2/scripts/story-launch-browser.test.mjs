@@ -56,6 +56,10 @@ try{
     await page.getByRole('heading',{name:'Создание истории остановлено',exact:true}).waitFor();
     await page.getByText('AI не вернул полноценную первую главу.',{exact:false}).waitFor();
     assert.equal(starts,1,'Failure display must not start generation');
+    await page.evaluate(()=>showLaunchJob({draft_id:'7',status:'failed',stage:'first_chapter',error_code:'NOVEL2_BIBLE_TOO_SHORT',candidate_prose_chars:2800}));
+    await page.getByText('Текст первой главы получен (2800 символов)',{exact:false}).waitFor();
+    await page.getByText('Черновик сохранён:',{exact:false}).waitFor();
+    assert.equal(starts,1);
     await page.evaluate(()=>{state.pending_reply={reply:'Fixture saved answer',action_key:''};menuMode=false;render();});
     assert.equal(await page.locator('#reply').inputValue(),'Fixture saved answer');
     assert.equal(await page.locator('#reply').evaluate(el=>el.readOnly),true);
