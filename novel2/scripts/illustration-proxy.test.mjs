@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {illustrationWorkbenchRequest} from '../src/illustration-workbench-proxy.js';
+const calls=[];const request=async(url,options)=>{calls.push({url,options});return {status:200,json:async()=>({ok:true,jobs:[]})}};
+for(const role of ['A','B'])assert.equal((await illustrationWorkbenchRequest({method:'POST',action:'list',input:{owner:'forged'},role,request})).status,200);
+assert.notEqual(calls[0].options.headers['x-workbench-owner'],calls[1].options.headers['x-workbench-owner']);
+assert(calls[0].options.headers.authorization.startsWith('Bearer '));assert(!calls[0].url.includes('forged'));
+assert.equal((await illustrationWorkbenchRequest({method:'GET',action:'list',role:'A',request})).status,405);
+assert.equal((await illustrationWorkbenchRequest({method:'POST',action:'../private',role:'A',request})).status,404);
+assert.equal(calls.length,2);
+assert.equal((await illustrationWorkbenchRequest({method:'POST',action:'list',input:{},role:'A',request:async()=>{throw Error('secret detail')}})).body.error,'NOVEL2_ILLUSTRATIONS_UNAVAILABLE');
+console.log('ILLUSTRATION_PROXY_OK role_scoping=true fixed_destination=true no_error_leak=true');

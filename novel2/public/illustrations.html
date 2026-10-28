@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="novel2-illustrations-release" content="markers-v1-20261029"><title>Иллюстрации романа</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f2ef;color:#222;font:16px/1.5 system-ui}main{max-width:1050px;margin:auto;padding:24px}h1{font-size:30px}h2{font-size:22px}section{background:white;border:1px solid #ddd;padding:22px;margin:18px 0}label{display:block;margin:18px 0 6px}input{max-width:100%}button,a.button{background:#542a36;color:white;padding:11px 16px;border:0;cursor:pointer;font:inherit;display:inline-block;text-decoration:none;margin:6px 6px 6px 0}button:disabled{opacity:.45;cursor:default}.secondary{background:#e8e4e0;color:#222}.muted{color:#655f5a}#error{white-space:pre-wrap;color:#8d233b}#frames{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}.frame{border:1px solid #ddd;padding:14px}.frame img{display:block;width:100%;height:330px;object-fit:contain;background:#eee}.status{white-space:pre-wrap;overflow-wrap:anywhere}code{background:#eee;padding:2px 5px}progress{width:100%;height:18px}footer{font-size:14px;color:#655f5a;margin-top:25px}#jobs button{background:#e8e4e0;color:#222}
+</style></head><body><main>
+<a href="/novel2/">К роману</a><h1>Иллюстрации романа</h1><p>Загрузите текст и файл визуальных инструкций. Готовые кадры займут места меток в документе.</p>
+<section><h2>1. Текст и инструкции</h2><p>На отдельной строке после нужного абзаца поставьте <code>[[IMAGE:arrival]]</code>. Имя каждой метки должно быть уникальным.</p>
+<button class="secondary" id="sampleText">Скачать пример текста</button><button class="secondary" id="sampleRules">Скачать пример инструкций</button>
+<form id="prepareForm"><label for="source">Рукопись .md, .txt или .docx до 2 МБ</label><input id="source" type="file" accept=".md,.txt,.docx" required>
+<label for="instructions">Инструкции .json</label><input id="instructions" type="file" accept=".json" required>
+<p class="muted">Файл задаёт тип контента, стиль, палитру, формат, описания вымышленных персонажей и локаций. Используются неграфические иллюстрации; инструкции не выполняются как код.</p><button id="prepare">Подготовить задания</button></form></section>
+<p id="error" role="alert"></p><section id="jobPanel" hidden><h2>2. Генерация и проверка</h2><p id="jobId" class="muted"></p><p id="summary" role="status"></p><progress id="progress" max="1" value="0"></progress>
+<button id="generate">Сгенерировать недостающие кадры</button><button id="retry" class="secondary" hidden>Повторить незавершённые запросы</button><button id="check" class="secondary">Обновить статус</button>
+<div id="frames"></div><h2>3. Документ</h2><p>Перед сборкой проверьте каждый кадр: соответствие сцене, внешность, одежду, руки и отсутствие лишних деталей. Утверждённые изображения вставляются вместо меток; текст сохраняется.</p><button id="export" disabled>Собрать и скачать DOCX</button></section>
+<section><h2>Ваши задания</h2><div id="jobs"></div></section><footer>Незавершённый сетевой запрос может быть уже оплачен провайдеру. Повтор запускается только после вашего подтверждения. Техническая проверка файла не заменяет визуальную проверку изображения.</footer>
+</main><script>
+'use strict';
+let job=null,poll=null,reading=false;
+const imageCache=new Map();
+const $=id=>document.getElementById(id);
+const errors={ACCESS_DENIED:'Откройте раздел из Telegram-бота.',NOVEL2_ACCESS_DENIED:'Откройте раздел из Telegram-бота.',NOVEL2_ILLUSTRATIONS_UNAVAILABLE:'Сервис иллюстраций пока недоступен.',DUPLICATE_MARKER:'В тексте повторяется имя метки.',MARKER_MUST_OCCUPY_ITS_OWN_PARAGRAPH:'Каждая метка должна находиться в отдельном абзаце.',MARKER_BEFORE_STORY:'Перед первой меткой должен быть текст сцены.',NO_IMAGE_MARKERS:'В тексте не найдено меток [[IMAGE:имя]].',INSTRUCTIONS_UNKNOWN_SCENE:'Инструкции содержат имя сцены, которого нет среди меток рукописи.',IMAGE_APPROVAL_REQUIRED:'Сначала утвердите все изображения.',JOB_BUSY:'Это задание уже обрабатывается.',CONTENT_NOT_SUPPORTED:'Запрошенный тип изображения не поддерживается.',GENERATOR_NOT_CONFIGURED:'Генератор не подключён.'};
+function explain(code){return errors[code]||('Операция остановлена: '+code)}
+function headers(){
+ const init=window.Telegram?.WebApp?.initData||sessionStorage.getItem('novel2_illustrations_init')||'';
+ if(init)sessionStorage.setItem('novel2_illustrations_init',init);
+ return {'content-type':'application/json','x-telegram-init-data':init};
+}
+async function api(action,data={}){
+ const response=await fetch('/novel2/api/illustrations/'+action,{method:'POST',headers:headers(),body:JSON.stringify(data),signal:AbortSignal.timeout(30000)});
+ const value=await response.json();if(!response.ok||!value.ok)throw Error(explain(value.error||'REQUEST_FAILED'));return value;
+}
+function showError(error){$('error').textContent=String(error.message||error)}
+function download(bytes,mime,name){const url=URL.createObjectURL(new Blob([bytes],{type:mime}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
+function unbase64(value){return Uint8Array.from(atob(value),c=>c.charCodeAt(0))}
+async function encodeFile(file){const bytes=new Uint8Array(await file.arrayBuffer());let s='';for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(s)}
+async function action(fn){$('error').textContent='';try{await fn()}catch(e){showError(e)}}
+function render(){
+ if(!job)return;$('jobPanel').hidden=false;$('jobId').textContent='Задание '+job.id;
+ $('summary').textContent='Сгенерировано '+job.images.filter(x=>['review_required','approved'].includes(x.status)).length+' из '+job.total+' · Утверждено '+job.approved+' из '+job.total+(job.running?' · Генерация выполняется. Можно закрыть окно.':'')+(job.error?' · '+explain(job.error):'');
+ $('progress').max=job.total;$('progress').value=job.approved;$('generate').disabled=job.running||job.images.every(x=>x.status!=='planned');
+ $('retry').hidden=!job.images.some(x=>['uncertain','failed'].includes(x.status));$('retry').disabled=job.running;$('export').disabled=!job.can_export||job.running;
+ $('frames').replaceChildren();
+ for(const item of job.images){
+  const frame=document.createElement('article');frame.className='frame';const title=document.createElement('h3');title.textContent=item.scene_id;frame.append(title);
+  const status=document.createElement('p');status.className='status';const labels={planned:'Готово к генерации',planning:'Готовим описание сцены',generating:'Генерируем изображение',uncertain:'Запрос не завершён',blocked:'Генерация отклонена',review_required:'Проверьте изображение',approved:'Утверждено'};status.textContent=(labels[item.status]||item.status)+(item.error?' · '+explain(item.error):'');frame.append(status);
+  if(['review_required','approved'].includes(item.status)){
+   const img=document.createElement('img');img.alt='Иллюстрация '+item.scene_id;frame.append(img);
+   const key=job.id+':'+item.scene_id+':'+item.sha256;
+   if(imageCache.has(key))img.src=imageCache.get(key);else{
+    const id=job.id;api('asset',{job_id:id,scene_id:item.scene_id}).then(value=>{const url=URL.createObjectURL(new Blob([unbase64(value.data)],{type:value.content_type}));imageCache.set(key,url);if(job?.id===id)img.src=url}).catch(showError);
+   }
+   if(item.status==='review_required'){const button=document.createElement('button');button.textContent='Кадр соответствует сцене';button.disabled=job.running;button.onclick=()=>action(async()=>{job=(await api('approve',{job_id:job.id,scene_id:item.scene_id})).job;render()});frame.append(button)}
+  }
+  $('frames').append(frame);
+ }
+}
+async function refresh(){if(reading||!job)return;reading=true;try{job=(await api('status',{job_id:job.id})).job;render();if(!job.running)clearInterval(poll)}finally{reading=false}}
+function watch(){clearInterval(poll);poll=setInterval(()=>refresh().catch(showError),2500)}
+async function jobs(){const list=(await api('list')).jobs;$('jobs').replaceChildren();for(const item of list){const b=document.createElement('button');b.textContent=new Date(item.created_at*1000).toLocaleString('ru')+' · '+item.approved+'/'+item.total;b.onclick=()=>action(async()=>{job=(await api('status',{job_id:item.id})).job;sessionStorage.setItem('novel2_illustration_job',job.id);render();if(job.running)watch()});$('jobs').append(b)}}
+$('prepareForm').onsubmit=e=>{e.preventDefault();action(async()=>{const source=$('source').files[0],rules=$('instructions').files[0];if(source.size>2000000||rules.size>100000)throw Error('Файл превышает допустимый размер.');$('prepare').disabled=true;try{const instructions=JSON.parse(await rules.text());job=(await api('prepare',{filename:source.name,data:await encodeFile(source),instructions})).job;sessionStorage.setItem('novel2_illustration_job',job.id);render();await jobs()}finally{$('prepare').disabled=false}})};
+$('generate').onclick=()=>action(async()=>{job=(await api('generate',{job_id:job.id})).job;job.running=true;render();watch()});
+$('retry').onclick=()=>action(async()=>{if(!confirm('Повторить незавершённые запросы? Провайдер мог уже списать оплату за предыдущую попытку.'))return;job=(await api('retry',{job_id:job.id,confirm_repeat:true})).job;job.running=true;render();watch()});
+$('check').onclick=()=>action(refresh);
+$('export').onclick=()=>action(async()=>{job=(await api('assemble',{job_id:job.id})).job;const value=await api('asset',{job_id:job.id,document:true});download(unbase64(value.data),value.content_type,'novel_illustrated.docx');render()});
+const exampleRules={version:1,content_type:'cinematic_romance',format:'portrait',visual_direction:'Неграфические романтические иллюстрации. Герои одеты, возраст 21+. Реалистичные материалы.',palette:'серое море, тёмное дерево, латунь',camera:'editorial photograph, 50 mm',characters:{},locations:{},scenes:{}};
+$('sampleRules').onclick=()=>download(JSON.stringify(exampleRules,null,2),'application/json','visual_instructions.json');
+$('sampleText').onclick=()=>download('# Пример\n\nЖенщина в сером пальто остановилась у окна старого отеля. На подоконнике лежал латунный ключ. За окном виднелось море.\n\n[[IMAGE:arrival]]\n\nОна взяла ключ и повернулась к двери.','text/markdown','story_marked.md');
+window.Telegram?.WebApp?.ready();
+action(async()=>{await jobs();const remembered=sessionStorage.getItem('novel2_illustration_job');if(remembered){job=(await api('status',{job_id:remembered})).job;render();if(job.running)watch()}});
+</script></body></html>
