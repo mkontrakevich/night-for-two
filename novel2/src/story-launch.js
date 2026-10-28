@@ -19,6 +19,7 @@ export function publicLaunchJob(row){
   if(!row)return null;
   return {draft_id:String(row.draft_id),status:row.status,stage:row.stage,
     book_id:row.book_id?String(row.book_id):null,error_code:row.error_code||'',
+    candidate_prose_chars:typeof row.checkpoint?.first_chapter_candidate?.first_scene?.prose==='string'?row.checkpoint.first_chapter_candidate.first_scene.prose.length:0,
     updated_at:row.updated_at,
     stalled:row.status==='working'&&Date.now()-new Date(row.updated_at).getTime()>90000};
 }

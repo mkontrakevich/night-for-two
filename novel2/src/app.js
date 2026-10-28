@@ -476,7 +476,12 @@ const launchQueue=createStoryLaunchQueue({db,pairKey,
       characters:{A:playerCards.A,B:playerCards.B},
       supportingCast,
       blueprint,
-      relationshipContext:relationship
+      relationshipContext:relationship,
+      resumeCandidate:checkpoint.first_chapter_candidate||null,
+      onCandidate:async(candidate)=>{
+        await save('first_chapter',{first_chapter_candidate:candidate});
+        checkpoint.first_chapter_candidate=candidate;
+      }
     }));
 
 

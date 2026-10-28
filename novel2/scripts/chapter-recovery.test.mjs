@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {expandSceneToTarget} from '../src/scene-expansion.js';
+import {publicLaunchJob} from '../src/story-launch.js';
+const source=fs.readFileSync(new URL('../src/prose-engine.js',import.meta.url),'utf8').replace(/\r\n?/g,'\n').replace(/^import .*;\n/gm,'').replace(/^export /gm,'');
+const factory=complete=>new Function('jsonCompletion','noirBeatPlan','attachNoirScene','expandSceneToTarget',source+'\nreturn createStoryBible;')(complete,()=>({}),scene=>scene,expandSceneToTarget);
+const A={passport:{fiction_name:'Fixture A'}},B={passport:{fiction_name:'Fixture B'}},blueprint={title:'Fixture',logline:'Neutral fixture'};
+const short={prose:'A neutral initial passage. '.repeat(45),target_role:'B',primary_interaction:{prompt:'Continue?'},optional_actions:[],visual_scene:{location:'Original setting'}};
+let saved,firstCalls=0,expansions=0;
+const failing=factory(async args=>{
+  if(args.responseSchema.required.includes('first_scene')){firstCalls++;return {title:'Fixture',first_scene:short};}
+  expansions++;assert(args.user.short_scene.prose===short.prose.trim());throw new Error('NOVEL2_EDGE_TEXT_504');
+});
+await assert.rejects(failing({characters:{A,B},blueprint,onCandidate:async candidate=>{saved=structuredClone(candidate);}}),/NOVEL2_EDGE_TEXT_504/);
+assert(saved?.first_scene.prose,'Candidate must be durable before expansion starts');
+assert.equal(firstCalls,1);assert.equal(expansions,1);
+const paragraphs=Array.from({length:10},(_,i)=>'Paragraph '+i+'. '+('Neutral facts about water. '.repeat(23)));
+let resumeCalls=0;
+const resumed=factory(async args=>{resumeCalls++;assert.deepEqual(args.responseSchema.required,['paragraphs']);assert(!Object.hasOwn(args.user,'output'),'Expansion only requests prose');return {paragraphs};});
+const book=await resumed({characters:{A,B},blueprint,resumeCandidate:saved,onCandidate:async candidate=>{saved=structuredClone(candidate);}});
+assert.equal(resumeCalls,1,'Resume expands the saved scene without replaying initial generation');
+assert(book.first_scene.prose.length>=4200);assert.equal(book.first_scene.target_role,'B');
+assert.equal(book.first_scene.primary_interaction.prompt,short.primary_interaction.prompt);
+assert.equal(book.first_scene.visual_scene.location,'Original setting');
+assert.equal(saved.first_scene.prose,book.first_scene.prose);
+const publicJob=publicLaunchJob({draft_id:9,status:'failed',stage:'first_chapter',checkpoint:{first_chapter_candidate:saved}});
+assert.equal(publicJob.candidate_prose_chars,saved.first_scene.prose.length);
+assert(!JSON.stringify(publicJob).includes('Neutral facts'));
+await assert.rejects(expandSceneToTarget(short,{complete:async()=>({paragraphs:['short']}),system:'Neutral'}),/EXPANSION_INVALID/);
+let paid=0;const full={...short,prose:paragraphs.join('\n\n')};
+assert.equal(await expandSceneToTarget(full,{complete:async()=>{paid++;},system:'Neutral'}),full);assert.equal(paid,0);
+console.log('CHAPTER_RECOVERY_OK candidate_before_inference=true resume_without_restart=true stable_decision=true compact_expansion=true private_status=true');
