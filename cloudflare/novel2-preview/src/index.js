@@ -690,7 +690,7 @@ export default{
     if(request.method==='GET'&&env.ASSETS&&typeof env.ASSETS.fetch==='function'){
       const uiPath=incoming.pathname==='/novel2'||incoming.pathname==='/novel2/'
         ?'/index.html'
-        :['/noir-experience.js','/noir-experience.css','/noir-host.js','/noir-host.css','/story-launch-client.js']
+        :['/illustrations.html','/noir-experience.js','/noir-experience.css','/noir-host.js','/noir-host.css','/story-launch-client.js']
             .find(p=>incoming.pathname==='/novel2'+p);
       if(uiPath){
         const assetUrl=new URL(uiPath,incoming);
@@ -783,5 +783,6 @@ export default{
     },{'retry-after':'2'});
   }
 };
+
 
 

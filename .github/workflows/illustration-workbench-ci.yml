@@ -1,0 +1,30 @@
+name: Illustration Workbench CI
+on:
+  pull_request:
+    paths: ['illustration_pipeline/**','novel2/public/illustrations.html','novel2/src/illustration-workbench-proxy.js','.github/workflows/illustration-workbench-ci.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pip install -r illustration_pipeline/requirements.txt
+      - run: python -m unittest discover -s illustration_pipeline -p 'test*.py' -v
+      - run: node novel2/scripts/illustration-proxy.test.mjs
+      - run: npm install --prefix illustration_pipeline --no-save --no-audit --no-fund playwright
+      - run: |
+          if ! command -v google-chrome; then
+            cd illustration_pipeline
+            npx playwright install --with-deps chromium
+          fi
+      - run: node illustration_pipeline/workbench-browser.test.mjs
+      - run: docker build -f illustration_pipeline/Dockerfile.workbench -t novel2-illustration-workbench:ci .
