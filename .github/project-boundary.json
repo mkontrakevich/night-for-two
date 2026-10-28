@@ -25,6 +25,7 @@
     "deploy-origin.yml",
     "diagnose-night-gateway-path.yml",
     "generate-full-novel.yml",
+    "illustration-workbench-ci.yml",
     "inspect-live-novel.yml",
     "inspect-night-cloudflared-errors.yml",
     "inspect-night-gateway.yml",
