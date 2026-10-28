@@ -39,6 +39,7 @@ def make_server(engine, token, host='127.0.0.1', port=5691):
                     raw=base64.b64decode(data.get('data',''),validate=True)
                     return self.answer(200,{'ok':True,'job':engine.create(owner,data.get('filename',''),raw,data.get('instructions'))})
                 if action=='list': return self.answer(200,{'ok':True,'jobs':engine.list(owner)})
+                if action=='configuration': return self.answer(200,engine.edge.call('provider-status',{}))
                 job_id=str(data.get('job_id',''))
                 job=engine.get(job_id,owner)
                 if action=='status': return self.answer(200,{'ok':True,'job':engine.view(job)})

@@ -16,7 +16,7 @@
 <section><h2>Ваши задания</h2><div id="jobs"></div></section><footer>Незавершённый сетевой запрос может быть уже оплачен провайдеру. Повтор запускается только после вашего подтверждения. Техническая проверка файла не заменяет визуальную проверку изображения.</footer>
 </main><script>
 'use strict';
-let job=null,poll=null,reading=false;
+let job=null,poll=null,reading=false,providerBlocked=false;
 const imageCache=new Map();
 const $=id=>document.getElementById(id);
 const errors={ACCESS_DENIED:'Откройте раздел из Telegram-бота.',NOVEL2_ACCESS_DENIED:'Откройте раздел из Telegram-бота.',NOVEL2_ILLUSTRATIONS_UNAVAILABLE:'Сервис иллюстраций пока недоступен.',DUPLICATE_MARKER:'В тексте повторяется имя метки.',MARKER_MUST_OCCUPY_ITS_OWN_PARAGRAPH:'Каждая метка должна находиться в отдельном абзаце.',MARKER_BEFORE_STORY:'Перед первой меткой должен быть текст сцены.',NO_IMAGE_MARKERS:'В тексте не найдено меток [[IMAGE:имя]].',INSTRUCTIONS_UNKNOWN_SCENE:'Инструкции содержат имя сцены, которого нет среди меток рукописи.',IMAGE_APPROVAL_REQUIRED:'Сначала утвердите все изображения.',JOB_BUSY:'Это задание уже обрабатывается.',CONTENT_NOT_SUPPORTED:'Запрошенный тип изображения не поддерживается.',GENERATOR_NOT_CONFIGURED:'Генератор не подключён.'};
@@ -38,8 +38,8 @@ async function action(fn){$('error').textContent='';try{await fn()}catch(e){show
 function render(){
  if(!job)return;$('jobPanel').hidden=false;$('jobId').textContent='Задание '+job.id;
  $('summary').textContent='Сгенерировано '+job.images.filter(x=>['review_required','approved'].includes(x.status)).length+' из '+job.total+' · Утверждено '+job.approved+' из '+job.total+(job.running?' · Генерация выполняется. Можно закрыть окно.':'')+(job.error?' · '+explain(job.error):'');
- $('progress').max=job.total;$('progress').value=job.approved;$('generate').disabled=job.running||job.images.every(x=>x.status!=='planned');
- $('retry').hidden=!job.images.some(x=>['uncertain','failed'].includes(x.status));$('retry').disabled=job.running;$('export').disabled=!job.can_export||job.running;
+ $('progress').max=job.total;$('progress').value=job.approved;$('generate').disabled=providerBlocked||job.running||job.images.every(x=>x.status!=='planned');
+ $('retry').hidden=!job.images.some(x=>['uncertain','failed'].includes(x.status));$('retry').disabled=providerBlocked||job.running;$('export').disabled=!job.can_export||job.running;
  $('frames').replaceChildren();
  for(const item of job.images){
   const frame=document.createElement('article');frame.className='frame';const title=document.createElement('h3');title.textContent=item.scene_id;frame.append(title);
@@ -53,7 +53,7 @@ function render(){
    if(item.status==='review_required'){const button=document.createElement('button');button.textContent='Кадр соответствует сцене';button.disabled=job.running;button.onclick=()=>action(async()=>{job=(await api('approve',{job_id:job.id,scene_id:item.scene_id})).job;render()});frame.append(button)}
   }
   if(['review_required','approved'].includes(item.status)){const reject=document.createElement('button');reject.className='secondary';reject.textContent=item.status==='approved'?'Отменить утверждение':'Кадр не подходит';reject.disabled=job.running;reject.onclick=()=>action(async()=>{job=(await api('reject',{job_id:job.id,scene_id:item.scene_id})).job;render()});frame.append(reject)}
-  if(item.status==='rejected'){const again=document.createElement('button');again.textContent='Сгенерировать другой кадр';again.disabled=job.running;again.onclick=()=>action(async()=>{if(!confirm('Сгенерировать новый вариант только этого кадра? Это новый платный запрос.'))return;job=(await api('retry',{job_id:job.id,scene_id:item.scene_id,confirm_repeat:true})).job;job.running=true;render();watch()});frame.append(again)}
+  if(item.status==='rejected'){const again=document.createElement('button');again.textContent='Сгенерировать другой кадр';again.disabled=providerBlocked||job.running;again.onclick=()=>action(async()=>{if(!confirm('Сгенерировать новый вариант только этого кадра? Это новый платный запрос.'))return;job=(await api('retry',{job_id:job.id,scene_id:item.scene_id,confirm_repeat:true})).job;job.running=true;render();watch()});frame.append(again)}
   $('frames').append(frame);
  }
 }
@@ -69,5 +69,5 @@ const exampleRules={version:1,content_type:'cinematic_romance',format:'portrait'
 $('sampleRules').onclick=()=>download(JSON.stringify(exampleRules,null,2),'application/json','visual_instructions.json');
 $('sampleText').onclick=()=>download('# Пример\n\nЖенщина в сером пальто остановилась у окна старого отеля. На подоконнике лежал латунный ключ. За окном виднелось море.\n\n[[IMAGE:arrival]]\n\nОна взяла ключ и повернулась к двери.','text/markdown','story_marked.md');
 window.Telegram?.WebApp?.ready();
-action(async()=>{await jobs();const remembered=sessionStorage.getItem('novel2_illustration_job');if(remembered){job=(await api('status',{job_id:remembered})).job;render();if(job.running)watch()}});
+action(async()=>{try{const cfg=await api('configuration');providerBlocked=!cfg.configured||!cfg.authenticated||cfg.expired||cfg.limit_exhausted||cfg.management_key;if(providerBlocked)$('error').textContent=cfg.limit_exhausted?'Достигнут лимит ключа OpenRouter. Генерация приостановлена.':cfg.expired?'Срок ключа OpenRouter истёк. Генерация приостановлена.':'Проверьте доступ ключа OpenRouter. Генерация приостановлена.';}catch(e){showError(e)}await jobs();const remembered=sessionStorage.getItem('novel2_illustration_job');if(remembered){job=(await api('status',{job_id:remembered})).job;render();if(job.running)watch()}});
 </script></body></html>

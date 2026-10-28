@@ -21,6 +21,7 @@ STORY='An adult archivist enters a quiet room.\n\n[[IMAGE:first]]\n\nShe finds a
 OWNER='a'*64
 class FakeEdge:
     def __init__(self): self.descriptions=0; self.generations=0; self.fail=False
+    def call(self,route,payload): return {'ok':True,'configured':True,'authenticated':True,'expired':False,'limit_exhausted':False}
     def describe(self,anchor,profile):
         self.descriptions+=1
         return 'A fully clothed adult archivist stands by a quiet archive table.',{'provider':'fixture','model':'fixture'}
