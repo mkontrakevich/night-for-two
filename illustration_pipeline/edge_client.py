@@ -17,7 +17,8 @@ class EdgeClient:
 
     def call(self, route, payload):
         request = urllib.request.Request(self.url+'/'+route, data=json.dumps(payload).encode(),
-            headers={'content-type':'application/json','x-novel2-service-key':self.key}, method='POST')
+            headers={'content-type':'application/json','x-novel2-service-key':self.key,
+                     'User-Agent':'Novel2-Illustration-Workbench/1.0'}, method='POST')
         deadline=time.monotonic()+210
         try:
             with urllib.request.urlopen(request,timeout=210) as response:

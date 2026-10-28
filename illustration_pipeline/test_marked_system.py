@@ -6,6 +6,7 @@ import threading
 import unittest
 import urllib.request
 import urllib.error
+from unittest.mock import patch
 from pathlib import Path
 from PIL import Image
 from docx import Document
@@ -13,6 +14,7 @@ from content_profile import validate_profile
 from marked_engine import MarkedEngine, JobError
 from marked_manuscript import read_manuscript, assemble_marked
 from workbench import make_server
+from edge_client import EdgeClient
 
 PROFILE={'version':1,'content_type':'mystery','format':'portrait','characters':{},'locations':{},'scenes':{}}
 STORY='An adult archivist enters a quiet room.\n\n[[IMAGE:first]]\n\nShe finds a letter.\n\n[[IMAGE:second]]'
@@ -113,5 +115,13 @@ class MarkedSystemTest(unittest.TestCase):
             request=urllib.request.Request(url,data=b'{}',headers={'Authorization':'Bearer '+'t'*64,'X-Workbench-Owner':OWNER},method='POST')
             with urllib.request.urlopen(request) as response:self.assertEqual(json.load(response),{'ok':True,'jobs':[]})
         finally:server.shutdown();server.server_close()
+
+    def test_edge_client_identifies_authenticated_service(self):
+        with patch('edge_client.urllib.request.urlopen') as open_url:
+            open_url.return_value.__enter__.return_value=io.BytesIO(b'{"ok":true}')
+            self.assertTrue(EdgeClient('https://example.invalid/novel2-ai','test-service-key').call('vpc-probe',{})['ok'])
+            request=open_url.call_args.args[0]
+            self.assertEqual(request.get_header('User-agent'),'Novel2-Illustration-Workbench/1.0')
+            self.assertEqual(request.get_header('X-novel2-service-key'),'test-service-key')
 
 if __name__=='__main__':unittest.main()
