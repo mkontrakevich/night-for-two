@@ -83,14 +83,18 @@ class MarkedEngine:
     def _lock(self, job_id):
         with self.guard: return self.locks.setdefault(job_id,threading.Lock())
 
-    def generate(self, job_id, owner, retry=False):
+    def generate(self, job_id, owner, retry=False, scene_id=None):
         lock = self._lock(job_id)
         if not lock.acquire(blocking=False): raise JobError('JOB_BUSY')
         try:
             job = self.get(job_id,owner); directory = self.root/job_id
+            if scene_id and scene_id not in {x['scene_id'] for x in job['images']}: raise JobError('SCENE_NOT_FOUND')
+            job.pop('error',None)
             if digest(directory/job['source'])!=job['source_sha256']: raise JobError('SOURCE_CHANGED')
             if not self.edge and not self.sd: raise JobError('GENERATOR_NOT_CONFIGURED')
             for item in job['images']:
+                if scene_id and item['scene_id']!=scene_id: continue
+                if item['status']=='rejected' and not (retry and scene_id): continue
                 if item['status'] in {'review_required','approved','blocked'}: continue
                 if item['status'] in {'failed','uncertain'} and not retry: continue
                 if item.get('prompt') is None:
@@ -129,7 +133,7 @@ class MarkedEngine:
         code = str(error)
         if not re.fullmatch('[A-Z][A-Z0-9_]{1,100}',code): code='PROVIDER_REQUEST_UNCERTAIN'
         # A request error may occur after provider acceptance; retain it for explicit review/retry.
-        status='blocked' if code=='CONTENT_NOT_SUPPORTED' or code in {'PROVIDER_HTTP_401','PROVIDER_HTTP_403','PROVIDER_HTTP_422'} else 'uncertain'
+        status='blocked' if code=='CONTENT_NOT_SUPPORTED' or code in {'PROVIDER_HTTP_401','PROVIDER_HTTP_403','PROVIDER_HTTP_422'} or re.match('NOVEL2_AI_TEXT_(?:PROVIDER_40[123]|REFUSED)',code) else 'uncertain'
         item.update(status=status,error=code); self._save(job)
         print(json.dumps({'job_id':job['id'],'scene_id':item['scene_id'],'status':status,'code':code}),flush=True)
 
@@ -154,6 +158,21 @@ class MarkedEngine:
             path=self.root/job_id/item['path']
             if self._image(path)['sha256']!=item['sha256']: raise JobError('IMAGE_CHANGED')
             item.update(status='approved',approved_at=time.time(),approved_by=owner)
+            self._save(job); return self.view(job)
+        finally: lock.release()
+
+    def reject(self, job_id, owner, scene_id):
+        lock=self._lock(job_id)
+        if not lock.acquire(blocking=False): raise JobError('JOB_BUSY')
+        try:
+            job=self.get(job_id,owner); item=next((x for x in job['images'] if x['scene_id']==scene_id),None)
+            if not item or item['status'] not in {'review_required','approved'}: raise JobError('IMAGE_NOT_READY_FOR_APPROVAL')
+            path=self.root/job_id/item['path']
+            archived=path.with_name(item['scene_id']+'-attempt-'+str(item['attempts'])+'.png')
+            path.replace(archived)
+            item.setdefault('history',[]).append({'path':archived.name,'sha256':item['sha256'],'model':item.get('model'),'rejected_at':time.time()})
+            item.update(status='rejected',path=archived.name)
+            for key in ['output','output_sha256']: job.pop(key,None)
             self._save(job); return self.view(job)
         finally: lock.release()
 

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import {config} from './config.js';
 
-const actions=new Set(['prepare','list','status','generate','retry','approve','assemble','asset']);
+const actions=new Set(['prepare','list','status','generate','retry','approve','reject','assemble','asset','configuration']);
 export async function illustrationWorkbenchRequest({method,action,input,role,request=fetch}){
   if(method!=='POST')return {status:405,body:{ok:false,error:'METHOD_NOT_ALLOWED'}};
   if(!actions.has(action))return {status:404,body:{ok:false,error:'NOT_FOUND'}};

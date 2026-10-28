@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const worker=fs.readFileSync(new URL('../../cloudflare/novel2-preview/src/index.js',import.meta.url),'utf8');
+const start=worker.indexOf('export function openRouterFailureCategory');
+const end=worker.indexOf('\n}',start)+2;
+const classify=new Function(worker.slice(start,end).replace('export ','')+';return openRouterFailureCategory;')();
+assert.equal(classify({error:{message:'Key limit exceeded: PRIVATE VALUE'}}),'LIMIT');
+assert.equal(classify({error:{message:'Unsupported country'}}),'REGION');
+assert.equal(classify({error:{message:'Blocked by guardrail'}}),'POLICY');
+assert.equal(classify({error:{message:'API key expired'}}),'KEY_EXPIRED');
+assert.equal(classify({error:{message:'arbitrary private data'}}),'ACCESS');
+assert(!classify({error:{message:'PRIVATE VALUE'}}).includes('PRIVATE'));
+console.log('ILLUSTRATION_PROVIDER_DIAGNOSTICS_OK safe_categories=true no_body_exposure=true');

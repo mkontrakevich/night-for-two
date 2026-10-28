@@ -20,6 +20,7 @@ jobs:
       - run: pip install -r illustration_pipeline/requirements.txt
       - run: python -m unittest discover -s illustration_pipeline -p 'test*.py' -v
       - run: node novel2/scripts/illustration-proxy.test.mjs
+      - run: node novel2/scripts/illustration-provider-diagnostics.test.mjs
       - run: npm install --prefix illustration_pipeline --no-save --no-audit --no-fund playwright
       - run: |
           if ! command -v google-chrome; then

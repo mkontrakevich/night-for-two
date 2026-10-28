@@ -39,6 +39,7 @@ def make_server(engine, token, host='127.0.0.1', port=5691):
                     raw=base64.b64decode(data.get('data',''),validate=True)
                     return self.answer(200,{'ok':True,'job':engine.create(owner,data.get('filename',''),raw,data.get('instructions'))})
                 if action=='list': return self.answer(200,{'ok':True,'jobs':engine.list(owner)})
+                if action=='configuration': return self.answer(200,engine.edge.call('provider-status',{}))
                 job_id=str(data.get('job_id',''))
                 job=engine.get(job_id,owner)
                 if action=='status': return self.answer(200,{'ok':True,'job':engine.view(job)})
@@ -51,7 +52,7 @@ def make_server(engine, token, host='127.0.0.1', port=5691):
                     reserved=threading.Event()
                     def work():
                         reserved.wait()
-                        try: engine.generate(job_id,owner,retry=retry)
+                        try: engine.generate(job_id,owner,retry=retry,scene_id=data.get('scene_id'))
                         except Exception as error:
                             code=str(error) if isinstance(error,JobError) else 'GENERATION_FAILED'
                             failed=engine.get(job_id,owner); failed['error']=code; engine._save(failed)
@@ -70,6 +71,8 @@ def make_server(engine, token, host='127.0.0.1', port=5691):
                     return self.answer(202,{'ok':True,'job':engine.view(job)})
                 if action=='approve':
                     return self.answer(200,{'ok':True,'job':engine.approve(job_id,owner,str(data.get('scene_id','')))})
+                if action=='reject':
+                    return self.answer(200,{'ok':True,'job':engine.reject(job_id,owner,str(data.get('scene_id','')))})
                 if action=='assemble': return self.answer(200,{'ok':True,'job':engine.assemble(job_id,owner)})
                 if action=='asset': return self.answer(200,{'ok':True,**engine.asset(job_id,owner,data.get('scene_id'),data.get('document') is True)})
                 raise JobError('ACTION_NOT_FOUND')
