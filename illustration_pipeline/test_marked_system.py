@@ -37,6 +37,16 @@ class MarkedSystemTest(unittest.TestCase):
         self.edge=FakeEdge();self.engine=MarkedEngine(self.root/'jobs',edge=self.edge)
     def tearDown(self): self.temp.cleanup()
     def create(self,story=STORY): return self.engine.create(OWNER,'story.md',story.encode(),PROFILE)
+    def test_optional_sdxl_backend_uses_cloud_adapter(self):
+        calls=[]
+        def sdxl(prompt,negative,path,width,height):
+            calls.append((width,height)); Image.new('RGB',(width,height),'white').save(path)
+            return {'backend':'cloudflare-sdxl','model':'fixture-sdxl','seed':None,'steps':4}
+        self.edge.generate_sdxl=sdxl
+        self.engine.cloud_sdxl=True
+        job=self.create(); result=self.engine.generate(job['id'],OWNER)
+        self.assertEqual(len(calls),2)
+        self.assertTrue(all(x['model']=='fixture-sdxl' and x['status']=='review_required' for x in result['images']))
     def test_exact_markers_and_no_future_leak(self):
         job=self.create();stored=self.engine.get(job['id'],OWNER)
         self.assertNotIn('finds a letter',stored['images'][0]['context'])

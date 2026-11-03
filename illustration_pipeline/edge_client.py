@@ -73,3 +73,11 @@ class EdgeClient:
         return {'backend':'cloudflare','model':result.get('model'),'seed':None,
                 'sampler':None,'steps':None,'cfg_scale':None}
 
+    def generate_sdxl(self, prompt, negative_prompt, output_path, width, height):
+        result = self.call('sdxl-image', {'prompt':prompt,'negative_prompt':negative_prompt,'width':width,'height':height})
+        try: raw = base64.b64decode(result['image'].split(',')[-1],validate=True)
+        except (KeyError,ValueError): raise ProviderError('IMAGE_ENCODING_INVALID') from None
+        output_path.write_bytes(raw)
+        return {'backend':'cloudflare-sdxl','model':result.get('model'),'seed':result.get('seed'),
+                'sampler':None,'steps':result.get('steps'),'cfg_scale':None}
+
