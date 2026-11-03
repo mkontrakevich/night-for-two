@@ -17,6 +17,7 @@ import {handleStranger,runStrangerWorld} from './stranger.js';
 import {handleNativeActor,runNativeActor} from './native-actor.js';
 import {handleMigrationAdmin,runLegacyMigration} from './migrate-legacy.js';
 import {ACTOR_VIEW_SPEC,actorViewPrompt,bytesFromAiImage,base64FromBytes,compositeActorSvg} from './actor-sheet-compose.js';
+import {generateSdxl} from './sdxl-image.js';
 
 export class ActorSheetWorkflow extends WorkflowEntrypoint {
  async run(event,step){
@@ -396,6 +397,14 @@ async function handleAi(request,env,incoming){
     }
   }
 
+  if(incoming.pathname==='/novel2-ai/sdxl-image'){
+    let body;try{body=await request.json()}catch{return json(400,{ok:false,error:'NOVEL2_AI_EDGE_JSON_REQUIRED'})}
+    try{return json(200,await generateSdxl(env.AI,body))}
+    catch(error){
+      const code=String(error?.message||'');
+      return json(code.endsWith('_INVALID')||code.endsWith('_NOT_SUPPORTED')?422:502,{ok:false,error:/^SDXL_[A-Z_]+$/.test(code)?code:'SDXL_INFERENCE_FAILED'});
+    }
+  }
   if(incoming.pathname==='/novel2-ai/image'){
     let body={};
     try{body=await request.json();}catch{return json(400,{ok:false,error:'NOVEL2_AI_EDGE_JSON_REQUIRED'});}

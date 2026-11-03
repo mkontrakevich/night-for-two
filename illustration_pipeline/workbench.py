@@ -89,11 +89,11 @@ def main():
     args=parser.parse_args()
     edge=EdgeClient(os.environ.get('NOVEL2_EDGE_AI_URL',''),os.environ.get('WORKBENCH_TOKEN',''))
     sd=None
-    if os.environ.get('SD_BACKEND'):
+    if os.environ.get('SD_BACKEND') and os.environ['SD_BACKEND']!='cloudflare-sdxl':
         from sd_client import StableDiffusionClient
         sd=StableDiffusionClient({'backend':os.environ['SD_BACKEND'],'base_url':os.environ.get('SD_BASE_URL','http://127.0.0.1:7860'),
             'checkpoint':os.environ.get('SD_CHECKPOINT',''),'width':768,'height':1024})
-    engine=MarkedEngine(os.environ.get('WORKBENCH_DATA','/data'),edge=edge,sd=sd)
+    engine=MarkedEngine(os.environ.get('WORKBENCH_DATA','/data'),edge=edge,sd=sd,cloud_sdxl=os.environ.get('SD_BACKEND')=='cloudflare-sdxl')
     make_server(engine,os.environ.get('WORKBENCH_TOKEN',''),args.host,args.port).serve_forever()
 
 if __name__=='__main__': main()

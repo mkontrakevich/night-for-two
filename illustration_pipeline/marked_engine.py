@@ -16,9 +16,9 @@ from edge_client import EdgeClient
 class JobError(RuntimeError): pass
 
 class MarkedEngine:
-    def __init__(self, root, edge=None, sd=None):
+    def __init__(self, root, edge=None, sd=None, cloud_sdxl=False):
         self.root = Path(root); self.root.mkdir(parents=True,exist_ok=True)
-        self.edge, self.sd, self.locks = edge, sd, {}
+        self.edge, self.sd, self.cloud_sdxl, self.locks = edge, sd, cloud_sdxl, {}
         self.guard = threading.Lock()
         # An interrupted inference may have been billed. Do not automatically replay it.
         for path in self.root.glob('*/job.json'):
@@ -112,7 +112,9 @@ class MarkedEngine:
                 path = directory/(item['scene_id']+'.png')
                 try:
                     width,height = FORMATS[job['instructions']['format']]
-                    if self.sd:
+                    if self.cloud_sdxl:
+                        metadata=self.edge.generate_sdxl(item['prompt'],item['negative_prompt'],path,width,height)
+                    elif self.sd:
                         from sd_client import StableDiffusionClient
                         generator=StableDiffusionClient({**self.sd.cfg,'width':width,'height':height})
                         metadata = generator.generate(item['prompt'],item['negative_prompt'],path)
