@@ -10,12 +10,28 @@ export const FORMATS = Object.freeze({
 const enc=new TextEncoder();
 const allowed = v => typeof v==='string' && v.trim() ? v.trim() : 'unknown';
 const validId=id=>typeof id==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id);
+const CRC_TABLE=Uint32Array.from({length:256},(_,i)=>{let c=i;for(let k=0;k<8;k++)c=(c&1)?((c>>>1)^0xEDB88320):(c>>>1);return c>>>0});
+function crc32(bytes,from,to){let c=0xffffffff;for(let i=from;i<to;i++)c=CRC_TABLE[(c^bytes[i])&255]^(c>>>8);return (c^0xffffffff)>>>0}
+
 function dimensions(bytes){
-  if(bytes.length>=24 && bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71&&bytes[4]===13&&bytes[5]===10&&bytes[6]===26&&bytes[7]===10){
+  if(bytes.length>=45 && bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71&&bytes[4]===13&&bytes[5]===10&&bytes[6]===26&&bytes[7]===10){
     const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
-    return {mime:'image/png',width:view.getUint32(16),height:view.getUint32(20)};
+    let offset=8,seenIHDR=false,seenIDAT=false,seenIEND=false,width=0,height=0;
+    while(offset+12<=bytes.length){
+      const len=view.getUint32(offset),from=offset+4,end=from+4+len;
+      if(len>bytes.length||end+4>bytes.length)throw Error('P1_PNG_CHUNK_INVALID');
+      const type=String.fromCharCode(...bytes.subarray(from,from+4));
+      const stored=view.getUint32(end),calc=crc32(bytes,from,end);
+      if(stored!==calc)throw Error('P1_PNG_CRC_INVALID');
+      if(!seenIHDR){if(type!=='IHDR'||len!==13)throw Error('P1_PNG_HEADER_INVALID');seenIHDR=true;width=view.getUint32(from+4);height=view.getUint32(from+8);}
+      if(type==='IDAT'&&len>0)seenIDAT=true;
+      offset=end+4;
+      if(type==='IEND'){if(len!==0||offset!==bytes.length)throw Error('P1_PNG_END_INVALID');seenIEND=true;break;}
+    }
+    if(!seenIHDR||!seenIDAT||!seenIEND)throw Error('P1_PNG_INCOMPLETE');
+    return {mime:'image/png',width,height};
   }
-  if(bytes[0]===255&&bytes[1]===216){
+  if(bytes.length>=1000&&bytes[0]===255&&bytes[1]===216&&bytes.at(-2)===255&&bytes.at(-1)===217){
     let p=2;
     while(p+9<bytes.length){
       if(bytes[p]!==255){p++;continue}

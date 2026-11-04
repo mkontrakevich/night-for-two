@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import {inspectImage,pencilPrompt,finalPrompt,runPencil,runImage,persistOriginal,FORMATS,MODEL} from '../src/model-test-image.js';
-// Lightweight PNG fixture: real IHDR dimensions, binary bytes. Does not assert decoder validity.
-function fixture(w,h){const b=new Uint8Array(100).fill(1);b.set([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82]);const v=new DataView(b.buffer);v.setUint32(16,w);v.setUint32(20,h);return b}
+import {fixture} from './png-fixture.mjs';
 const sketch=fixture(288,496),draft=fixture(768,1344);
 assert.deepEqual(FORMATS.portrait.sketch,[288,496]);
 assert.equal(inspectImage(sketch,{reference:true}).mime,'image/png');
+assert.throws(()=>inspectImage(new Uint8Array(100).fill(1)),/IMAGE_MIME_INVALID|PNG/);
 assert.throws(()=>inspectImage(draft,{reference:true}),/REFERENCE_TOO_LARGE/);
 const frame={status:'complete',shot_type:'medium shot',camera_angle:'eye-level',lens_mm:50,scene_summary:'Двое взрослых рядом у окна',blocking:{hands:'на столе'},emotion:'сдержанность',wardrobe_props:'пальто',environment:'отель',lighting:'вечерний свет',final_image_prompt:'Two fictional adults by a hotel window at dusk',negative_prompt:'extra fingers'};
 assert.ok(pencilPrompt(frame).includes('CAMERA / LENS'));

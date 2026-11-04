@@ -8,7 +8,7 @@ class Storage{
  async setAlarm(t){this.alarm=t}
  async transaction(fn){return fn(this)}
 }
-function fixture(w,h){const b=new Uint8Array(100).fill(1);b.set([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82]);const v=new DataView(b.buffer);v.setUint32(16,w);v.setUint32(20,h);return b}
+import {fixture} from './png-fixture.mjs';
 const sketch=fixture(288,496),draft=fixture(768,1344),objects=new Map();let paidCalls=0;
 const r2={
  async head(k){const o=objects.get(k);return o?{size:o.bytes.length,customMetadata:o.metadata}:null},
