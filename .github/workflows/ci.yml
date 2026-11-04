@@ -22,6 +22,14 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm test
+      - name: Night4two model tests (mocked, no paid API calls)
+        run: |
+          node cloudflare/novel2-preview/scripts/model-test-drive.test.mjs
+          node cloudflare/night4two-drive-oauth/scripts/ingest.test.mjs
+          node cloudflare/novel2-preview/scripts/model-test-state.test.mjs
+          node cloudflare/novel2-preview/scripts/model-comparison.test.mjs
+          node --experimental-loader ./cloudflare/novel2-preview/scripts/cloudflare-test-loader.mjs cloudflare/novel2-preview/scripts/model-test-api.test.mjs
+          node --experimental-loader ./cloudflare/novel2-preview/scripts/cloudflare-test-loader.mjs cloudflare/novel2-preview/scripts/model-test-cloud.test.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
