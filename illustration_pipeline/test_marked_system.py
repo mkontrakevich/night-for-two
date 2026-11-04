@@ -37,6 +37,16 @@ class MarkedSystemTest(unittest.TestCase):
         self.edge=FakeEdge();self.engine=MarkedEngine(self.root/'jobs',edge=self.edge)
     def tearDown(self): self.temp.cleanup()
     def create(self,story=STORY): return self.engine.create(OWNER,'story.md',story.encode(),PROFILE)
+    def test_director_recorded_and_prompt_uses_scene_boundaries(self):
+        job=self.create(); self.engine.generate(job['id'],OWNER)
+        stored=self.engine.get(job['id'],OWNER)
+        first=stored['images'][0]
+        self.assertEqual(first['director']['version'],'sensual-director-novel2-v1.1')
+        self.assertEqual(len(first['director']['context_sha256']),64)
+        self.assertIn('Never reveal later events',first['prompt'])
+        self.assertIn('visible action and its initiator',first['prompt'])
+        self.assertIn('do not disclose private answers',first['prompt'])
+        self.assertNotIn('finds a letter',first['prompt'])
     def test_exact_markers_and_no_future_leak(self):
         job=self.create();stored=self.engine.get(job['id'],OWNER)
         self.assertNotIn('finds a letter',stored['images'][0]['context'])

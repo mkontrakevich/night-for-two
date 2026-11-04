@@ -1,6 +1,7 @@
 """Uploaded JSON is declarative visual direction, never code or backend config."""
 from __future__ import annotations
 import json
+from sensual_director import DIRECTOR_GUIDANCE
 
 KINDS = {'cinematic_romance', 'mystery', 'editorial', 'landscape'}
 FORMATS = {'portrait':(768,1024), 'landscape':(1024,768), 'square':(1024,1024)}
@@ -32,6 +33,7 @@ def validate_profile(raw):
 def prompt_for(anchor, profile, description=None):
     return '\n'.join([
         POLICY,
+        DIRECTOR_GUIDANCE,
         'SHOT TYPE: '+profile.get('camera','cinematic editorial still, 50 mm'),
         'STORY/ACTION: '+(description or anchor['context'][-3000:]),
         'BODY LANGUAGE: grounded natural anatomy; no extra characters or spoilers.',

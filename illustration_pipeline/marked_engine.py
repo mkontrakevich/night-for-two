@@ -12,13 +12,14 @@ from PIL import Image, ImageOps
 from content_profile import validate_profile, prompt_for, FORMATS
 from marked_manuscript import read_manuscript, assemble_marked, digest
 from edge_client import EdgeClient
+from sensual_director import director_metadata
 
 class JobError(RuntimeError): pass
 
 class MarkedEngine:
-    def __init__(self, root, edge=None, sd=None):
+    def __init__(self, root, edge=None, sd=None, openrouter_image=False):
         self.root = Path(root); self.root.mkdir(parents=True,exist_ok=True)
-        self.edge, self.sd, self.locks = edge, sd, {}
+        self.edge, self.sd, self.openrouter_image, self.locks = edge, sd, openrouter_image, {}
         self.guard = threading.Lock()
         # An interrupted inference may have been billed. Do not automatically replay it.
         for path in self.root.glob('*/job.json'):
@@ -103,6 +104,7 @@ class MarkedEngine:
                     try:
                         description, metadata = self.edge.describe(item,job['instructions'])
                         item['planner'] = metadata
+                        item['director'] = director_metadata(item['context'])
                         item['prompt'] = prompt_for(item,job['instructions'],description)
                         item['negative_prompt'] = 'nudity, explicit sexual acts, extra fingers, malformed hands, duplicate people, distorted anatomy, plastic skin, text, logos, watermarks'
                         item['status'] = 'planned'; self._save(job)
@@ -117,7 +119,10 @@ class MarkedEngine:
                         generator=StableDiffusionClient({**self.sd.cfg,'width':width,'height':height})
                         metadata = generator.generate(item['prompt'],item['negative_prompt'],path)
                     else:
-                        metadata = self.edge.generate(item['prompt'],item['negative_prompt'],path,width,height)
+                        if self.openrouter_image:
+                            metadata = self.edge.generate(item['prompt'],item['negative_prompt'],path,width,height,openrouter=True,content_type=job['instructions']['content_type'])
+                        else:
+                            metadata = self.edge.generate(item['prompt'],item['negative_prompt'],path,width,height)
                     with Image.open(path) as original:
                         normalized=ImageOps.exif_transpose(original).convert('RGB')
                         normalized.save(path,format='PNG')
