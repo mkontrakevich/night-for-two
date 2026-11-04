@@ -12,6 +12,7 @@ from PIL import Image, ImageOps
 from content_profile import validate_profile, prompt_for, FORMATS
 from marked_manuscript import read_manuscript, assemble_marked, digest
 from edge_client import EdgeClient
+from sensual_director import director_metadata
 
 class JobError(RuntimeError): pass
 
@@ -103,6 +104,7 @@ class MarkedEngine:
                     try:
                         description, metadata = self.edge.describe(item,job['instructions'])
                         item['planner'] = metadata
+                        item['director'] = director_metadata(item['context'])
                         item['prompt'] = prompt_for(item,job['instructions'],description)
                         item['negative_prompt'] = 'nudity, explicit sexual acts, extra fingers, malformed hands, duplicate people, distorted anatomy, plastic skin, text, logos, watermarks'
                         item['status'] = 'planned'; self._save(job)
