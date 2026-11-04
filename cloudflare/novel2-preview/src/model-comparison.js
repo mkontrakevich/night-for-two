@@ -12,6 +12,13 @@ export async function modelComparison(request,env,send=fetch){
  if(typeof body.model!=='string'||!allowed.includes(body.model)||!/^[-a-zA-Z0-9_.]+\/[-a-zA-Z0-9_.:]+$/.test(body.model))return output(403,{ok:false,error:'NOVEL2_COMPARE_MODEL_DENIED'});
  if(typeof body.prompt!=='string'||!body.prompt.trim()||new TextEncoder().encode(body.prompt).length>205000)return output(400,{ok:false,error:'NOVEL2_COMPARE_INVALID_PROMPT'});
  if(body.temperature!==0.5||body.max_tokens!==1800)return output(400,{ok:false,error:'NOVEL2_COMPARE_PARAMS_INVALID'});
+
+ if(env.MODEL_TESTS_FIXTURE_MODE==='1'){
+   // Only an isolated staging Worker explicitly enables this simulation.
+   const result={frame_title:'STAGING FIXTURE',scene_summary:'Двое вымышленных взрослых у окна; синтетический ответ',shot_type:'medium shot',camera_angle:'eye level',lens_mm:50,blocking:{person_a:'слева у окна',person_b:'справа',hands:'на столе',gaze:'в окно',scale:'medium'},wardrobe_props:'пальто',environment:'приморский отель',lighting:'мягкий свет справа',palette:'латунь и серый',emotion:'сдержанная близость',sensory_details:'бархат и туман',final_image_prompt:'STAGING FIXTURE ONLY: medium shot of two fictional adults by a hotel window, natural perspective, soft evening light',negative_prompt:'extra fingers, distorted anatomy'};
+   return output(200,{ok:true,content:JSON.stringify(result),model:body.model,usage:{prompt_tokens:0,completion_tokens:0,total_tokens:0,cost:0},simulation:true});
+ }
+
  try{
   const response=await send('https://openrouter.ai/api/v1/chat/completions',{
    method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+env.OPENROUTER_API_KEY},signal:AbortSignal.timeout(100000),
