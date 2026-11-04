@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - rebuild/novel-2-clean
+      - feat/prompt-evaluation-core
     paths:
       - "novel2/**"
       - ".github/workflows/novel2-ci.yml"
