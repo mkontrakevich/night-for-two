@@ -37,6 +37,7 @@
     "night-product-deploy.yml",
     "night4two-staging-auth.yml",
     "night4two-staging-e2e.yml",
+    "night4two-staging-invite.yml",
     "novel2-ci.yml",
     "novel2-migration-verify.yml",
     "novel2-preview-worker.yml",
