@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
 import bridge from '../src/index.js';
-globalThis.crypto=webcrypto;
+const crypto=globalThis.crypto??webcrypto;
 
 class KV{
  constructor(init={}){this.m=new Map(Object.entries(init));}
