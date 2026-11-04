@@ -1,3 +1,11 @@
+export function selectImageModel(raw,kind) {
+  let config;try{config=JSON.parse(raw||'')}catch{return null}
+  if(!['cinematic_romance','mystery','editorial','landscape'].includes(kind))return null;
+  if(!Array.isArray(config.models)||!Number.isFinite(config.max_usd)||config.max_usd<=0)return null;
+  const candidates=config.models.filter(m=>typeof m.id==='string'&&/^[a-z0-9._-]+\/[a-z0-9._:-]+$/i.test(m.id)&&Array.isArray(m.kinds)&&m.kinds.includes(kind)&&m.enabled===true&&Number.isFinite(m.estimated_usd)&&m.estimated_usd>=0&&m.estimated_usd<=config.max_usd);
+  candidates.sort((a,b)=>(Number(b.priority||0)-Number(a.priority||0))||(a.estimated_usd-b.estimated_usd)||a.id.localeCompare(b.id));
+  return candidates.length?{model:candidates[0].id,reason:'configured_kind_priority',estimated_usd:candidates[0].estimated_usd}:null;
+}
 export async function openRouterImage({key,model,prompt,request=fetch}) {
   if(!key||!model) return {ok:false,error:'OPENROUTER_IMAGE_NOT_CONFIGURED'};
   if(typeof prompt!=='string'||!prompt.trim()||prompt.length>12000) return {ok:false,error:'OPENROUTER_IMAGE_PROMPT_INVALID'};

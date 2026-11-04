@@ -66,11 +66,11 @@ class EdgeClient:
         if not isinstance(text,str) or not 20<=len(text)<=6000: raise ProviderError('SCENE_DESCRIPTION_INVALID')
         return text, {'provider':result.get('provider'),'model':result.get('model')}
 
-    def generate(self, prompt, negative_prompt, output_path, width, height, openrouter=False):
-        result = self.call('openrouter-image' if openrouter else 'image',{'prompt':prompt,'width':width,'height':height,'keepalive':True})
+    def generate(self, prompt, negative_prompt, output_path, width, height, openrouter=False, content_type=None):
+        result = self.call('openrouter-image' if openrouter else 'image',{'prompt':prompt,'width':width,'height':height,'keepalive':True,'content_type':content_type})
         try: raw = base64.b64decode(result['image'].split(',')[-1],validate=True)
         except (KeyError,ValueError): raise ProviderError('IMAGE_ENCODING_INVALID') from None
         output_path.write_bytes(raw)
-        return {'backend':'openrouter' if openrouter else 'cloudflare','model':result.get('model'),'seed':None,
+        return {'backend':'openrouter' if openrouter else 'cloudflare','model':result.get('model'),'selection':result.get('selection'),'usage':result.get('usage'),'seed':None,
                 'sampler':None,'steps':None,'cfg_scale':None}
 

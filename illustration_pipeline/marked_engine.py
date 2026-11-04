@@ -120,7 +120,7 @@ class MarkedEngine:
                         metadata = generator.generate(item['prompt'],item['negative_prompt'],path)
                     else:
                         if self.openrouter_image:
-                            metadata = self.edge.generate(item['prompt'],item['negative_prompt'],path,width,height,openrouter=True)
+                            metadata = self.edge.generate(item['prompt'],item['negative_prompt'],path,width,height,openrouter=True,content_type=job['instructions']['content_type'])
                         else:
                             metadata = self.edge.generate(item['prompt'],item['negative_prompt'],path,width,height)
                     with Image.open(path) as original:

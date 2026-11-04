@@ -17,7 +17,7 @@ import {handleStranger,runStrangerWorld} from './stranger.js';
 import {handleNativeActor,runNativeActor} from './native-actor.js';
 import {handleMigrationAdmin,runLegacyMigration} from './migrate-legacy.js';
 import {ACTOR_VIEW_SPEC,actorViewPrompt,bytesFromAiImage,base64FromBytes,compositeActorSvg} from './actor-sheet-compose.js';
-import {openRouterImage} from './openrouter-image.js';
+import {openRouterImage,selectImageModel} from './openrouter-image.js';
 
 export class ActorSheetWorkflow extends WorkflowEntrypoint {
  async run(event,step){
@@ -400,7 +400,10 @@ async function handleAi(request,env,incoming){
   if(incoming.pathname==='/novel2-ai/openrouter-image'){
     let body;try{body=await request.json()}catch{return json(400,{ok:false,error:'NOVEL2_AI_EDGE_JSON_REQUIRED'})}
     if(body.input_references?.length)return json(422,{ok:false,error:'OPENROUTER_IMAGE_REFERENCE_UNSUPPORTED'});
-    const result=await openRouterImage({key:env.OPENROUTER_API_KEY,model:env.OPENROUTER_IMAGE_MODEL,prompt:body.prompt});
+    const choice=selectImageModel(env.NOVEL2_IMAGE_MODELS,body.content_type);
+    if(!choice)return json(503,{ok:false,error:'OPENROUTER_IMAGE_NO_ELIGIBLE_MODEL'});
+    const result=await openRouterImage({key:env.OPENROUTER_API_KEY,model:choice.model,prompt:body.prompt});
+    if(result.ok)result.selection=choice;
     return json(result.ok?200:502,result);
   }
   if(incoming.pathname==='/novel2-ai/image'){
