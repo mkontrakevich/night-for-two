@@ -499,6 +499,7 @@ async function main(){
   await launchQueue.init();
   const html=await fs.readFile(htmlPath,'utf8');
   const illustrationHtml=await fs.readFile(path.resolve(__dirname,'../public/illustrations.html'),'utf8');
+  const modelTestsHtml=await fs.readFile(path.resolve(__dirname,'../public/model-tests.html'),'utf8');
   const launchClientJs=await fs.readFile(path.resolve(__dirname,'../public/story-launch-client.js'),'utf8');
   const noirJs=await fs.readFile(path.resolve(__dirname,'../public/noir-experience.js'),'utf8');
   const noirCss=await fs.readFile(path.resolve(__dirname,'../public/noir-experience.css'),'utf8');
@@ -511,6 +512,7 @@ async function main(){
     try{
       const url=new URL(req.url,'http://localhost');
       if(req.method==='GET'&&url.pathname==='/novel2/illustrations.html')return send(res,200,illustrationHtml,'text/html; charset=utf-8');
+      if(req.method==='GET'&&url.pathname==='/novel2/model-tests.html')return send(res,200,modelTestsHtml,'text/html; charset=utf-8');
       if(req.method==='GET'&&url.pathname==='/novel2/health')return send(res,200,{ok:true,product:'interactive_novel_2',story_launch_api:1});
       if(req.method==='GET'&&(url.pathname==='/novel2'||url.pathname==='/novel2/'))return send(res,200,html,'text/html; charset=utf-8');
       if(req.method==='GET'&&url.pathname==='/novel2/noir-experience.js')return send(res,200,noirJs,'text/javascript; charset=utf-8');

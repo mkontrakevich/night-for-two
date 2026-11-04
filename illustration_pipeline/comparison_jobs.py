@@ -8,10 +8,12 @@ from pathlib import Path
 from prompt_evaluation import EvaluationError, prepare, run_once
 
 class ComparisonJobs:
-    def __init__(self, root, read_source, invoke, allowed_models):
+    def __init__(self, root, read_source, invoke, allowed_models, export=None, upload=None):
         self.root=Path(root)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.read_source, self.invoke, self.allowed_models=read_source, invoke, tuple(allowed_models)
+        self.export=export
+        self.upload=upload
         self.lock=threading.RLock()
         self.active=set()
 
@@ -45,8 +47,31 @@ class ComparisonJobs:
         return self.view(owner,job['id'])
 
     def view(self, owner, job_id):
-        with self.lock: job=self._load(owner,job_id)
+        with self.lock:
+            job=self._load(owner,job_id)
+            if (owner,job_id) not in self.active:
+                if job.get('state')=='running':
+                    job['state']='uncertain'
+                    for entry in job.get('results',[]):
+                        if entry.get('status')=='running': entry.update(status='uncertain',error='INTERRUPTED')
+                    self._save(owner,job_id,job)
+                if job.get('export',{}).get('state')=='writing':
+                    job['export']={'state':'uncertain','error':'DRIVE_EXPORT_UNCERTAIN'}
+                    self._save(owner,job_id,job)
         return {k:v for k,v in job.items() if k!='prompt'}
+
+    def list(self, owner):
+        if not re.fullmatch(r'[a-f0-9]{64}',str(owner)): raise EvaluationError('OWNER_REQUIRED')
+        with self.lock:
+            paths=sorted(self.root.glob(owner+'-*.json'),key=lambda p:p.stat().st_mtime,reverse=True)[:100]
+            return [self.view(owner,path.stem.split('-')[-1]) for path in paths]
+
+    def create_upload(self, owner, filename, raw, models):
+        self._path(owner,'a'*32)
+        prepare(filename,raw,models,self.allowed_models)
+        if not self.upload: raise EvaluationError('DRIVE_UPLOAD_NOT_CONFIGURED')
+        file_id=self.upload(filename,raw)
+        return self.create(owner,file_id,models)
 
     def run(self, owner, job_id, confirm=False):
         with self.lock:
@@ -61,10 +86,15 @@ class ComparisonJobs:
             job['state']='uncertain' if any(x['status']=='uncertain' for x in job['results']) else 'complete'
         except Exception:
             job['state']='uncertain'
+        try:
+            if self.export and job.get('results'):
+                # A lost write response must not lead to an automatic duplicate.
+                job['export']={'state':'writing'}; record(job)
+                try: job['export']={'state':'complete',**self.export(job)}
+                except Exception: job['export']={'state':'uncertain','error':'DRIVE_EXPORT_UNCERTAIN'}
+            record(job)
         finally:
-            with self.lock:
-                try: self._save(owner,job_id,job)
-                finally: self.active.discard((owner,job_id))
+            with self.lock: self.active.discard((owner,job_id))
         return self.view(owner,job_id)
 
     def recover(self, owner, job_id):
@@ -76,5 +106,8 @@ class ComparisonJobs:
                 job['state']='uncertain'
                 for entry in job.get('results',[]):
                     if entry['status']=='running': entry.update(status='uncertain',error='INTERRUPTED')
+                self._save(owner,job_id,job)
+            elif job.get('export',{}).get('state')=='writing':
+                job['export']={'state':'uncertain','error':'DRIVE_EXPORT_UNCERTAIN'}
                 self._save(owner,job_id,job)
             return self.view(owner,job_id)

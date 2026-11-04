@@ -1026,10 +1026,18 @@ async function sendReply(){
  try{state=(await api('reply',{reply,action_key:selectedAction,book_id:state.book.id,turn_no:Number(state.book.turn_no)},600000)).state;selectedAction='';render()}catch(e){if(isCancelled(e))return;alert(e.message);refresh()}finally{busy=false}
 }
 async function loadVisual(){try{const j=await api('visual');const img=document.getElementById('sceneImage');if(img&&j.image){img.src=j.image;img.classList.add('on')}}catch{}}
+let modelTestsChecking=false;
 const illustrationNavigation=new MutationObserver(()=>{
  const menu=app.querySelector('.mainMenu');if(!menu||document.getElementById('illustrationEntry'))return;
  const link=document.createElement('a');link.id='illustrationEntry';link.className='secondary';link.href='/novel2/illustrations.html';link.textContent='Иллюстрации рукописи';
  link.onclick=()=>{const init=authHeaders()['x-telegram-init-data'];if(init)sessionStorage.setItem('novel2_illustrations_init',init);};menu.append(link);
+ if(!modelTestsChecking){modelTestsChecking=true;
+  fetch('/novel2/api/model-tests/config',{method:'POST',headers:authHeaders(),body:'{}',signal:AbortSignal.timeout(10000)})
+   .then(async response=>response.ok?response.json():null).then(data=>{if(!data?.ok||!menu.isConnected||document.getElementById('modelTestsEntry'))return;
+    const item=document.createElement('a');item.id='modelTestsEntry';item.className='secondary';item.href='/novel2/model-tests.html';item.textContent='Тестирование моделей';
+    item.onclick=()=>{const init=authHeaders()['x-telegram-init-data'];if(init)sessionStorage.setItem('novel2_illustrations_init',init)};menu.append(item);
+   }).catch(()=>{}).finally(()=>{modelTestsChecking=false});
+ }
 });
 illustrationNavigation.observe(app,{childList:true,subtree:true});
 refresh();

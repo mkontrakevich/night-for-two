@@ -39,6 +39,11 @@ def make_server(engine, token, host='127.0.0.1', port=5691, comparison=None):
                 if action.startswith('model-tests-'):
                     if comparison is None:
                         return self.answer(503,{'ok':False,'error':'MODEL_TESTS_NOT_CONFIGURED'})
+                    if action=='model-tests-config': return self.answer(200,{'ok':True,'models':comparison.allowed_models})
+                    if action=='model-tests-list': return self.answer(200,{'ok':True,'jobs':comparison.list(owner)})
+                    if action=='model-tests-upload':
+                        raw=base64.b64decode(data.get('data',''),validate=True)
+                        return self.answer(200,{'ok':True,'job':comparison.create_upload(owner,data.get('filename',''),raw,data.get('models'))})
                     if action=='model-tests-create':
                         return self.answer(200,{'ok':True,'job':comparison.create(owner,data.get('file_id',''),data.get('models'))})
                     if action=='model-tests-status':
@@ -113,6 +118,11 @@ def main():
         sd=StableDiffusionClient({'backend':os.environ['SD_BACKEND'],'base_url':os.environ.get('SD_BASE_URL','http://127.0.0.1:7860'),
             'checkpoint':os.environ.get('SD_CHECKPOINT',''),'width':768,'height':1024})
     engine=MarkedEngine(os.environ.get('WORKBENCH_DATA','/data'),edge=edge,sd=sd)
-    make_server(engine,os.environ.get('WORKBENCH_TOKEN',''),args.host,args.port).serve_forever()
+    comparison=None
+    if os.environ.get('MODEL_TESTS_ENABLED')=='1':
+        import requests
+        from comparison_runtime import create_comparison_runtime
+        comparison=create_comparison_runtime(os.environ,edge,requests)
+    make_server(engine,os.environ.get('WORKBENCH_TOKEN',''),args.host,args.port,comparison=comparison).serve_forever()
 
 if __name__=='__main__': main()

@@ -2,15 +2,17 @@
 import re
 from prompt_evaluation import MAX_FILE_BYTES, EvaluationError
 
-def read_drive_prompt(file_id, access_token, get):
+def read_drive_prompt(file_id, access_token, get, allowed_folder=None):
     if not re.fullmatch(r'[A-Za-z0-9_-]{10,200}',str(file_id or '')): raise EvaluationError('DRIVE_FILE_INVALID')
     if not isinstance(access_token,str) or not access_token: raise EvaluationError('DRIVE_AUTH_REQUIRED')
     headers={'Authorization':'Bearer '+access_token}
     base='https://www.googleapis.com/drive/v3/files/'+file_id
     try:
-        meta=get(base,headers=headers,params={'fields':'id,name,mimeType,size,modifiedTime'},timeout=15)
+        meta=get(base,headers=headers,params={'fields':'id,name,mimeType,size,modifiedTime,parents'},timeout=15)
         if not meta.ok: raise EvaluationError('DRIVE_METADATA_HTTP_'+str(meta.status_code))
         info=meta.json()
+        if allowed_folder is not None and allowed_folder not in info.get('parents',[]):
+            raise EvaluationError('DRIVE_FILE_OUTSIDE_PROJECT')
         if info.get('id')!=file_id or info.get('mimeType')!='text/plain' or not str(info.get('name','')).lower().endswith('.txt'):
             raise EvaluationError('DRIVE_TEXT_FILE_REQUIRED')
         if not str(info.get('size','')).isdigit() or not 0<int(info['size'])<=MAX_FILE_BYTES:
