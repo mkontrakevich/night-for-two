@@ -5,13 +5,13 @@ export const PROMPT_COLUMNS = Object.freeze(['job_id','scene_id','model_id','sta
 export const AROMA_COLUMNS = Object.freeze(['job_id','scene_id','model_id','aroma_label','tone_density','sensuality_level','intimacy_level','cinematicity','visual_specificity','softness','tension','elegance','aroma_notes','rubric_version','evaluator_model','confidence']);
 export const RUBRIC = Object.freeze({version:'n4t-aroma-rules-v1',evaluator:'rules:n4t-aroma-v1',scale:'0..10, null means insufficient evidence',labels:['velvet','smoky','crystal','silk','nocturne','intimate','editorial','dramatic','restrained','luxurious'],method:'observable lexical cues; not a ranking, not a psychological judgment'});
 const MATCHES = {
-  cinematicity:/\b(?:камера|кадр|объектив|план|фокус|диафрагм|lens|frame|camera|shot|focus)\b/iu,
-  softness:/\b(?:мягк|нежн|плавн|рассеян|soft|gentle|diffus)\w*/iu,
-  tension:/\b(?:напряж|ожидан|контраст|резк|тишин|tension|contrast|suspense)\w*/iu,
-  elegance:/\b(?:элегант|изящ|сдержан|утонч|editorial|elegant|refined|restrained)\w*/iu,
-  sensuality_level:/\b(?:шёлк|шелк|бархат|прикоснов|фактур|взгляд|silk|velvet|touch|texture|gaze)\w*/iu,
-  intimacy_level:/\b(?:близост|дистанц|вместе|рядом|пара|proximity|distance|intimate|together)\w*/iu,
-  visual_specificity:/\b(?:слева|справа|переднем|заднем|сверху|снизу|тень|рук|пальц|лев|прав|behind|foreground|background|shadow|hand|left|right)\w*/iu
+  cinematicity:/(?<![\p{L}\p{N}])(?:камера|кадр|объектив|план|фокус|диафрагм|lens|frame|camera|shot|focus)[\p{L}]*/iu,
+  softness:/(?<![\p{L}\p{N}])(?:мягк|нежн|плавн|рассеян|soft|gentle|diffus)[\p{L}]*/iu,
+  tension:/(?<![\p{L}\p{N}])(?:напряж|ожидан|контраст|резк|тишин|tension|contrast|suspense)[\p{L}]*/iu,
+  elegance:/(?<![\p{L}\p{N}])(?:элегант|изящ|сдержан|утонч|editorial|elegant|refined|restrained)[\p{L}]*/iu,
+  sensuality_level:/(?<![\p{L}\p{N}])(?:шёлк|шелк|бархат|прикоснов|фактур|взгляд|silk|velvet|touch|texture|gaze)[\p{L}]*/iu,
+  intimacy_level:/(?<![\p{L}\p{N}])(?:близост|дистанц|вместе|рядом|пара|proximity|distance|intimate|together)[\p{L}]*/iu,
+  visual_specificity:/(?<![\p{L}\p{N}])(?:слева|справа|переднем|заднем|сверху|снизу|тень|рук|пальц|лев|прав|behind|foreground|background|shadow|hand|left|right)[\p{L}]*/iu
 };
 const AROMA_HINTS = [
  ['velvet',/бархат|velvet/iu],['smoky',/дым|туман|smok/iu],['crystal',/стекл|кристалл|crystal/iu],['silk',/шелк|шёлк|silk/iu],['nocturne',/ноч|полумрак|night|nocturne/iu],['intimate',/близост|близк|интим|intimate|proximity/iu],['editorial',/редакцион|журнал|editorial|fashion/iu],['dramatic',/драмат|контраст|dramatic|contrast/iu],['restrained',/сдержан|лаконич|restrained|minimal/iu],['luxurious',/роскош|люкс|luxurious|luxury/iu]
@@ -53,7 +53,7 @@ export function normalizeFrame(raw,{jobId,sceneId,modelId,attemptId,usage=null,l
   if(validation_error)output.status='invalid_schema';
   return output;
 }
-function estimatedScore(text,re,complete){if(!complete||!text)return null;const matches=String(text).match(new RegExp(re.source,'giu'))||[];return Math.min(10,2+matches.length*2);}
+function estimatedScore(text,re,complete){if(!complete||!text)return null;const matches=String(text).match(new RegExp(re.source,'giu'))||[];return matches.length?Math.min(10,2+matches.length*2):null;}
 export function classifyAroma(frame,modelId){
   const complete=frame?.status==='complete';
   const t=complete?[frame.scene_summary,frame.emotion,frame.sensory_details,frame.final_image_prompt,frame.lighting,frame.palette].filter(Boolean).join(' '):'';

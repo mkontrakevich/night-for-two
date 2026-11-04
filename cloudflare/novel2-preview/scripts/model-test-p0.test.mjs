@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {ModelTestJobs} from '../src/model-test-jobs.js';
-import {normalizeFrame,parseUpload,buildModelPrompt,createComparisons,asCsv,PROMPT_COLUMNS} from '../src/model-test-p0.js';
+import {normalizeFrame,parseUpload,buildModelPrompt,createComparisons,asCsv,PROMPT_COLUMNS,classifyAroma} from '../src/model-test-p0.js';
 class Storage{
  constructor(){this.map=new Map();this.alarm=null}async get(k){return structuredClone(this.map.get(k))}async put(k,v){this.map.set(k,structuredClone(v))}async list({prefix}={}){return new Map([...this.map].filter(([k])=>!prefix||k.startsWith(prefix)).map(([k,v])=>[k,structuredClone(v)]))}async setAlarm(t){this.alarm=t}async transaction(fn){return fn(this)}
 }
@@ -61,4 +61,13 @@ assert.equal((await noBudgetJobs.validate(noBudget.id)).ready,false);
 await assert.rejects(()=>noBudgetJobs.start(noBudget.id,true),/BUDGET_NOT_CONFIGURED/);
 // Failure never auto-retries an uncertain Drive write.
 let failed=await jobs.create({models:['p/model-a'],budget_max_usd:0.1});failNext=true;failed=await jobs.addAsset({job_id:failed.id,role:'scene',filename:'test.txt',data:asBase64('First try')});assert.equal(failed.state,'input_uncertain');await assert.rejects(()=>jobs.addAsset({job_id:failed.id,role:'scene',filename:'test.txt',data:asBase64('First try')}),/LOCKED/);
+// Cyrillic word boundaries and missing evidence must not create false baseline scores.
+const russian=classifyAroma({status:'complete',scene_summary:'Мягкий свет справа, рядом двое, камера и объектив, руки слева, бархат и шелк'},'p/model-a');
+assert.ok(russian.softness>0);
+assert.ok(russian.cinematicity>0);
+assert.ok(russian.visual_specificity>0);
+assert.equal(russian.elegance,null);
+const noEvidence=classifyAroma({status:'complete',scene_summary:'Нейтральная сцена'},'p/model-a');
+assert.equal(noEvidence.cinematicity,null);
+assert.equal(noEvidence.softness,null);
 console.log('NIGHT4TWO_P0_LOCAL_OK', {providerCalls:providerCalls.length,driveFiles:files.size,job:job.id});
