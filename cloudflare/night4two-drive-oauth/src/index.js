@@ -22,11 +22,19 @@ async function ingest(req,e){
  if(!canUse(e))return out({ok:false,error:'NOT_CONFIGURED'},503);
  let data;try{data=await bodyJson(req)}catch{return out({ok:false,error:'INVALID_BODY'},413)}
  const {filename,content,job_id:id,kind,content_type:mime}=data||{};
- if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(String(id||''))||!['source','result'].includes(kind))return out({ok:false,error:'INVALID_JOB'},400);
- const name='model-test-'+id+'-'+kind+(kind==='source'?'.txt':'.json');
- if(filename!==name||mime!==(kind==='source'?'text/plain':'application/json'))return out({ok:false,error:'INVALID_FILE'},400);
+ const artifactTypes={
+  source:['.txt','text/plain'],scene:['.txt','text/plain'],
+  sensual_director:['.md','text/markdown'],couple_space:['.md','text/markdown'],
+  manifest:['.json','application/json'],result:['.json','application/json'],
+  prompt_comparison_json:['.json','application/json'],prompt_comparison_csv:['.csv','text/csv'],
+  aroma_comparison_json:['.json','application/json'],aroma_comparison_csv:['.csv','text/csv']
+ };
+ if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(String(id||''))||!Object.hasOwn(artifactTypes,String(kind)))return out({ok:false,error:'INVALID_JOB'},400);
+ const [ext,allowedMime]=artifactTypes[kind];
+ const name='model-test-'+id+'-'+kind+ext;
+ if(filename!==name||mime!==allowedMime)return out({ok:false,error:'INVALID_FILE'},400);
  if(typeof content!=='string'||new TextEncoder().encode(content).byteLength>2000000)return out({ok:false,error:'FILE_TOO_LARGE'},413);
- if(kind==='result'){try{JSON.parse(content)}catch{return out({ok:false,error:'INVALID_RESULT_JSON'},400)}}
+ if(mime==='application/json'){try{JSON.parse(content)}catch{return out({ok:false,error:'INVALID_RESULT_JSON'},400)}}
  const record='ingest:'+id+':'+kind,stored=await e.STORE.get(record);
  if(valid(stored))return out({ok:true,id:stored,existing:true});
  try{const token=await access(e),dir=await e.STORE.get('google:app_folder_id');if(!valid(dir))return out({ok:false,error:'APP_FOLDER_NOT_READY'},409);const uploaded=await upload(token,dir,name,content,mime);await e.STORE.put(record,uploaded);return out({ok:true,id:uploaded})}

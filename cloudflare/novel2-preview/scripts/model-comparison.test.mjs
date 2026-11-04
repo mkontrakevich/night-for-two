@@ -13,12 +13,12 @@ const send=async(_url,options)=>{
 };
 let response=await modelComparison(request({model:'other/model',prompt:'test'}),env,send);
 assert.equal(response.status,403);assert.equal(calls,0);
-response=await modelComparison(request({model:'example/model',prompt:'test'}),{},send);
+response=await modelComparison(request({model:'example/model',prompt:'test',temperature:0.5,max_tokens:1800}),{},send);
 assert.equal(response.status,503);assert.equal(calls,0);
-response=await modelComparison(request({model:'example/model',prompt:'test'}),env,send);
+response=await modelComparison(request({model:'example/model',prompt:'test',temperature:0.5,max_tokens:1800}),env,send);
 assert.equal((await response.json()).content,'A frame description');assert.equal(calls,1);
-response=await modelComparison(request({model:'example/model',prompt:'test'}),env,async()=>Response.json({choices:[{message:{refusal:'no'},finish_reason:'content_filter'}]}));
+response=await modelComparison(request({model:'example/model',prompt:'test',temperature:0.5,max_tokens:1800}),env,async()=>Response.json({choices:[{message:{refusal:'no'},finish_reason:'content_filter'}]}));
 assert.equal((await response.json()).refused,true);
-response=await modelComparison(request({model:'example/model',prompt:'test'}),env,async()=>{throw Error('timeout');});
+response=await modelComparison(request({model:'example/model',prompt:'test',temperature:0.5,max_tokens:1800}),env,async()=>{throw Error('timeout');});
 assert.equal((await response.json()).error,'NOVEL2_COMPARE_OUTCOME_UNCERTAIN');
 console.log('MODEL_COMPARISON_OK');

@@ -30,6 +30,8 @@ jobs:
           node cloudflare/novel2-preview/scripts/model-comparison.test.mjs
           node --experimental-loader ./cloudflare/novel2-preview/scripts/cloudflare-test-loader.mjs cloudflare/novel2-preview/scripts/model-test-api.test.mjs
           node --experimental-loader ./cloudflare/novel2-preview/scripts/cloudflare-test-loader.mjs cloudflare/novel2-preview/scripts/model-test-cloud.test.mjs
+      - name: Night4two P0 model tests (mocked)
+        run: node --experimental-loader ./cloudflare/novel2-preview/scripts/cloudflare-test-loader.mjs cloudflare/novel2-preview/scripts/model-test-p0.test.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
