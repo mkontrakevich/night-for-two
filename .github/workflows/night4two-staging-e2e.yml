@@ -1,13 +1,6 @@
 name: Night4two Staging E2E
 
 on:
-  push:
-    branches: [feat/prompt-evaluation-core]
-    paths:
-      - "cloudflare/novel2-preview/src/model-test-**"
-      - "cloudflare/novel2-preview/src/model-comparison.js"
-      - "cloudflare/novel2-preview/scripts/night4two-staging-smoke.py"
-      - ".github/workflows/night4two-staging-e2e.yml"
   workflow_dispatch:
 
 permissions:
