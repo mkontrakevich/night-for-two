@@ -659,6 +659,10 @@ async function main(){
       }
       const auth=authenticate(req);if(!auth)return send(res,403,{ok:false,error:'NOVEL2_ACCESS_DENIED'});
       const input=await bodyJson(req);
+      if(url.pathname.startsWith('/novel2/api/model-tests/')){
+        const result=await illustrationWorkbenchRequest({method:req.method,action:'model-tests-'+url.pathname.slice('/novel2/api/model-tests/'.length),input,role:auth.role});
+        return send(res,result.status,result.body);
+      }
       if(url.pathname.startsWith('/novel2/api/illustrations/')){
         const result=await illustrationWorkbenchRequest({method:req.method,action:url.pathname.slice('/novel2/api/illustrations/'.length),input,role:auth.role});
         return send(res,result.status,result.body);

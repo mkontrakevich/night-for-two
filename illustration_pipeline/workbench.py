@@ -11,8 +11,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from marked_engine import MarkedEngine, JobError
 from edge_client import EdgeClient
+from prompt_evaluation import EvaluationError
 
-def make_server(engine, token, host='127.0.0.1', port=5691):
+def make_server(engine, token, host='127.0.0.1', port=5691, comparison=None):
     if len(token)<32: raise ValueError('WORKBENCH_TOKEN_REQUIRED')
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args): pass
@@ -35,6 +36,24 @@ def make_server(engine, token, host='127.0.0.1', port=5691):
                 data=json.loads(self.rfile.read(length))
                 if not isinstance(data,dict): raise JobError('JSON_OBJECT_REQUIRED')
                 action=self.path.strip('/')
+                if action.startswith('model-tests-'):
+                    if comparison is None:
+                        return self.answer(503,{'ok':False,'error':'MODEL_TESTS_NOT_CONFIGURED'})
+                    if action=='model-tests-create':
+                        return self.answer(200,{'ok':True,'job':comparison.create(owner,data.get('file_id',''),data.get('models'))})
+                    if action=='model-tests-status':
+                        return self.answer(200,{'ok':True,'job':comparison.view(owner,str(data.get('job_id','')))})
+                    if action=='model-tests-start':
+                        if data.get('confirm') is not True: raise EvaluationError('CONFIRMATION_REQUIRED')
+                        job_id=str(data.get('job_id',''))
+                        job=comparison.view(owner,job_id)
+                        if job['state']!='ready': raise EvaluationError('JOB_ALREADY_STARTED')
+                        def run_comparison():
+                            try: comparison.run(owner,job_id,confirm=True)
+                            except Exception: pass
+                        threading.Thread(target=run_comparison,daemon=True).start()
+                        return self.answer(202,{'ok':True,'job':comparison.view(owner,job_id)})
+                    raise EvaluationError('ACTION_NOT_FOUND')
                 if action=='prepare':
                     raw=base64.b64decode(data.get('data',''),validate=True)
                     return self.answer(200,{'ok':True,'job':engine.create(owner,data.get('filename',''),raw,data.get('instructions'))})
@@ -76,7 +95,7 @@ def make_server(engine, token, host='127.0.0.1', port=5691):
                 if action=='assemble': return self.answer(200,{'ok':True,'job':engine.assemble(job_id,owner)})
                 if action=='asset': return self.answer(200,{'ok':True,**engine.asset(job_id,owner,data.get('scene_id'),data.get('document') is True)})
                 raise JobError('ACTION_NOT_FOUND')
-            except (ValueError,JobError) as error:
+            except (ValueError,JobError,EvaluationError) as error:
                 code=str(error)
                 if not re.fullmatch('[A-Z][A-Z0-9_]+',code): code='INVALID_REQUEST'
                 self.answer(409 if code in {'JOB_BUSY','IMAGE_APPROVAL_REQUIRED'} else 422,{'ok':False,'error':code})

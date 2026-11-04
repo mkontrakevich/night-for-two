@@ -13,6 +13,7 @@ class ComparisonJobs:
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.read_source, self.invoke, self.allowed_models=read_source, invoke, tuple(allowed_models)
         self.lock=threading.RLock()
+        self.active=set()
 
     def _path(self, owner, job_id):
         if not re.fullmatch(r'[a-f0-9]{64}',str(owner)) or not re.fullmatch(r'[a-f0-9]{32}',str(job_id)):
@@ -52,19 +53,25 @@ class ComparisonJobs:
             job=self._load(owner,job_id)
             if job['state']!='ready': raise EvaluationError('JOB_ALREADY_STARTED')
             if confirm is not True: raise EvaluationError('CONFIRMATION_REQUIRED')
-            job['state']='running'; self._save(owner,job_id,job)
-            try:
-                run_once(job,self.invoke,lambda value:self._save(owner,job_id,value),confirm=True)
-                job['state']='uncertain' if any(x['status']=='uncertain' for x in job['results']) else 'complete'
-            except Exception:
-                job['state']='uncertain'
-            self._save(owner,job_id,job)
-            return self.view(owner,job_id)
+            job['state']='running'; self._save(owner,job_id,job); self.active.add((owner,job_id))
+        def record(value):
+            with self.lock: self._save(owner,job_id,value)
+        try:
+            run_once(job,self.invoke,record,confirm=True)
+            job['state']='uncertain' if any(x['status']=='uncertain' for x in job['results']) else 'complete'
+        except Exception:
+            job['state']='uncertain'
+        finally:
+            with self.lock:
+                try: self._save(owner,job_id,job)
+                finally: self.active.discard((owner,job_id))
+        return self.view(owner,job_id)
 
     def recover(self, owner, job_id):
         # Only when the host knows no worker for the job is active.
         with self.lock:
             job=self._load(owner,job_id)
+            if (owner,job_id) in self.active: raise EvaluationError('JOB_BUSY')
             if job['state']=='running':
                 job['state']='uncertain'
                 for entry in job.get('results',[]):
