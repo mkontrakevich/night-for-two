@@ -8,9 +8,10 @@ const source=fs.readFileSync(new URL('../../cloudflare/novel2-preview/src/index.
 const module=new vm.SourceTextModule(source,{context});
 const values={WorkflowEntrypoint:class{},handleStranger:async()=>null,runStrangerWorld:async()=>{},
   handleNativeActor:async()=>null,runNativeActor:async()=>{},handleMigrationAdmin:async()=>{},runLegacyMigration:async()=>{},
+  modelComparison:async()=>Response.json({ok:false}),handleModelTests:async()=>null,ModelTestJobs:class{},
   ACTOR_VIEW_SPEC:[],actorViewPrompt:()=>'',bytesFromAiImage:()=>{},base64FromBytes:()=>'',compositeActorSvg:()=>''};
 await module.link(async specifier=>{
-  const names=[...source.matchAll(/import\s*{([^}]+)}\s*from\s*['"]([^'"]+)['"]/g)].find(match=>match[2]===specifier)[1].split(',').map(x=>x.trim());
+  const names=[...source.matchAll(/(?:import|export)\s*{([^}]+)}\s*from\s*['"]([^'"]+)['"]/g)].find(match=>match[2]===specifier)[1].split(',').map(x=>x.trim());
   return new vm.SyntheticModule(names,function(){for(const name of names)this.setExport(name,values[name]);},{context});
 });
 await module.evaluate();const worker=module.namespace.default;
