@@ -150,7 +150,17 @@ export class ModelTestJobs extends DurableObject {
   if(!validId(job_id)||!['sketch','image'].includes(phase))throw Error('P1_MEDIA_INVALID');
   const j=await this.ctx.storage.get(key(job_id));if(!j)throw Error('JOB_NOT_FOUND');
   const media=j[phase];if(!media?.r2?.key)throw Error('P1_MEDIA_NOT_FOUND');
-  return {job_id,phase,...media.r2};
+  return {job_id,phase,...media.r2,approved:media.approval?.approved===true,drive:media.drive||null};
+ }
+ async mediaReceipt({job_id,phase,sha256,file_id}={}){
+  if(!validId(job_id)||!['sketch','image'].includes(phase)||!/^[0-9a-f]{64}$/.test(String(sha256))||!/^[A-Za-z0-9_-]{10,200}$/.test(String(file_id)))throw Error('P1_MEDIA_RECEIPT_INVALID');
+  return this.ctx.storage.transaction(async txn=>{
+   const j=await txn.get(key(job_id));if(!j)throw Error('JOB_NOT_FOUND');
+   const media=j[phase];if(!media?.r2?.key||media.r2.sha256!==sha256||media.approval?.approved!==true)throw Error('P1_MEDIA_NOT_APPROVED');
+   if(media.drive?.id&&media.drive.id!==file_id)throw Error('P1_MEDIA_RECEIPT_CONFLICT');
+   media.drive={id:file_id,sha256,state:'saved',at:utc()};j.updatedAt=Date.now();await txn.put(key(job_id),j);
+   return {phase,drive:media.drive};
+  });
  }
  async alarm(){
   if(this.alarmActive){await this.ctx.storage.setAlarm(Date.now()+timeoutMs);return}this.alarmActive=true;
