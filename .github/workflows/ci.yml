@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/prompt-evaluation-core]
   pull_request:
   workflow_dispatch:
 
