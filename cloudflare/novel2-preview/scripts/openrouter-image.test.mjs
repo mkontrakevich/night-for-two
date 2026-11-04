@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {openRouterImage} from '../src/openrouter-image.js';
+let calls=0;
+const request=async(url,options)=>{calls++;assert.equal(url,'https://openrouter.ai/api/v1/images');const b=JSON.parse(options.body);assert.equal(b.model,'fixture/image');assert.equal(b.n,1);return new Response(JSON.stringify({data:[{b64_json:'aGVsbG8=',media_type:'image/png'}],usage:{cost:0}}),{status:200})};
+const r=await openRouterImage({key:'secret',model:'fixture/image',prompt:'quiet hotel',request});
+assert.equal(r.ok,true);assert.equal(r.provider,'openrouter');assert.equal(calls,1);
+assert.equal((await openRouterImage({key:'',model:'fixture/image',prompt:'hotel',request})).error,'OPENROUTER_IMAGE_NOT_CONFIGURED');
+assert.equal(calls,1);
+assert.equal((await openRouterImage({key:'x',model:'fixture/image',prompt:'hotel',request:async()=>new Response('',{status:403})})).error,'OPENROUTER_IMAGE_HTTP_403');
+assert.equal((await openRouterImage({key:'x',model:'fixture/image',prompt:'hotel',request:async()=>{throw Error('network')}})).error,'OPENROUTER_IMAGE_RESPONSE_UNCERTAIN');
+console.log('OpenRouter image routing checks passed');
