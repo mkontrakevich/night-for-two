@@ -8,12 +8,16 @@ class Storage{
  async setAlarm(t){this.alarm=t}
  async transaction(fn){return fn(this)}
 }
-const env={NOVEL2_COMPARE_MODELS:JSON.stringify(['p/model']),OPENROUTER_API_KEY:'test',MODEL_TESTS_DRIVE_FOLDER_ID:'folder_123456789',MODEL_TESTS_GOOGLE_CLIENT_ID:'client',MODEL_TESTS_GOOGLE_CLIENT_SECRET:'secret',MODEL_TESTS_GOOGLE_REFRESH_TOKEN:'refresh'};
+const env={NOVEL2_COMPARE_MODELS:JSON.stringify(['p/model']),OPENROUTER_API_KEY:'test',MODEL_TESTS_DRIVE_INGEST_KEY:'test_secret_1234567890_1234567890'};
 let modelCalls=0,uploads=0;
 globalThis.fetch=async (url,options)=>{
  url=String(url);
- if(url.includes('oauth2.googleapis.com'))return Response.json({access_token:'test'});
- if(url.includes('upload/drive')){uploads++;return Response.json({id:'file_123456789',webViewLink:'https://drive.google.com/file/d/file_123456789/view'})}
+ if(url.includes('night4two-drive-oauth.kontrakevich.workers.dev/api/drive/ingest')){
+  uploads++;
+  assert.equal(options.headers.authorization,'Bearer '+env.MODEL_TESTS_DRIVE_INGEST_KEY);
+  const body=JSON.parse(options.body);assert.ok(body.filename.endsWith('.txt')||body.filename.endsWith('.json'));
+  return Response.json({ok:true,id:'file_123456789'});
+ }
  if(url.includes('openrouter.ai')){modelCalls++;return Response.json({model:'p/model',choices:[{message:{content:'A neutral scene'},finish_reason:'stop'}]})}
  throw Error('unexpected request');
 };
