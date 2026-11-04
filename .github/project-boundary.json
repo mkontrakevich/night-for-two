@@ -35,6 +35,8 @@
     "inspect-night-udp-block-rule.yml",
     "night-cloudflare-inspect-20260929.yml",
     "night-product-deploy.yml",
+    "night4two-staging-auth.yml",
+    "night4two-staging-e2e.yml",
     "novel2-ci.yml",
     "novel2-migration-verify.yml",
     "novel2-preview-worker.yml",
