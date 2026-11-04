@@ -2,6 +2,7 @@
 // Two independent auth paths: signed Telegram owner for the UI and a random
 // staging-only secret for controlled machine QA. Real provider disabled.
 import page from './model-test-staging-ui.js';
+import {digest} from './model-test-image.js';
 export {ModelTestJobs} from './model-test-jobs.js';
 const reply=(data,status=200)=>Response.json(data,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff'}});
 const equal=(a,b)=>{a=String(a||'');b=String(b||'');if(!a||a.length!==b.length)return false;let d=0;for(let i=0;i<a.length;i++)d|=a.charCodeAt(i)^b.charCodeAt(i);return d===0};
@@ -45,6 +46,40 @@ export default {async fetch(req,env){
  const stub=env.MODEL_TEST_JOBS.getByName(owner?'tg:'+owner:'machine:night4two-staging');
  try{
   const d=await bounded(req);
+
+  if(action==='select-prompt')return reply({ok:true,job:await stub.selectPrompt({job_id:d.job_id,model_id:d.model_id})});
+  if(action==='sketch/start')return reply({ok:true,job:await stub.sketchStart({job_id:d.job_id,confirm:d.confirm,format:d.format,budget_max_usd:d.budget_max_usd})},202);
+  if(action==='sketch/approve')return reply({ok:true,job:await stub.sketchApprove({job_id:d.job_id,approved:d.approved,notes:d.notes})});
+  if(action==='image/start')return reply({ok:true,job:await stub.imageStart({job_id:d.job_id,confirm:d.confirm,budget_max_usd:d.budget_max_usd})},202);
+  if(action==='image/approve')return reply({ok:true,job:await stub.imageApprove({job_id:d.job_id,approved:d.approved,notes:d.notes})});
+  if(action==='media/get'){
+   if(!env.MODEL_TEST_MEDIA)return reply({ok:false,error:'P1_DISABLED'},503);
+   const meta=await stub.mediaMeta({job_id:d.job_id,phase:d.phase});
+   const file=await env.MODEL_TEST_MEDIA.get(meta.key);
+   if(!file)return reply({ok:false,error:'P1_MEDIA_NOT_FOUND'},404);
+   return new Response(file.body,{headers:{'content-type':meta.mime,'cache-control':'no-store','x-content-type-options':'nosniff','content-disposition':'inline'}});
+  }
+  if(action==='media/export'){
+   if(!env.MODEL_TEST_MEDIA||!env.MODEL_TESTS_DRIVE_INGEST_KEY)return reply({ok:false,error:'P1_DISABLED'},503);
+   const meta=await stub.mediaMeta({job_id:d.job_id,phase:d.phase});
+   if(!meta.approved)return reply({ok:false,error:'P1_MEDIA_NOT_APPROVED'},409);
+   if(meta.drive?.id)return reply({ok:true,existing:true,drive:meta.drive});
+   const object=await env.MODEL_TEST_MEDIA.get(meta.key);
+   if(!object||object.size>12_000_000)return reply({ok:false,error:'P1_MEDIA_NOT_FOUND'},404);
+   const raw=new Uint8Array(await object.arrayBuffer());
+   if(await digest(raw)!==meta.sha256)return reply({ok:false,error:'P1_MEDIA_HASH_MISMATCH'},409);
+   // Chunk sizes are divisible by three: concatenated Base64 remains valid.
+   const parts=[];for(let i=0;i<raw.length;i+=32766)parts.push(btoa(String.fromCharCode(...raw.subarray(i,i+32766))));
+   const output=await fetch('https://night4two-drive-oauth.kontrakevich.workers.dev/api/drive/media/ingest',{
+    method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+env.MODEL_TESTS_DRIVE_INGEST_KEY},
+    body:JSON.stringify({job_id:d.job_id,phase:d.phase,mime:meta.mime,sha256:meta.sha256,content_base64:parts.join('')}),signal:AbortSignal.timeout(60000)
+   });
+   if(!output.ok)return reply({ok:false,error:'P1_MEDIA_DRIVE_EXPORT_UNCERTAIN'},502);
+   const result=await output.json().catch(()=>null);
+   if(!result?.ok||!/^[A-Za-z0-9_-]{10,200}$/.test(String(result.id||'')))return reply({ok:false,error:'P1_MEDIA_DRIVE_EXPORT_UNCERTAIN'},502);
+   const saved=await stub.mediaReceipt({job_id:d.job_id,phase:d.phase,sha256:meta.sha256,file_id:result.id});
+   return reply({ok:true,drive:saved.drive});
+  }
   if(action==='config')return reply({ok:true,...await stub.config()});
   if(action==='list')return reply({ok:true,jobs:await stub.list()});
   if(action==='create')return reply({ok:true,job:await stub.create({sceneId:d.scene_id,models:d.models,budget_max_usd:d.budget_max_usd})},201);
