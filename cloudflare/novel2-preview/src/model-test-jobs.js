@@ -2,6 +2,7 @@ import {DurableObject} from 'cloudflare:workers';
 import {modelComparison} from './model-comparison.js';
 import {modelTestDrive} from './model-test-drive.js';
 import {beginModel,finishModel,interrupted} from './model-test-state.js';
+import {runPencil,runImage,persistOriginal,digest} from './model-test-image.js';
 import {ROLES,parseUpload,sha256Hex,buildModelPrompt,normalizeFrame,createComparisons,asCsv,PROMPT_COLUMNS,AROMA_COLUMNS} from './model-test-p0.js';
 const key=id=>'job:'+id;
 const validId=id=>/^[a-f0-9-]{36}$/.test(String(id||''));
@@ -28,8 +29,8 @@ function manifestOf(job){return {schema_version:'n4t-test-v1',job_id:job.id,scop
 export class ModelTestJobs extends DurableObject {
  async config(){const models=modelsFor(this.env);modelTestDrive(this.env);if(!this.env.OPENROUTER_API_KEY||!models.length)throw Error('MODEL_TESTS_NOT_CONFIGURED');const prices=pricesFor(this.env);return {models,model_cost_ceiling_usd:Object.fromEntries(models.map(m=>[m,typeof prices[m]==='number'?prices[m]:null])),required_inputs:ROLES,schema_version:'n4t-test-v1'};}
  async list(){const all=await this.ctx.storage.list({prefix:'job:',limit:MAX_JOBS});return [...all.values()].map(publicJob).sort((a,b)=>b.createdAt-a.createdAt)}
- async status(id){if(!validId(id))throw Error('JOB_NOT_FOUND');let job=await this.ctx.storage.get(key(id));if(!job)throw Error('JOB_NOT_FOUND');if(['running','uploading_source','exporting','uploading_input','preparing_manifest'].includes(job.state)&&Date.now()-job.updatedAt>timeoutMs){
-  if(job.state==='uploading_input')job.state='input_uncertain';else if(job.state==='preparing_manifest')job.state='manifest_uncertain';else job=interrupted(job);
+ async status(id){if(!validId(id))throw Error('JOB_NOT_FOUND');let job=await this.ctx.storage.get(key(id));if(!job)throw Error('JOB_NOT_FOUND');if(['running','uploading_source','exporting','uploading_input','preparing_manifest','sketch_generating','image_generating'].includes(job.state)&&Date.now()-job.updatedAt>timeoutMs){
+  if(job.state==='uploading_input')job.state='input_uncertain';else if(job.state==='preparing_manifest')job.state='manifest_uncertain';else if(job.state==='sketch_generating'||job.state==='image_generating')job.state='image_uncertain';else job=interrupted(job);
   job.updatedAt=Date.now();await this.ctx.storage.put(key(id),job);
  }return publicJob(job)}
  async create({sceneId='scene-001',models,budget_max_usd,budgetMaxUsd,filename,data}={}){
@@ -89,12 +90,99 @@ export class ModelTestJobs extends DurableObject {
   job.state='queued';job.stage='text';job.updatedAt=Date.now();await this.ctx.storage.put(key(id),job);
   await this.ctx.storage.setAlarm(Date.now()+1000);return publicJob(job);
  }
- async comparison(id){if(!validId(id))throw Error('JOB_NOT_FOUND');const job=await this.ctx.storage.get(key(id));if(!job)throw Error('JOB_NOT_FOUND');if(!['comparison','complete'].includes(job.stage))throw Error('COMPARISON_NOT_READY');return {job_id:job.id,stage:job.stage,state:job.state,prompt:job.comparison?.prompt||[],aromas:job.comparison?.aromas||[],exports:job.exports||{}}}
+ async comparison(id){if(!validId(id))throw Error('JOB_NOT_FOUND');const job=await this.ctx.storage.get(key(id));if(!job)throw Error('JOB_NOT_FOUND');if(!['comparison','complete','sketch','image'].includes(job.stage))throw Error('COMPARISON_NOT_READY');return {job_id:job.id,stage:job.stage,state:job.state,prompt:job.comparison?.prompt||[],aromas:job.comparison?.aromas||[],exports:job.exports||{}}}
+ async selectPrompt({job_id,model_id}={}){
+  if(!validId(job_id))throw Error('JOB_NOT_FOUND');
+  return this.ctx.storage.transaction(async txn=>{
+   const job=await txn.get(key(job_id));if(!job)throw Error('JOB_NOT_FOUND');
+   if(job.stage!=='complete'||job.state!=='complete'||job.selection)throw Error('P1_PROMPT_NOT_SELECTABLE');
+   const item=job.results.find(x=>x.model===model_id&&x.status==='complete'&&x.normalized?.status==='complete');
+   if(!item||!item.normalized.final_image_prompt)throw Error('P1_FRAME_NOT_APPROVED');
+   const frame=item.normalized,promptHash=await digest(encoder.encode(frame.final_image_prompt));
+   job.selection={model_id,frame,prompt_sha256:promptHash,selected_at:utc()};
+   job.stage='sketch';job.state='sketch_ready';job.updatedAt=Date.now();await txn.put(key(job.id),job);
+   return publicJob(job);
+  });
+ }
+ async sketchStart({job_id,confirm,format='portrait',budget_max_usd}={}){
+  if(confirm!==true)throw Error('CONFIRMATION_REQUIRED');
+  if(this.env.MODEL_TESTS_P1_ENABLED!=='1'||!this.env.AI||!this.env.MODEL_TEST_MEDIA)throw Error('P1_DISABLED');
+  const ceiling=Number(this.env.MODEL_TESTS_IMAGE_CEILING_USD||0),budget=Number(budget_max_usd||0);
+  if(!(ceiling>0&&Number.isFinite(ceiling)&&budget>=ceiling&&budget<=100))throw Error('P1_BUDGET_REQUIRED');
+  if(!['portrait','landscape','square'].includes(format))throw Error('P1_FORMAT_INVALID');
+  const job=await this.ctx.storage.transaction(async txn=>{
+   const j=await txn.get(key(job_id));if(!j)throw Error('JOB_NOT_FOUND');
+   if(j.state!=='sketch_ready'||j.stage!=='sketch'||!j.selection)throw Error('P1_SKETCH_NOT_READY');
+   j.state='sketch_queued';j.format=format;j.sketch_budget_ceiling_usd=ceiling;j.sketch_approved_budget_usd=budget;j.updatedAt=Date.now();await txn.put(key(job_id),j);return j;
+  });
+  await this.ctx.storage.setAlarm(Date.now()+1000);return publicJob(job);
+ }
+ async sketchApprove({job_id,approved,notes}={}){
+  if(typeof approved!=='boolean')throw Error('P1_APPROVAL_REQUIRED');
+  return this.ctx.storage.transaction(async txn=>{
+   const j=await txn.get(key(job_id));if(!j)throw Error('JOB_NOT_FOUND');
+   if(j.stage!=='sketch'||j.state!=='sketch_review'||!j.sketch?.r2?.key)throw Error('P1_SKETCH_NOT_REVIEWABLE');
+   j.sketch.approval={approved,notes:String(notes||'').slice(0,500),at:utc()};
+   j.state=approved?'sketch_approved':'sketch_rejected';j.updatedAt=Date.now();await txn.put(key(job_id),j);return publicJob(j);
+  });
+ }
+ async imageStart({job_id,confirm,budget_max_usd}={}){
+  if(confirm!==true)throw Error('CONFIRMATION_REQUIRED');
+  if(this.env.MODEL_TESTS_P1_ENABLED!=='1'||!this.env.AI||!this.env.MODEL_TEST_MEDIA)throw Error('P1_DISABLED');
+  const ceiling=Number(this.env.MODEL_TESTS_IMAGE_CEILING_USD||0),budget=Number(budget_max_usd||0);
+  if(!(ceiling>0&&Number.isFinite(ceiling)&&budget>=ceiling&&budget<=100))throw Error('P1_BUDGET_REQUIRED');
+  const job=await this.ctx.storage.transaction(async txn=>{
+   const j=await txn.get(key(job_id));if(!j)throw Error('JOB_NOT_FOUND');
+   if(j.state!=='sketch_approved'||!j.sketch?.approval?.approved||!j.sketch?.r2?.key)throw Error('P1_SKETCH_APPROVAL_REQUIRED');
+   j.state='image_queued';j.stage='image';j.image_budget_ceiling_usd=ceiling;j.image_approved_budget_usd=budget;j.updatedAt=Date.now();await txn.put(key(job_id),j);return j;
+  });
+  await this.ctx.storage.setAlarm(Date.now()+1000);return publicJob(job);
+ }
+ async imageApprove({job_id,approved,notes}={}){
+  if(typeof approved!=='boolean')throw Error('P1_APPROVAL_REQUIRED');
+  return this.ctx.storage.transaction(async txn=>{
+   const j=await txn.get(key(job_id));if(!j)throw Error('JOB_NOT_FOUND');
+   if(j.stage!=='image'||j.state!=='image_review'||!j.image?.r2?.key)throw Error('P1_IMAGE_NOT_REVIEWABLE');
+   j.image.approval={approved,notes:String(notes||'').slice(0,500),at:utc()};j.state=approved?'image_approved':'image_rejected';j.updatedAt=Date.now();await txn.put(key(job_id),j);return publicJob(j);
+  });
+ }
+ async mediaMeta({job_id,phase}={}){
+  if(!validId(job_id)||!['sketch','image'].includes(phase))throw Error('P1_MEDIA_INVALID');
+  const j=await this.ctx.storage.get(key(job_id));if(!j)throw Error('JOB_NOT_FOUND');
+  const media=j[phase];if(!media?.r2?.key)throw Error('P1_MEDIA_NOT_FOUND');
+  return {job_id,phase,...media.r2};
+ }
  async alarm(){
   if(this.alarmActive){await this.ctx.storage.setAlarm(Date.now()+timeoutMs);return}this.alarmActive=true;
   try{
-   const all=await this.ctx.storage.list({prefix:'job:',limit:MAX_JOBS});const pending=[...all.values()].filter(j=>['running','exporting','queued','ready_to_export'].includes(j.state)).sort((a,b)=>a.createdAt-b.createdAt);
+   const all=await this.ctx.storage.list({prefix:'job:',limit:MAX_JOBS});const pending=[...all.values()].filter(j=>['running','exporting','queued','ready_to_export','sketch_queued','image_queued','sketch_generating','image_generating'].includes(j.state)).sort((a,b)=>a.createdAt-b.createdAt);
    let job=pending[0];if(!job)return;
+   if(['sketch_generating','image_generating'].includes(job.state)){
+    if(Date.now()-job.updatedAt<timeoutMs){await this.ctx.storage.setAlarm(job.updatedAt+timeoutMs);return}
+    job.state='image_uncertain';job.updatedAt=Date.now();await this.ctx.storage.put(key(job.id),job);return;
+   }
+   if(job.state==='sketch_queued'){
+    job.state='sketch_generating';job.updatedAt=Date.now();await this.ctx.storage.put(key(job.id),job);await this.ctx.storage.setAlarm(Date.now()+timeoutMs);
+    try{
+     const result=await runPencil(this.env.AI,job.selection.frame,job.format);
+     const r2=await persistOriginal(this.env.MODEL_TEST_MEDIA,job.id,'sketch',result);
+     job.sketch={id:crypto.randomUUID(),r2,prompt:result.prompt,model:result.model,reference_sha256:job.selection.prompt_sha256,approval:{approved:null},created_at:utc()};
+     job.state='sketch_review';job.updatedAt=Date.now();await this.ctx.storage.put(key(job.id),job);
+    }catch(error){job.state='image_uncertain';job.image_error=String(error?.message||'P1_SKETCH_UNCERTAIN').slice(0,80);job.updatedAt=Date.now();await this.ctx.storage.put(key(job.id),job)}
+    return;
+   }
+   if(job.state==='image_queued'){
+    job.state='image_generating';job.updatedAt=Date.now();await this.ctx.storage.put(key(job.id),job);await this.ctx.storage.setAlarm(Date.now()+timeoutMs);
+    try{
+     const sketch=await this.env.MODEL_TEST_MEDIA.get(job.sketch.r2.key);if(!sketch)throw Error('P1_SKETCH_MISSING');
+     const sketchBytes=new Uint8Array(await sketch.arrayBuffer());
+     const result=await runImage(this.env.AI,job.selection.frame,sketchBytes,job.format);
+     const r2=await persistOriginal(this.env.MODEL_TEST_MEDIA,job.id,'image',result);
+     job.image={id:crypto.randomUUID(),r2,prompt:result.prompt,model:result.model,reference_sha256:result.sketch_sha256,approval:{approved:null},created_at:utc()};
+     job.state='image_review';job.updatedAt=Date.now();await this.ctx.storage.put(key(job.id),job);
+    }catch(error){job.state='image_uncertain';job.image_error=String(error?.message||'P1_IMAGE_UNCERTAIN').slice(0,80);job.updatedAt=Date.now();await this.ctx.storage.put(key(job.id),job)}
+    return;
+   }
    if(['running','exporting'].includes(job.state)){
     if(Date.now()-job.updatedAt<timeoutMs){await this.ctx.storage.setAlarm(job.updatedAt+timeoutMs);return}
     job=interrupted(job);job.updatedAt=Date.now();await this.ctx.storage.put(key(job.id),job);await this.ctx.storage.setAlarm(Date.now()+1000);return;

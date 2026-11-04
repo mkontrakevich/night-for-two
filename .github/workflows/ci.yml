@@ -34,6 +34,8 @@ jobs:
         run: node --experimental-loader ./cloudflare/novel2-preview/scripts/cloudflare-test-loader.mjs cloudflare/novel2-preview/scripts/model-test-p0.test.mjs
       - name: Night4two image-reference adapter (mocked, no paid calls)
         run: node cloudflare/novel2-preview/scripts/model-test-image.test.mjs
+      - name: Night4two P1 stateful approvals (mocked)
+        run: node --experimental-loader ./cloudflare/novel2-preview/scripts/cloudflare-test-loader.mjs cloudflare/novel2-preview/scripts/model-test-p1.test.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
