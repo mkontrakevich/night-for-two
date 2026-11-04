@@ -1,3 +1,4 @@
+import {mediaIngest} from './media-drive-ingest.js';
 // Night4two: dedicated OAuth and Drive write bridge. Secrets must be
 // supplied via Cloudflare Secret bindings. No sensitive payloads are logged.
 const H={'cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer'};
@@ -43,6 +44,7 @@ async function ingest(req,e){
 export default {async fetch(req,e){
  const u=new URL(req.url),callback=e.PUBLIC_ORIGIN+'/oauth/google/callback';
  if(u.pathname==='/health')return out({service:'night4two-drive-oauth',configured:canUse(e),connected:Boolean(await e.STORE.get('google:refresh:v1')),appFolder:await e.STORE.get('google:app_folder_id')||null});
+ if(u.pathname==='/api/drive/media/ingest')return req.method==='POST'?mediaIngest(req,e,{access}):txt('Method not allowed',405);
  if(u.pathname==='/api/drive/ingest')return req.method==='POST'?ingest(req,e):txt('Method not allowed',405);
  if(u.pathname==='/oauth/google/start'){
   if(req.method!=='GET')return txt('Method not allowed',405);
