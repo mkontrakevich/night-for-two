@@ -14,6 +14,8 @@ export function openRouterFailureCategory(payload={}){
 
 import {WorkflowEntrypoint} from 'cloudflare:workers';
 import {modelComparison} from './model-comparison.js';
+import {handleModelTests} from './model-test-api.js';
+export {ModelTestJobs} from './model-test-jobs.js';
 import {handleStranger,runStrangerWorld} from './stranger.js';
 import {handleNativeActor,runNativeActor} from './native-actor.js';
 import {handleMigrationAdmin,runLegacyMigration} from './migrate-legacy.js';
@@ -713,6 +715,8 @@ export default{
     if(incoming.pathname.startsWith('/novel2/api/cloud/actor/'))
       return await handleNativeActor(request,env,incoming);
     if(incoming.pathname.startsWith('/novel2-ai/'))return handleAi(request,env,incoming);
+    const modelTests=await handleModelTests(request,env,incoming);
+    if(modelTests)return modelTests;
     // Native Cloudflare prologue. Existing casting/story API remains behind VPC until migrated.
     const stranger=await handleStranger(request,env,incoming);
     if(stranger)return stranger;

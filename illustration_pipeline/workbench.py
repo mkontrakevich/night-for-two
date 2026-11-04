@@ -11,9 +11,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from marked_engine import MarkedEngine, JobError
 from edge_client import EdgeClient
-from prompt_evaluation import EvaluationError
 
-def make_server(engine, token, host='127.0.0.1', port=5691, comparison=None):
+def make_server(engine, token, host='127.0.0.1', port=5691):
     if len(token)<32: raise ValueError('WORKBENCH_TOKEN_REQUIRED')
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args): pass
@@ -36,29 +35,6 @@ def make_server(engine, token, host='127.0.0.1', port=5691, comparison=None):
                 data=json.loads(self.rfile.read(length))
                 if not isinstance(data,dict): raise JobError('JSON_OBJECT_REQUIRED')
                 action=self.path.strip('/')
-                if action.startswith('model-tests-'):
-                    if comparison is None:
-                        return self.answer(503,{'ok':False,'error':'MODEL_TESTS_NOT_CONFIGURED'})
-                    if action=='model-tests-config': return self.answer(200,{'ok':True,'models':comparison.allowed_models})
-                    if action=='model-tests-list': return self.answer(200,{'ok':True,'jobs':comparison.list(owner)})
-                    if action=='model-tests-upload':
-                        raw=base64.b64decode(data.get('data',''),validate=True)
-                        return self.answer(200,{'ok':True,'job':comparison.create_upload(owner,data.get('filename',''),raw,data.get('models'))})
-                    if action=='model-tests-create':
-                        return self.answer(200,{'ok':True,'job':comparison.create(owner,data.get('file_id',''),data.get('models'))})
-                    if action=='model-tests-status':
-                        return self.answer(200,{'ok':True,'job':comparison.view(owner,str(data.get('job_id','')))})
-                    if action=='model-tests-start':
-                        if data.get('confirm') is not True: raise EvaluationError('CONFIRMATION_REQUIRED')
-                        job_id=str(data.get('job_id',''))
-                        job=comparison.view(owner,job_id)
-                        if job['state']!='ready': raise EvaluationError('JOB_ALREADY_STARTED')
-                        def run_comparison():
-                            try: comparison.run(owner,job_id,confirm=True)
-                            except Exception: pass
-                        threading.Thread(target=run_comparison,daemon=True).start()
-                        return self.answer(202,{'ok':True,'job':comparison.view(owner,job_id)})
-                    raise EvaluationError('ACTION_NOT_FOUND')
                 if action=='prepare':
                     raw=base64.b64decode(data.get('data',''),validate=True)
                     return self.answer(200,{'ok':True,'job':engine.create(owner,data.get('filename',''),raw,data.get('instructions'))})
@@ -100,7 +76,7 @@ def make_server(engine, token, host='127.0.0.1', port=5691, comparison=None):
                 if action=='assemble': return self.answer(200,{'ok':True,'job':engine.assemble(job_id,owner)})
                 if action=='asset': return self.answer(200,{'ok':True,**engine.asset(job_id,owner,data.get('scene_id'),data.get('document') is True)})
                 raise JobError('ACTION_NOT_FOUND')
-            except (ValueError,JobError,EvaluationError) as error:
+            except (ValueError,JobError) as error:
                 code=str(error)
                 if not re.fullmatch('[A-Z][A-Z0-9_]+',code): code='INVALID_REQUEST'
                 self.answer(409 if code in {'JOB_BUSY','IMAGE_APPROVAL_REQUIRED'} else 422,{'ok':False,'error':code})
@@ -118,11 +94,6 @@ def main():
         sd=StableDiffusionClient({'backend':os.environ['SD_BACKEND'],'base_url':os.environ.get('SD_BASE_URL','http://127.0.0.1:7860'),
             'checkpoint':os.environ.get('SD_CHECKPOINT',''),'width':768,'height':1024})
     engine=MarkedEngine(os.environ.get('WORKBENCH_DATA','/data'),edge=edge,sd=sd)
-    comparison=None
-    if os.environ.get('MODEL_TESTS_ENABLED')=='1':
-        import requests
-        from comparison_runtime import create_comparison_runtime
-        comparison=create_comparison_runtime(os.environ,edge,requests)
-    make_server(engine,os.environ.get('WORKBENCH_TOKEN',''),args.host,args.port,comparison=comparison).serve_forever()
+    make_server(engine,os.environ.get('WORKBENCH_TOKEN',''),args.host,args.port).serve_forever()
 
 if __name__=='__main__': main()

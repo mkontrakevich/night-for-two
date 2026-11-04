@@ -65,9 +65,6 @@ class EdgeClient:
         if not isinstance(text,str) or not 20<=len(text)<=6000: raise ProviderError('SCENE_DESCRIPTION_INVALID')
         return text, {'provider':result.get('provider'),'model':result.get('model')}
 
-    def compare(self, model, prompt):
-        return self.call('compare-text',{'model':model,'prompt':prompt})
-
     def generate(self, prompt, negative_prompt, output_path, width, height):
         result = self.call('image',{'prompt':prompt,'width':width,'height':height,'keepalive':True})
         try: raw = base64.b64decode(result['image'].split(',')[-1],validate=True)
