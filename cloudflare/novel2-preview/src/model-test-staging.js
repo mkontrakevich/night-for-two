@@ -80,7 +80,7 @@ export default {async fetch(req,env){
    const saved=await stub.mediaReceipt({job_id:d.job_id,phase:d.phase,sha256:meta.sha256,file_id:result.id});
    return reply({ok:true,drive:saved.drive});
   }
-  if(action==='config')return reply({ok:true,...await stub.config()});
+  if(action==='config')return reply({ok:true,p1_enabled:env.MODEL_TESTS_P1_ENABLED==='1',staging_fixture_mode:env.MODEL_TESTS_FIXTURE_MODE==='1',...await stub.config()});
   if(action==='list')return reply({ok:true,jobs:await stub.list()});
   if(action==='create')return reply({ok:true,job:await stub.create({sceneId:d.scene_id,models:d.models,budget_max_usd:d.budget_max_usd})},201);
   if(action==='assets/upload')return reply({ok:true,job:await stub.addAsset({job_id:d.job_id,role:d.role,filename:d.filename,data:d.data_base64,sha256:d.sha256})});
