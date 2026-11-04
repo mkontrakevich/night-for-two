@@ -1,0 +1,58 @@
+name: Night4two Staging E2E
+
+on:
+  push:
+    branches: [feat/prompt-evaluation-core]
+    paths:
+      - "cloudflare/novel2-preview/src/model-test-**"
+      - "cloudflare/novel2-preview/src/model-comparison.js"
+      - "cloudflare/novel2-preview/scripts/night4two-staging-smoke.py"
+      - ".github/workflows/night4two-staging-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: night4two-staging-fixture
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      N4T_STAGING_URL: https://night4two-model-tests-staging.kontrakevich.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify scoped staging credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CF_ACCOUNT" || { echo '::error::MISSING_CF_ACCOUNT'; exit 1; }
+          test -n "$CF_TOKEN" || { echo '::error::MISSING_CF_TOKEN'; exit 1; }
+      - name: Rotate ephemeral test key and run real Drive transport smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::$token"
+          secret_payload="$(jq -cn --arg value "$token" '{name:"STAGING_KEY",type:"secret_text",text:$value}')"
+          curl --fail --silent --show-error --max-time 35 --request PUT \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/workers/scripts/night4two-model-tests-staging/secrets" \
+            --header "authorization: Bearer $CF_TOKEN" \
+            --header "content-type: application/json" \
+            --data-binary "$secret_payload" > /tmp/n4t-secret-response.json
+          jq -e '.success == true' /tmp/n4t-secret-response.json >/dev/null || { echo '::error::STAGING_SECRET_SET_FAILED'; exit 1; }
+          rm -f /tmp/n4t-secret-response.json
+          export N4T_STAGING_TOKEN="$token"
+          python3 cloudflare/novel2-preview/scripts/night4two-staging-smoke.py
+      - name: Upload sanitized receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: night4two-staging-receipts
+          path: /tmp/night4two-staging-smoke.json
+          if-no-files-found: ignore
