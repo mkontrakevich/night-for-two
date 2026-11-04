@@ -1,0 +1,38 @@
+name: Night4two Staging Invite
+
+on:
+  push:
+    branches: [feat/prompt-evaluation-core]
+    paths:
+      - ".github/workflows/night4two-staging-invite.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  invite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      N4T_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      N4T_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
+    steps:
+      - name: Send protected owner-only Night4two staging Mini App
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$N4T_BOT_TOKEN" || { echo '::error::BOT_TOKEN_MISSING'; exit 1; }
+          [[ "$N4T_OWNER_ID" =~ ^[0-9]{5,20}$ ]] || { echo '::error::OWNER_ID_INVALID'; exit 1; }
+          payload="$(jq -nc --arg id "$N4T_OWNER_ID" '{
+            chat_id:$id,
+            disable_notification:true,
+            protect_content:true,
+            text:"Night4two — TEXT TEST (staging). Синтетические модели, стоимость 0 USD. Загрузите описание сцены, Sensual Director и Couple Space. Основной роман не менялся.",
+            reply_markup:{inline_keyboard:[[{text:"Открыть TEXT TEST",web_app:{url:"https://night4two-model-tests-staging.kontrakevich.workers.dev/novel2/model-tests.html"}}]]}
+          }')"
+          curl --silent --show-error --fail --max-time 30 \
+            "https://api.telegram.org/bot$N4T_BOT_TOKEN/sendMessage" \
+            -H "content-type: application/json" --data-binary "$payload" > /tmp/night4two-invite.json
+          jq -e '.ok == true' /tmp/night4two-invite.json >/dev/null || { echo '::error::TELEGRAM_INVITE_FAILED'; exit 1; }
+          jq -r '"NIGHT4TWO_STAGING_INVITE_SENT=true message_id=" + (.result.message_id|tostring)' /tmp/night4two-invite.json
+          rm -f /tmp/night4two-invite.json
