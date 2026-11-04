@@ -1,0 +1,44 @@
+name: Night4two Staging Auth Setup
+
+on:
+  push:
+    branches: [feat/prompt-evaluation-core]
+    paths:
+      - "cloudflare/novel2-preview/src/model-test-staging.js"
+      - "cloudflare/novel2-preview/src/model-test-staging-ui.js"
+      - ".github/workflows/night4two-staging-auth.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      N4T_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      N4T_OWNER_ID: ${{ secrets.PRIMARY_OWNER_ID }}
+    steps:
+      - name: Configure owner-only Telegram verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CF_ACCOUNT CF_TOKEN N4T_BOT_TOKEN N4T_OWNER_ID; do
+            test -n "${!name}" || { echo "::error::MISSING_$name"; exit 1; }
+          done
+          [[ "$N4T_OWNER_ID" =~ ^[0-9]{5,20}$ ]] || { echo '::error::INVALID_OWNER_ID'; exit 1; }
+          worker='night4two-model-tests-staging'
+          for var in NOVEL2_TELEGRAM_BOT_TOKEN NOVEL2_ALLOWED_USER_IDS; do
+            if [ "$var" = NOVEL2_TELEGRAM_BOT_TOKEN ]; then secret="$N4T_BOT_TOKEN"; else secret="$N4T_OWNER_ID"; fi
+            payload="$(jq -cn --arg name "$var" --arg value "$secret" '{name:$name,type:"secret_text",text:$value}')"
+            curl --fail --silent --show-error --max-time 35 --request PUT \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/workers/scripts/$worker/secrets" \
+              -H "authorization: Bearer $CF_TOKEN" -H "content-type: application/json" \
+              --data-binary "$payload" > /tmp/n4t-auth-result.json
+            jq -e '.success == true' /tmp/n4t-auth-result.json >/dev/null || { echo "::error::BINDING_FAILED_$var"; exit 1; }
+            rm -f /tmp/n4t-auth-result.json
+          done
+          echo 'NIGHT4TWO_STAGING_TELEGRAM_AUTH_CONFIGURED=true'
