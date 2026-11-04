@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {inspectImage,pencilPrompt,finalPrompt,runPencil,runImage,persistOriginal,FORMATS,MODEL} from '../src/model-test-image.js';
+// Lightweight PNG fixture: real IHDR dimensions, binary bytes. Does not assert decoder validity.
+function fixture(w,h){const b=new Uint8Array(100).fill(1);b.set([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82]);const v=new DataView(b.buffer);v.setUint32(16,w);v.setUint32(20,h);return b}
+const sketch=fixture(288,496),draft=fixture(768,1344);
+assert.deepEqual(FORMATS.portrait.sketch,[288,496]);
+assert.equal(inspectImage(sketch,{reference:true}).mime,'image/png');
+assert.throws(()=>inspectImage(draft,{reference:true}),/REFERENCE_TOO_LARGE/);
+const frame={status:'complete',shot_type:'medium shot',camera_angle:'eye-level',lens_mm:50,scene_summary:'Двое взрослых рядом у окна',blocking:{hands:'на столе'},emotion:'сдержанность',wardrobe_props:'пальто',environment:'отель',lighting:'вечерний свет',final_image_prompt:'Two fictional adults by a hotel window at dusk',negative_prompt:'extra fingers'};
+assert.ok(pencilPrompt(frame).includes('CAMERA / LENS'));
+assert.ok(finalPrompt(frame).includes('input_image_0'));
+let calls=[];
+const ai={async run(model,{multipart}){calls.push({model,form:await new Response(multipart.body,{headers:{'content-type':multipart.contentType}}).formData()});return {image:btoa(String.fromCharCode(...(calls.length===1?sketch:draft)))}}};
+const a=await runPencil(ai,frame);assert.equal(a.info.width,288);assert.equal(a.phase,'sketch');
+const b=await runImage(ai,frame,a.bytes);assert.equal(b.info.height,1344);assert.equal(b.phase,'image');assert.equal(b.sketch_sha256,a.sha256);
+assert.equal(calls.length,2);assert.equal(calls[0].model,MODEL);assert.equal(calls[0].form.has('input_image_0'),false);
+assert.equal(calls[1].form.has('input_image_0'),true);
+assert.equal((await calls[1].form.get('input_image_0').arrayBuffer()).byteLength,sketch.length);
+assert.throws(()=>pencilPrompt({status:'invalid_schema'}),/FRAME_INVALID/);
+const contents=new Map();const r2={async head(key){const x=contents.get(key);return x?{size:x.bytes.length,customMetadata:x.customMetadata}:null},async put(key,bytes,options){contents.set(key,{bytes,customMetadata:options.customMetadata})}};
+const id='a1b2c3d4-1111-4222-8333-123456789abc';const first=await persistOriginal(r2,id,'sketch',a);assert.equal(first.alreadySaved,false);const second=await persistOriginal(r2,id,'sketch',a);assert.equal(second.alreadySaved,true);assert.equal(contents.size,1);
+console.log('NIGHT4TWO_P1_IMAGE_ADAPTER_OK', {model:MODEL,forms:calls.length,r2Objects:contents.size});
