@@ -3,6 +3,10 @@
   "main": "src/index.js",
   "compatibility_date": "2026-09-01",
   "workers_dev": true,
+  "durable_objects": {
+    "bindings": [{"name": "MODEL_TEST_JOBS", "class_name": "ModelTestJobs"}]
+  },
+  "migrations": [{"tag": "model-tests-v1", "new_sqlite_classes": ["ModelTestJobs"]}],
   "vpc_networks": [
     {
       "binding": "NOVEL2_VPC",

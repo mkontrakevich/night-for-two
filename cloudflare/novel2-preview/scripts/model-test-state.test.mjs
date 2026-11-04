@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {beginModel,finishModel,interrupted} from '../src/model-test-state.js';
+let job={state:'queued',models:['one/model','two/model'],results:[]};
+job=beginModel(job);const attempt=job.attempt;
+assert.equal(job.results[0].status,'running');
+assert.throws(()=>beginModel(job),/JOB_NOT_QUEUED/);
+assert.throws(()=>finishModel(job,'old',{}),/STALE_ATTEMPT/);
+const crashed=interrupted(job);assert.equal(crashed.state,'uncertain');assert.equal(crashed.results[0].status,'uncertain');assert.throws(()=>beginModel(crashed));
+job=finishModel(job,attempt,{refused:true});assert.equal(job.results[0].status,'refused');assert.equal(job.state,'queued');
+job=beginModel(job);job=finishModel(job,job.attempt,{content:'description'});assert.equal(job.state,'ready_to_export');
+assert.equal(interrupted({state:'exporting'}).state,'export_uncertain');
+console.log('MODEL_TEST_STATE_OK');

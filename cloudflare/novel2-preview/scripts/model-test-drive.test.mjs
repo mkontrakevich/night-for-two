@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {modelTestDrive} from '../src/model-test-drive.js';
+const env={MODEL_TESTS_DRIVE_FOLDER_ID:'folder_123456789',MODEL_TESTS_GOOGLE_CLIENT_ID:'client',MODEL_TESTS_GOOGLE_CLIENT_SECRET:'secret',MODEL_TESTS_GOOGLE_REFRESH_TOKEN:'refresh'};
+assert.throws(()=>modelTestDrive({}),/NOT_CONFIGURED/);
+let calls=[];
+const http=async(url,options)=>{calls.push(url);if(url.includes('oauth2'))return Response.json({access_token:'token'});assert.equal(options.headers.authorization,'Bearer token');return Response.json({id:'file_123456789',name:'sample.txt'})};
+const drive=modelTestDrive(env,http),job='a1b2c3d4-1111-4222-8333-123456789abc';
+const result=await drive.upload('sample.txt','text/plain',new TextEncoder().encode('test'),job,'source');
+assert.equal(result.id,'file_123456789');assert.equal(calls.length,2);
+let uploads=0;
+const failed=modelTestDrive(env,async(url)=>{if(url.includes('oauth2'))return Response.json({access_token:'token'});uploads++;throw Error('timeout')});
+await assert.rejects(()=>failed.upload('sample.txt','text/plain',new Uint8Array([1]),job,'source'),/WRITE_UNCERTAIN/);assert.equal(uploads,1);
+console.log('MODEL_TEST_DRIVE_OK');

@@ -13,6 +13,9 @@ export function openRouterFailureCategory(payload={}){
 }
 
 import {WorkflowEntrypoint} from 'cloudflare:workers';
+import {modelComparison} from './model-comparison.js';
+import {handleModelTests} from './model-test-api.js';
+export {ModelTestJobs} from './model-test-jobs.js';
 import {handleStranger,runStrangerWorld} from './stranger.js';
 import {handleNativeActor,runNativeActor} from './native-actor.js';
 import {handleMigrationAdmin,runLegacyMigration} from './migrate-legacy.js';
@@ -230,6 +233,7 @@ function workerTextContent(result){
 async function handleAi(request,env,incoming){
   if(request.method!=='POST')return json(405,{ok:false,error:'METHOD_NOT_ALLOWED'});
   if(!await aiAuthorized(request,env))return json(401,{ok:false,error:'NOVEL2_AI_EDGE_UNAUTHORIZED'});
+  if(incoming.pathname==='/novel2-ai/compare-text')return modelComparison(request,env);
   if(!env.AI||typeof env.AI.run!=='function')return json(503,{ok:false,error:'NOVEL2_AI_BINDING_MISSING'});
   if(incoming.pathname==='/novel2-ai/provider-status'){
     const model=String(env.OPENROUTER_TEXT_MODEL||env.OPENROUTER_HOST_MODEL||'openai/gpt-4.1-mini');
@@ -711,6 +715,8 @@ export default{
     if(incoming.pathname.startsWith('/novel2/api/cloud/actor/'))
       return await handleNativeActor(request,env,incoming);
     if(incoming.pathname.startsWith('/novel2-ai/'))return handleAi(request,env,incoming);
+    const modelTests=await handleModelTests(request,env,incoming);
+    if(modelTests)return modelTests;
     // Native Cloudflare prologue. Existing casting/story API remains behind VPC until migrated.
     const stranger=await handleStranger(request,env,incoming);
     if(stranger)return stranger;
@@ -719,7 +725,7 @@ export default{
     if(request.method==='GET'&&env.ASSETS&&typeof env.ASSETS.fetch==='function'){
       const uiPath=incoming.pathname==='/novel2'||incoming.pathname==='/novel2/'
         ?'/index.html'
-        :['/illustrations.html','/noir-experience.js','/noir-experience.css','/noir-host.js','/noir-host.css','/story-launch-client.js']
+        :['/illustrations.html','/model-tests.html','/noir-experience.js','/noir-experience.css','/noir-host.js','/noir-host.css','/story-launch-client.js']
             .find(p=>incoming.pathname==='/novel2'+p);
       if(uiPath){
         const assetUrl=new URL(uiPath,incoming);
