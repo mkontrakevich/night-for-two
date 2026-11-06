@@ -25,7 +25,7 @@ async function ingest(req,e){
  const {filename,content,job_id:id,kind,content_type:mime}=data||{};
  const artifactTypes={
   source:['.txt','text/plain'],scene:['.txt','text/plain'],
-  sensual_director:['.md','text/markdown'],couple_space:['.md','text/markdown'],
+  sensual_director:['.md','text/markdown'],couple_space:['.md','text/markdown'],sd_story:['.md','text/markdown'],
   manifest:['.json','application/json'],result:['.json','application/json'],
   prompt_comparison_json:['.json','application/json'],prompt_comparison_csv:['.csv','text/csv'],
   aroma_comparison_json:['.json','application/json'],aroma_comparison_csv:['.csv','text/csv']

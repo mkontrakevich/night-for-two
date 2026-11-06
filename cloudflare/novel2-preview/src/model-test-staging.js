@@ -3,7 +3,6 @@
 // staging-only secret for controlled machine QA. Real provider disabled.
 import page from './model-test-staging-ui.js';
 import {digest} from './model-test-image.js';
-import {DEFAULT_INSTRUCTIONS} from './model-test-instruction-defaults.js';
 export {ModelTestJobs} from './model-test-jobs.js';
 const reply=(data,status=200)=>Response.json(data,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff'}});
 const equal=(a,b)=>{a=String(a||'');b=String(b||'');if(!a||a.length!==b.length)return false;let d=0;for(let i=0;i<a.length;i++)d|=a.charCodeAt(i)^b.charCodeAt(i);return d===0};
@@ -81,7 +80,7 @@ export default {async fetch(req,env){
    const saved=await stub.mediaReceipt({job_id:d.job_id,phase:d.phase,sha256:meta.sha256,file_id:result.id});
    return reply({ok:true,drive:saved.drive});
   }
-  if(action==='config')return reply({ok:true,p1_enabled:env.MODEL_TESTS_P1_ENABLED==='1',staging_fixture_mode:env.MODEL_TESTS_FIXTURE_MODE==='1',default_instructions:DEFAULT_INSTRUCTIONS,...await stub.config()});
+  if(action==='config')return reply({ok:true,p1_enabled:env.MODEL_TESTS_P1_ENABLED==='1',staging_fixture_mode:env.MODEL_TESTS_FIXTURE_MODE==='1',...await stub.config()});
   if(action==='list')return reply({ok:true,jobs:await stub.list()});
   if(action==='create')return reply({ok:true,job:await stub.create({sceneId:d.scene_id,models:d.models,budget_max_usd:d.budget_max_usd})},201);
   if(action==='assets/upload')return reply({ok:true,job:await stub.addAsset({job_id:d.job_id,role:d.role,filename:d.filename,data:d.data_base64,sha256:d.sha256})});

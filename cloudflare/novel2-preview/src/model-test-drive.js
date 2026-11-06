@@ -3,7 +3,7 @@ const INGEST_URL='https://night4two-drive-oauth.kontrakevich.workers.dev/api/dri
 const validId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{10,200}$/.test(value);
 export const DRIVE_ARTIFACTS=Object.freeze({
   source:{ext:'.txt',mime:'text/plain'},scene:{ext:'.txt',mime:'text/plain'},
-  sensual_director:{ext:'.md',mime:'text/markdown'},couple_space:{ext:'.md',mime:'text/markdown'},
+  sensual_director:{ext:'.md',mime:'text/markdown'},couple_space:{ext:'.md',mime:'text/markdown'},sd_story:{ext:'.md',mime:'text/markdown'},
   manifest:{ext:'.json',mime:'application/json'},result:{ext:'.json',mime:'application/json'},
   prompt_comparison_json:{ext:'.json',mime:'application/json'},prompt_comparison_csv:{ext:'.csv',mime:'text/csv'},
   aroma_comparison_json:{ext:'.json',mime:'application/json'},aroma_comparison_csv:{ext:'.csv',mime:'text/csv'}

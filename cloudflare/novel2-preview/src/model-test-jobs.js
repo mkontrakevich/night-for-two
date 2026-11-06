@@ -1,6 +1,7 @@
 import {DurableObject} from 'cloudflare:workers';
 import {modelComparison} from './model-comparison.js';
 import {modelTestDrive} from './model-test-drive.js';
+import {DEFAULT_INSTRUCTIONS} from './model-test-instruction-defaults.js';
 import {beginModel,finishModel,interrupted} from './model-test-state.js';
 import {runPencil,runImage,persistOriginal,digest} from './model-test-image.js';
 import {ROLES,parseUpload,sha256Hex,buildModelPrompt,normalizeFrame,createComparisons,asCsv,PROMPT_COLUMNS,AROMA_COLUMNS} from './model-test-p0.js';
@@ -20,14 +21,14 @@ function costCeilings(models,env){const price=pricesFor(env),out={};for(const m 
 function publicJob(job){
  const {source,inputs,modelPrompt,attempt,...rest}=job;
  const view={...rest};
- view.input_files={};for(const role of ROLES){const v=inputs?.[role];if(v)view.input_files[role]={filename:v.filename,sha256:v.sha256,bytes:v.bytes,state:v.state,drive:v.file||null}}
+ view.input_files={};for(const role of ROLES){const v=inputs?.[role];if(v)view.input_files[role]={filename:v.filename,sha256:v.sha256,bytes:v.bytes,state:v.state,drive:v.file||null,source:v.source||'user',version:v.version||null}}
  // Hide full raw prompt and per-input text; model results are outputs, not private inputs.
  return view;
 }
-function requireThree(job){return ROLES.every(role=>job.inputs?.[role]?.state==='saved'&&job.inputs[role].file?.id)}
-function manifestOf(job){return {schema_version:'n4t-test-v1',job_id:job.id,scope:'fiction_test',scene_id:job.sceneId,inputs:Object.fromEntries(ROLES.map(role=>{const v=job.inputs[role];return [role,{filename:v.filename,sha256:v.sha256,bytes:v.bytes,drive_file_id:v.file.id}]})),text_models:job.models,generation_params:job.params,budget:{max_usd:job.budgetMaxUsd,estimated_ceiling_usd:job.estimatedCeilingUsd},created_at:job.createdAtIso}}
+function requireInputs(job){return ROLES.every(role=>job.inputs?.[role]?.state==='saved'&&job.inputs[role].file?.id)}
+function manifestOf(job){return {schema_version:'n4t-test-v1',job_id:job.id,scope:'fiction_test',scene_id:job.sceneId,inputs:Object.fromEntries(ROLES.map(role=>{const v=job.inputs[role];return [role,{filename:v.filename,sha256:v.sha256,bytes:v.bytes,drive_file_id:v.file?.id||null,source:v.source||'user',version:v.version||null}]})),text_models:job.models,generation_params:job.params,budget:{max_usd:job.budgetMaxUsd,estimated_ceiling_usd:job.estimatedCeilingUsd},created_at:job.createdAtIso}}
 export class ModelTestJobs extends DurableObject {
- async config(){const models=modelsFor(this.env);modelTestDrive(this.env);if(!this.env.OPENROUTER_API_KEY||!models.length)throw Error('MODEL_TESTS_NOT_CONFIGURED');const prices=pricesFor(this.env);return {models,model_cost_ceiling_usd:Object.fromEntries(models.map(m=>[m,typeof prices[m]==='number'?prices[m]:null])),required_inputs:ROLES,schema_version:'n4t-test-v1'};}
+ async config(){const models=modelsFor(this.env);modelTestDrive(this.env);if(!this.env.OPENROUTER_API_KEY||!models.length)throw Error('MODEL_TESTS_NOT_CONFIGURED');const prices=pricesFor(this.env);return {models,model_cost_ceiling_usd:Object.fromEntries(models.map(m=>[m,typeof prices[m]==='number'?prices[m]:null])),required_inputs:['scene'],system_instruction_roles:Object.keys(DEFAULT_INSTRUCTIONS),system_instructions:Object.fromEntries(Object.entries(DEFAULT_INSTRUCTIONS).map(([role,doc])=>[role,{filename:doc.filename,version:doc.version,origin:doc.origin}])),schema_version:'n4t-test-v2'};}
  async list(){const all=await this.ctx.storage.list({prefix:'job:',limit:MAX_JOBS});return [...all.values()].map(publicJob).sort((a,b)=>b.createdAt-a.createdAt)}
  async status(id){if(!validId(id))throw Error('JOB_NOT_FOUND');let job=await this.ctx.storage.get(key(id));if(!job)throw Error('JOB_NOT_FOUND');if(['running','uploading_source','exporting','uploading_input','preparing_manifest','sketch_generating','image_generating'].includes(job.state)&&Date.now()-job.updatedAt>timeoutMs){
   if(job.state==='uploading_input')job.state='input_uncertain';else if(job.state==='preparing_manifest')job.state='manifest_uncertain';else if(job.state==='sketch_generating'||job.state==='image_generating')job.state='image_uncertain';else job=interrupted(job);
@@ -42,13 +43,33 @@ export class ModelTestJobs extends DurableObject {
   if(!Number.isFinite(max)||max<0||max>100)throw Error('BUDGET_INVALID');
   const id=crypto.randomUUID(),now=Date.now();
   const job={id,scope:'fiction_test',sceneId,models,params:{temperature:0.5,max_tokens:1800,language:'ru'},budgetMaxUsd:max,estimatedCeilingUsd:null,modelCostCeilings:{},inputs:{},state:'collecting_inputs',stage:'input',results:[],exports:{},createdAt:now,createdAtIso:utc(),updatedAt:now};
+  // Fixed, versioned server-side instructional inputs; no browser override.
+  // Reserve all three before I/O; an ambiguous Drive write is never retried.
+  for(const [role,doc] of Object.entries(DEFAULT_INSTRUCTIONS)){
+   if(!ROLES.includes(role)||typeof doc.text!=='string'||typeof doc.filename!=='string')throw Error('DEFAULT_INSTRUCTION_INVALID');
+   const bytes=encoder.encode(doc.text);
+   if(bytes.length===0||bytes.length>65536)throw Error('DEFAULT_INSTRUCTION_TOO_LARGE');
+   job.inputs[role]={filename:doc.filename,sha256:await sha256Hex(bytes),bytes:bytes.length,text:doc.text,source:'system',version:doc.version,state:'uploading'};
+  }
+  job.state='uploading_input';job.updatedAt=Date.now();
   await this.ctx.storage.put(key(id),job);
+  for(const [role,doc] of Object.entries(DEFAULT_INSTRUCTIONS)){
+   try{
+    const receipt=await modelTestDrive(this.env).upload(doc.filename,'text/markdown',encoder.encode(doc.text),id,role);
+    job.inputs[role].file=receipt;job.inputs[role].state='saved';job.updatedAt=Date.now();
+    await this.ctx.storage.put(key(id),job);
+   }catch{
+    job.inputs[role].state='uncertain';job.state='input_uncertain';job.updatedAt=Date.now();
+    await this.ctx.storage.put(key(id),job);return publicJob(job);
+   }
+  }
+  job.state='collecting_inputs';job.updatedAt=Date.now();await this.ctx.storage.put(key(id),job);
   if(filename!==undefined||data!==undefined){return this.addAsset({job_id:id,role:'scene',filename,data});}
   return publicJob(job);
  }
  async addAsset({job_id,role,filename,data,sha256}={}){
   if(!validId(job_id))throw Error('JOB_NOT_FOUND');
-  if(!ROLES.includes(role))throw Error('ASSET_ROLE_INVALID');
+  if(role!=='scene')throw Error('SYSTEM_INSTRUCTION_IMMUTABLE');
   const input=parseUpload({role,filename,data,sha256});
   const hash=await sha256Hex(input.bytes);
   if(input.claimedHash&&hash!==input.claimedHash)throw Error('ASSET_HASH_MISMATCH');
@@ -57,7 +78,7 @@ export class ModelTestJobs extends DurableObject {
     const existing=job.inputs?.[role];
     if(existing){if(existing.sha256===hash&&existing.state==='saved')return {job,alreadySaved:true};throw Error('ASSET_SLOT_LOCKED')}
     if(job.stage!=='input'||!['collecting_inputs','ready'].includes(job.state))throw Error('INPUTS_FROZEN');
-    job.inputs[role]={filename:input.filename,sha256:hash,bytes:input.bytes.length,text:input.text,state:'uploading'};
+    job.inputs[role]={filename:input.filename,sha256:hash,bytes:input.bytes.length,text:input.text,state:'uploading',source:'user',version:null};
     job.state='uploading_input';job.updatedAt=Date.now();await txn.put(key(job.id),job);
     return {job,alreadySaved:false};
   });
@@ -66,7 +87,7 @@ export class ModelTestJobs extends DurableObject {
   let uploaded;
   try{uploaded=await modelTestDrive(this.env).upload(input.filename,role==='scene'?'text/plain':'text/markdown',input.bytes,job.id,role)}
   catch{job.inputs[role].state='uncertain';job.state='input_uncertain';job.updatedAt=Date.now();await this.ctx.storage.put(key(job.id),job);return publicJob(job)}
-  job.inputs[role].file=uploaded;job.inputs[role].state='saved';job.state=requireThree(job)?'ready':'collecting_inputs';job.updatedAt=Date.now();await this.ctx.storage.put(key(job.id),job);
+  job.inputs[role].file=uploaded;job.inputs[role].state='saved';job.state=requireInputs(job)?'ready':'collecting_inputs';job.updatedAt=Date.now();await this.ctx.storage.put(key(job.id),job);
   return publicJob(job);
  }
  async validate(id){const job=await this.ctx.storage.get(key(id));if(!job)throw Error('JOB_NOT_FOUND');const missing=ROLES.filter(r=>job.inputs?.[r]?.state!=='saved');let cost=null,block=null;
@@ -78,7 +99,7 @@ export class ModelTestJobs extends DurableObject {
   if(confirm!==true)throw Error('CONFIRMATION_REQUIRED');if(phase!=='text')throw Error('PHASE_INVALID');if(!validId(id))throw Error('JOB_NOT_FOUND');
   const job=await this.ctx.storage.transaction(async txn=>{
     const item=await txn.get(key(id));if(!item)throw Error('JOB_NOT_FOUND');
-    if(item.state!=='ready'||!requireThree(item))throw Error('INPUTS_INCOMPLETE');
+    if(item.state!=='ready'||!requireInputs(item))throw Error('INPUTS_INCOMPLETE');
     const ceilings=costCeilings(item.models,this.env),amount=Object.values(ceilings).reduce((a,b)=>a+b,0);
     if(!(item.budgetMaxUsd>0)||item.budgetMaxUsd+1e-9<amount)throw Error('BUDGET_APPROVAL_REQUIRED');
     item.estimatedCeilingUsd=amount;item.modelCostCeilings=ceilings;
