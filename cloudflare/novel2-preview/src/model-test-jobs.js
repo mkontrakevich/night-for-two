@@ -54,6 +54,14 @@ export class ModelTestJobs extends DurableObject {
   job.state='uploading_input';job.updatedAt=Date.now();
   await this.ctx.storage.put(key(id),job);
   for(const [role,doc] of Object.entries(DEFAULT_INSTRUCTIONS)){
+   // SD skill is a canonical document in the owner's Drive. Include the
+   // immutable source snapshot and reference by Drive ID + SHA-256.
+   if(role==='sd_story'){
+    if(!/^[A-Za-z0-9_-]{10,200}$/.test(String(doc.drive_file_id||'')))throw Error('DEFAULT_SD_DRIVE_REF_INVALID');
+    job.inputs[role].file={id:doc.drive_file_id,url:'https://drive.google.com/file/d/'+doc.drive_file_id+'/view',canonical:true};
+    job.inputs[role].state='saved';job.updatedAt=Date.now();
+    await this.ctx.storage.put(key(id),job);continue;
+   }
    try{
     const receipt=await modelTestDrive(this.env).upload(doc.filename,'text/markdown',encoder.encode(doc.text),id,role);
     job.inputs[role].file=receipt;job.inputs[role].state='saved';job.updatedAt=Date.now();

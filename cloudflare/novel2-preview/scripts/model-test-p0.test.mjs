@@ -29,7 +29,7 @@ await assert.rejects(()=>jobs.start(job.id,true),/INPUTS_INCOMPLETE/);
 const asBase64=s=>btoa(unescape(encodeURIComponent(s)));
 const inputs=[['scene','scene.txt','Двое взрослых у окна.']];
 assert.deepEqual(Object.keys(job.input_files).sort(),['couple_space','sd_story','sensual_director']);
-assert.equal(files.size,3);
+assert.equal(files.size,2);
 assert.ok(Object.values(job.input_files).every(x=>x.source==='system'&&x.version&&x.state==='saved'&&x.sha256.length===64));
 await assert.rejects(()=>jobs.addAsset({job_id:job.id,role:'sensual_director',filename:'override.md',data:asBase64('override')}),/SYSTEM_INSTRUCTION_IMMUTABLE/);
 for(const [role,filename,text] of inputs){const r=await jobs.addAsset({job_id:job.id,role,filename,data:asBase64(text)});assert.equal(r.inputs,undefined);assert.equal(r.input_files[role].state,'saved');}
@@ -38,12 +38,12 @@ const initial=await store.get('job:'+job.id);assert.equal(initial.inputs.scene.t
 await assert.rejects(()=>jobs.addAsset({job_id:job.id,role:'scene',filename:'scene.txt',data:asBase64('Different text')}),/LOCKED/);
 await assert.rejects(()=>jobs.start(job.id,false),/CONFIRM/);
 let started=await jobs.start(job.id,true);
-assert.equal(started.state,'queued');assert.equal(files.size,5);
+assert.equal(started.state,'queued');assert.equal(files.size,4);
 await assert.rejects(()=>jobs.start(job.id,true),/INCOMPLETE/);
 await jobs.alarm();assert.equal(providerCalls.length,1);
 await jobs.alarm();assert.equal(providerCalls.length,2);assert.equal(providerCalls[0].messages[1].content.replaceAll('p/model-a',''),providerCalls[1].messages[1].content.replaceAll('p/model-b',''));
 await jobs.alarm();const completed=await jobs.status(job.id);
-assert.equal(completed.state,'complete');assert.equal(completed.stage,'complete');assert.equal(providerCalls.length,2);assert.equal(files.size,10);
+assert.equal(completed.state,'complete');assert.equal(completed.stage,'complete');assert.equal(providerCalls.length,2);assert.equal(files.size,9);
 assert.equal(completed.results.length,2);assert.equal(completed.results[0].normalized.status,'complete');assert.equal(completed.results[1].normalized.status,'complete');
 assert.ok(completed.exports.aroma_comparison_csv.id);assert.ok(completed.exports.prompt_comparison_json.id);
 const c=await jobs.comparison(job.id);assert.equal(c.prompt.length,2);assert.equal(c.aromas.length,2);
@@ -56,7 +56,7 @@ const outsider=new ModelTestJobs({storage:new Storage()},env);
 await assert.rejects(()=>outsider.status(job.id),/JOB_NOT_FOUND/);
 assert.equal(normalizeFrame(JSON.stringify({shot_type:'close',camera_angle:'eye-level',final_image_prompt:'subject'}),{}).status,'complete');
 assert.throws(()=>parseUpload({role:'scene',filename:'foo.png',data:asBase64('text')}),/ASSET_FILE_INVALID/);
-await jobs.alarm();assert.equal(providerCalls.length,2);assert.equal(files.size,10);
+await jobs.alarm();assert.equal(providerCalls.length,2);assert.equal(files.size,9);
 // No paid requests are allowed when model price ceilings are absent.
 const noBudgetJobs=new ModelTestJobs({storage:new Storage()},{...env,MODEL_TESTS_PRICE_CEILINGS_JSON:'{}'});
 let noBudget=await noBudgetJobs.create({models:['p/model-a'],budget_max_usd:0.1});
