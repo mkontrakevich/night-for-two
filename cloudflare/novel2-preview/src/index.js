@@ -14,6 +14,7 @@ export function openRouterFailureCategory(payload={}){
 
 import {WorkflowEntrypoint} from 'cloudflare:workers';
 import {handleStranger,runStrangerWorld} from './stranger.js';
+import {normalizeIllustrationPrepare} from './illustration-intake.js';
 import {handleNativeActor,runNativeActor} from './native-actor.js';
 import {handleMigrationAdmin,runLegacyMigration} from './migrate-legacy.js';
 import {ACTOR_VIEW_SPEC,actorViewPrompt,bytesFromAiImage,base64FromBytes,compositeActorSvg} from './actor-sheet-compose.js';
@@ -743,6 +744,32 @@ export default{
       return beginLobbyWorldAtEdge(request,env,host,port);
     if(request.method==='POST'&&incoming.pathname==='/novel2/api/identity/calibrate/start')
       return beginActorSheetAtEdge(request,env,host,port);
+    if(request.method==='POST'&&incoming.pathname==='/novel2/api/illustrations/prepare'){
+      // No provider call here. Preflight modifies only the scene document,
+      // then forwards it ONCE to the existing Telegram-authenticated origin.
+      // Do not retry writes after a VPC failure: the origin may have committed.
+      let normalized;
+      try{
+        const size=Number(request.headers.get('content-length')||0);
+        if(size>140000)return json(413,{ok:false,error:'SCENE_SIZE_INVALID'});
+        const raw=await request.clone().text();
+        if(raw.length>140000)return json(413,{ok:false,error:'SCENE_SIZE_INVALID'});
+        normalized=JSON.stringify(normalizeIllustrationPrepare(JSON.parse(raw)));
+      }catch(error){
+        const code=/^[A-Z][A-Z0-9_]{1,90}$/.test(String(error?.message||''))?error.message:'SCENE_PAYLOAD_INVALID';
+        return json(Number(error?.status)||422,{ok:false,error:code});
+      }
+      const target=new URL(incoming.pathname,`http://${host}:${port}`);
+      try{
+        const upstream=buildUpstream(target,request.clone(),incoming,1,normalized);
+        const response=await env.NOVEL2_VPC.fetch(upstream);
+        const headers=new Headers(response.headers);headers.set('cache-control','no-store');headers.set('x-novel2-intake','server-pinned-v3');
+        headers.delete('content-length');
+        return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+      }catch{
+        return json(502,{ok:false,error:'NOVEL2_ILLUSTRATIONS_ORIGIN_UNREACHABLE'});
+      }
+    }
 
     const target=new URL(incoming.pathname+incoming.search,`http://${host}:${port}`);
     // Document pages are small. Buffer them at the edge so VPC streaming and

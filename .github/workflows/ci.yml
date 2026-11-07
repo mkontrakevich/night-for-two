@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/night4two-v3-journey]
   pull_request:
   workflow_dispatch:
 
@@ -22,6 +22,10 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm test
+      - name: Night4two v3 scene-only intake and UI contracts
+        run: |
+          node cloudflare/novel2-preview/scripts/illustration-intake.test.mjs
+          node novel2/scripts/v3-journey-contract.test.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
