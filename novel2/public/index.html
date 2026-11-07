@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0909">
-<meta name="novel2-ui-release" content="noir-chapter-recovery-20261028-r2">
+<meta name="novel2-ui-release" content="night4two-v3-journey-20261107">
 <title>Interactive Novel 2.0</title>
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <link rel="stylesheet" href="/novel2/noir-experience.css?v=1">
@@ -118,6 +118,7 @@
 .actorAngleField input[type=file]::file-selector-button{background:#eee4dc;color:#17120f;border:0;padding:7px 10px;margin-right:7px}
 .actorAngleOptional{grid-column:2;color:#93847b;font-size:10px;line-height:1.3}
 .builder .actorAngleField,.photoIdentityPanel .actorAngleField{border-radius:0}
+ .journeyTool{display:block;border:1px solid rgba(242,222,215,.35);padding:17px 15px;color:#f2e6df;text-decoration:none;font-size:14px;letter-spacing:.03em;min-height:55px}.journeyToolNote{margin:9px 0 26px;color:#a89893;font-size:12px;line-height:1.45}
 </style>
 </head>
 <body><main id="app"></main>
@@ -703,16 +704,20 @@ function renderMainMenu(){
  // No character roster, partner placeholder, cast count or preview in the lobby.
  const characterStrip=roleCardHtml(role,ownCast);
  const castNotice='';
+ const primaryStoryLabel=active?'Продолжить роман →':own?.ready?'Начать новую историю →':'Создать актёра →';
+ const ownerWorkshop=role==='A'?'<div class="libraryTitle">Мастерская</div><a class="journeyTool" id="illustrationEntry" href="/novel2/illustrations.html">Иллюстрации сцен →</a><p class="journeyToolNote">Один текстовый файл · инструкции применяются автоматически</p>':'';
  const booksHtml=libraryBooks.length?libraryBooks.map(bookRowHtml).join(''):'<div class="hint">Готовых романов пока нет.</div>';
  const draftsHtml=libraryDrafts.length?libraryDrafts.map(draftRowHtml).join(''):'';
- app.innerHTML='<section class="mainMenu"><div class="editorialHero"><div class="editorialObjects" aria-hidden="true"></div><div class="editorialCopy"><div class="kicker">INTERACTIVE NOVEL 2.0 · PRIVATE STORIES</div><h1>Фантазии<br>становятся<br>историями</h1><p>Каждое ваше решение меняет сюжет. История начинается с вашего выбора.</p><button type="button" class="editorialCTA" id="heroNewBook">Начать роман →</button></div></div>'+(active?'<div class="menuActions"><button type="button" class="secondary" id="continueBook">Продолжить роман →</button></div>':'')+'<div class="libraryTitle">'+'Карточка актёра'+'</div><div class="playerCards'+' '+'">'+characterStrip+'</div>'+castNotice+(draftsHtml?'<div class="libraryTitle">Черновики историй</div>'+draftsHtml:'')+'<div class="libraryTitle">Мои романы</div>'+booksHtml+'</section>';
+ app.innerHTML='<section class="mainMenu"><div class="editorialHero"><div class="editorialObjects" aria-hidden="true"></div><div class="editorialCopy"><div class="kicker">INTERACTIVE NOVEL 2.0 · PRIVATE STORIES</div><h1>Фантазии<br>становятся<br>историями</h1><p>Каждое ваше решение меняет сюжет. История начинается с вашего выбора.</p><button type="button" class="editorialCTA" id="heroNewBook">'+primaryStoryLabel+'</button></div></div>'+'<div class="libraryTitle">'+'Карточка актёра'+'</div><div class="playerCards'+' '+'">'+characterStrip+'</div>'+castNotice+(draftsHtml?'<div class="libraryTitle">Черновики историй</div>'+draftsHtml:'')+'<div class="libraryTitle">Мои романы</div>'+booksHtml+ownerWorkshop+'</section>';
  bindMainMenu();
+ const workshopLink=document.getElementById('illustrationEntry');
+ if(workshopLink)workshopLink.onclick=()=>{const init=authHeaders()['x-telegram-init-data'];if(init)sessionStorage.setItem('novel2_illustrations_init',init);};
  // Load persisted Actor Sheet on home as soon as identity exists.
  // The generated image is independent of final identity approval.
  if(!active&&own?.identity_only&&!characterLooksLoaded[role])void loadCharacterLooks(role);
  const ownSaved=Boolean((characterLooks[role]||[]).some(x=>x?.key==='canonical'&&x?.image&&x?.model!=='existing'));
  const actorBlocked=!ownSaved&&(actorSheetTask.active||(actorSheetTask.status==='ready'&&calibrationImage));
- const heroNewBook=document.getElementById('heroNewBook');if(heroNewBook){heroNewBook.disabled=actorBlocked;heroNewBook.onclick=actorBlocked?null:startNewBook}
+ const heroNewBook=document.getElementById('heroNewBook');if(heroNewBook){heroNewBook.disabled=!active&&actorBlocked;heroNewBook.onclick=active?()=>{menuMode=false;render()}:actorBlocked?null:startNewBook}
  const newBookButton=document.getElementById('newBook');if(newBookButton)newBookButton.disabled=actorBlocked;
  ensureActorMenuTicker();
  attachLaunchBanner();
@@ -1026,12 +1031,6 @@ async function sendReply(){
  try{state=(await api('reply',{reply,action_key:selectedAction,book_id:state.book.id,turn_no:Number(state.book.turn_no)},600000)).state;selectedAction='';render()}catch(e){if(isCancelled(e))return;alert(e.message);refresh()}finally{busy=false}
 }
 async function loadVisual(){try{const j=await api('visual');const img=document.getElementById('sceneImage');if(img&&j.image){img.src=j.image;img.classList.add('on')}}catch{}}
-const illustrationNavigation=new MutationObserver(()=>{
- const menu=app.querySelector('.mainMenu');if(!menu||document.getElementById('illustrationEntry'))return;
- const link=document.createElement('a');link.id='illustrationEntry';link.className='secondary';link.href='/novel2/illustrations.html';link.textContent='Иллюстрации рукописи';
- link.onclick=()=>{const init=authHeaders()['x-telegram-init-data'];if(init)sessionStorage.setItem('novel2_illustrations_init',init);};menu.append(link);
-});
-illustrationNavigation.observe(app,{childList:true,subtree:true});
 refresh();
 </script>
 <script src="/novel2/noir-experience.js?v=pipeline-r1"></script>
