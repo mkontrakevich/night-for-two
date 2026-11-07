@@ -29,3 +29,14 @@ jobs:
           fi
       - run: node illustration_pipeline/workbench-browser.test.mjs
       - run: docker build -f illustration_pipeline/Dockerfile.workbench -t novel2-illustration-workbench:ci .
+      - name: Validate private Compose and start healthchecked workbench
+        env:
+          TELEGRAM_BOT_TOKEN: github-ci-test-token-not-a-real-secret
+        run: |
+          set -euo pipefail
+          touch .env novel2/.env
+          docker compose -f novel2/docker-compose.yml config --quiet
+          docker compose -p n4t-v3-ci -f novel2/docker-compose.yml up -d --build --wait --wait-timeout 90 novel2-illustration-workbench
+          docker compose -p n4t-v3-ci -f novel2/docker-compose.yml ps --status running
+          docker compose -p n4t-v3-ci -f novel2/docker-compose.yml down --remove-orphans
+
