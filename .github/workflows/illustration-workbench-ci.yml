@@ -36,7 +36,13 @@ jobs:
           set -euo pipefail
           touch .env novel2/.env
           docker compose -f novel2/docker-compose.yml config --quiet
-          docker compose -p n4t-v3-ci -f novel2/docker-compose.yml up -d --build --wait --wait-timeout 90 novel2-illustration-workbench
+          if ! docker compose -p n4t-v3-ci -f novel2/docker-compose.yml up -d --build --wait --wait-timeout 90 novel2-illustration-workbench; then
+            echo '::error::N4T_WORKBENCH_CONTAINER_HEALTH_FAILED'
+            docker compose -p n4t-v3-ci -f novel2/docker-compose.yml logs --no-color --tail 80 novel2-illustration-workbench || true
+            docker compose -p n4t-v3-ci -f novel2/docker-compose.yml ps -a || true
+            docker compose -p n4t-v3-ci -f novel2/docker-compose.yml down --remove-orphans || true
+            exit 1
+          fi
           docker compose -p n4t-v3-ci -f novel2/docker-compose.yml ps --status running
           docker compose -p n4t-v3-ci -f novel2/docker-compose.yml down --remove-orphans
 
