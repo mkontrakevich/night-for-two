@@ -19,7 +19,9 @@ const installRoutes=async page=>{
   let payload;
   try{payload=normalizeIllustrationPrepare(route.request().postDataJSON())}
   catch(error){return route.fulfill({status:Number(error?.status)||422,contentType:'application/json',body:JSON.stringify({ok:false,error:String(error?.message||'SCENE_PAYLOAD_INVALID')})})}
-  return route.continue({postData:JSON.stringify(payload),headers:{...route.request().headers(),'content-type':'application/json'}});
+  const headers={...route.request().headers(),'content-type':'application/json'};
+  delete headers['content-length'];delete headers['transfer-encoding'];
+  return route.continue({postData:JSON.stringify(payload),headers});
  });
 };
 try{
@@ -36,7 +38,7 @@ try{
   await page.locator('#source').setInputFiles({name:'scene.txt',mimeType:'text/plain',buffer:Buffer.from('Взрослая архивистка в тёмном пальто стоит у окна старого отеля. На подоконнике лежит латунный ключ; за окном море и туман.')});
   await page.locator('#prepare').click();
   await page.locator('#generationStep').waitFor({state:'visible'});
-  assert.equal(await page.locator('.frame').count(),0);
+  assert.equal(await page.locator('#reviewStep').isVisible(),false);
   assert.equal(await page.locator('#exportStep').isVisible(),false);
   const direct=await page.evaluate(()=>fetch('/novel2/api/illustrations/prepare',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({filename:'scene.txt',data:'YWFhYWFhYWFhYWFhYWFhYWFh',instructions:{}})}).then(r=>r.json()));
   assert.equal(direct.error,'SYSTEM_INSTRUCTIONS_SERVER_ONLY');
