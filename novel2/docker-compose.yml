@@ -13,6 +13,33 @@ services:
       timeout: 3s
       retries: 20
 
+  novel2-illustration-workbench:
+    # Private sidecar, addressable only through the authenticated Novel2 proxy.
+    build:
+      context: ..
+      dockerfile: illustration_pipeline/Dockerfile.workbench
+    environment:
+      NOVEL2_TELEGRAM_AUTH_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      NOVEL2_EDGE_AI_URL: ${NOVEL2_EDGE_AI_URL:-https://novel2-preview.kontrakevich.workers.dev/novel2-ai}
+      WORKBENCH_DATA: /data
+    command:
+      - sh
+      - -ec
+      - |
+        test -n "$NOVEL2_TELEGRAM_AUTH_TOKEN" || exit 1
+        export WORKBENCH_TOKEN="$(printf 'novel2-ai-v1:%s' "$NOVEL2_TELEGRAM_AUTH_TOKEN" | sha256sum | cut -d ' ' -f1)"
+        exec python workbench.py --host 0.0.0.0 --port 5691
+    volumes:
+      - novel2_workbench_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5691/health',timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - default
+
   app:
     build: .
     env_file:
@@ -44,6 +71,7 @@ services:
 
 volumes:
   novel2_pg:
+  novel2_workbench_data:
 
 
 networks:
