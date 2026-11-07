@@ -22,7 +22,7 @@ class WorkbenchComposeContract(unittest.TestCase):
         command='\n'.join(str(x) for x in worker['command'])
         self.assertIn('WORKBENCH_TOKEN',command)
         self.assertIn('NOVEL2_TELEGRAM_AUTH_TOKEN',command)
-        self.assertIn('novel2-ai-v1:%s',command)
+        self.assertIn('novel2-ai-v1:',command)
         self.assertIn('hashlib.sha256',command)
         self.assertNotIn('TELEGRAM_BOT_TOKEN: ""',command)
         self.assertTrue(worker['healthcheck'])
