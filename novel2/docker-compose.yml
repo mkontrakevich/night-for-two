@@ -23,12 +23,14 @@ services:
       NOVEL2_EDGE_AI_URL: ${NOVEL2_EDGE_AI_URL:-https://novel2-preview.kontrakevich.workers.dev/novel2-ai}
       WORKBENCH_DATA: /data
     command:
-      - sh
-      - -ec
+      - python
+      - -c
       - |
-        test -n "$NOVEL2_TELEGRAM_AUTH_TOKEN" || exit 1
-        export WORKBENCH_TOKEN="$(printf 'novel2-ai-v1:%s' "$NOVEL2_TELEGRAM_AUTH_TOKEN" | sha256sum | cut -d ' ' -f1)"
-        exec python workbench.py --host 0.0.0.0 --port 5691
+        import os,sys,hashlib
+        token=os.environ.get('NOVEL2_TELEGRAM_AUTH_TOKEN','')
+        if not token: sys.exit('WORKBENCH_AUTH_UNCONFIGURED')
+        os.environ['WORKBENCH_TOKEN']=hashlib.sha256(('novel2-ai-v1:'+token).encode()).hexdigest()
+        os.execvp('python',['python','workbench.py','--host','0.0.0.0','--port','5691'])
     volumes:
       - novel2_workbench_data:/data
     healthcheck:
