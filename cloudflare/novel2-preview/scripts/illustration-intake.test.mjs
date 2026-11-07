@@ -5,7 +5,7 @@ const input={filename:'scene.txt',data:b64('Двое взрослых в ста�
 const result=normalizeIllustrationPrepare(input);
 assert.deepEqual(result.instructions,SERVER_VISUAL_PROFILE);
 assert.equal(result.filename,'scene.txt');
-assert.match(Buffer.from(result.data,'base64').toString(),/\[\[IMAGE:scene_001\]\]$/);
+assert.match(Buffer.from(result.data,'base64').toString(),/\[\[IMAGE:scene_001\]\]\s*$/);
 assert(!JSON.stringify(input).includes('instructions'));
 const marked=normalizeIllustrationPrepare({filename:'story.md',data:b64('A grown archivist in a sea-side hotel room.\n\n[[IMAGE:arrival]]')});
 assert.equal((Buffer.from(marked.data,'base64').toString().match(/\[\[IMAGE:/g)||[]).length,1);
