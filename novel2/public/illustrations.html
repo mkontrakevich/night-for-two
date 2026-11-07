@@ -1,73 +1,134 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="novel2-illustrations-release" content="markers-v1-20261029-r2"><title>Иллюстрации романа</title>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#100c0e">
+<meta name="novel2-illustrations-release" content="night4two-v3-scene-only-20261107">
+<title>Мастерская · Night4two</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f4f2ef;color:#222;font:16px/1.5 system-ui}main{max-width:1050px;margin:auto;padding:24px}h1{font-size:30px}h2{font-size:22px}section{background:white;border:1px solid #ddd;padding:22px;margin:18px 0}label{display:block;margin:18px 0 6px}input{max-width:100%}button,a.button{background:#542a36;color:white;padding:11px 16px;border:0;cursor:pointer;font:inherit;display:inline-block;text-decoration:none;margin:6px 6px 6px 0}button:disabled{opacity:.45;cursor:default}.secondary{background:#e8e4e0;color:#222}.muted{color:#655f5a}#error,#providerStatus{white-space:pre-wrap;color:#8d233b}#frames{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}.frame{border:1px solid #ddd;padding:14px}.frame img{display:block;width:100%;height:330px;object-fit:contain;background:#eee}.status{white-space:pre-wrap;overflow-wrap:anywhere}code{background:#eee;padding:2px 5px}progress{width:100%;height:18px}footer{font-size:14px;color:#655f5a;margin-top:25px}#jobs button{background:#e8e4e0;color:#222}
-</style></head><body><main>
-<a href="/novel2/">К роману</a><h1>Иллюстрации романа</h1><p>Загрузите текст и файл визуальных инструкций. Готовые кадры займут места меток в документе.</p>
-<section><h2>1. Текст и инструкции</h2><p>На отдельной строке после нужного абзаца поставьте <code>[[IMAGE:arrival]]</code>. Имя каждой метки должно быть уникальным.</p>
-<button class="secondary" id="sampleText">Скачать пример текста</button><button class="secondary" id="sampleRules">Скачать пример инструкций</button>
-<form id="prepareForm"><label for="source">Рукопись .md, .txt или .docx до 2 МБ</label><input id="source" type="file" accept=".md,.txt,.docx" required>
-<label for="instructions">Инструкции .json</label><input id="instructions" type="file" accept=".json" required>
-<p class="muted">Файл задаёт тип контента, стиль, палитру, формат, описания вымышленных персонажей и локаций. Используются неграфические иллюстрации; инструкции не выполняются как код.</p><button id="prepare">Подготовить задания</button></form></section>
-<p id="providerStatus" role="status"></p><p id="error" role="alert"></p><section id="jobPanel" hidden><h2>2. Генерация и проверка</h2><p id="jobId" class="muted"></p><p id="summary" role="status"></p><progress id="progress" max="1" value="0"></progress>
-<button id="generate">Сгенерировать недостающие кадры</button><button id="retry" class="secondary" hidden>Повторить незавершённые запросы</button><button id="check" class="secondary">Обновить статус</button>
-<div id="frames"></div><h2>3. Документ</h2><p>Перед сборкой проверьте каждый кадр: соответствие сцене, внешность, одежду, руки и отсутствие лишних деталей. Утверждённые изображения вставляются вместо меток; текст сохраняется.</p><button id="export" disabled>Собрать и скачать DOCX</button></section>
-<section><h2>Ваши задания</h2><div id="jobs"></div></section><footer>Незавершённый сетевой запрос может быть уже оплачен провайдеру. Повтор запускается только после вашего подтверждения. Техническая проверка файла не заменяет визуальную проверку изображения.</footer>
-</main><script>
+:root{--bg:#100c0e;--text:#f2eae4;--muted:#b3a29f;--line:rgba(242,227,217,.18);--action:#e2c1ad;--ok:#b8d2bc;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);min-height:100%;font-size:15px}body{background:radial-gradient(ellipse at 90% 0,rgba(103,38,57,.22),transparent 42%),var(--bg)}
+main{max-width:760px;margin:0 auto;padding:24px 20px calc(64px + env(safe-area-inset-bottom))}
+header{padding:5px 0 26px;border-bottom:1px solid var(--line)}nav a{color:var(--muted);text-decoration:none;font-size:13px}
+.kicker{font-size:10px;letter-spacing:.23em;text-transform:uppercase;color:var(--muted);margin-top:35px}
+h1{font:400 clamp(37px,9vw,57px)/1.02 Georgia,serif;letter-spacing:-.045em;margin:13px 0 16px}h2{font:400 28px/1.12 Georgia,serif;margin:8px 0 16px}h3{font:400 21px/1.2 Georgia,serif}p{color:var(--muted);line-height:1.5;margin:10px 0 17px}
+section{padding:25px 0;border-bottom:1px solid var(--line)}section[hidden],div[hidden],details[hidden]{display:none!important}
+label{display:block;font-size:13px;margin-bottom:12px}input[type=file]{display:block;width:100%;border:1px dashed rgba(240,219,207,.45);background:rgba(255,255,255,.035);padding:18px;margin:12px 0 12px;color:var(--text);font:inherit}
+input[type=file]::file-selector-button{border:0;background:#f0e3d9;color:#1b1114;padding:9px 14px;margin-right:14px}
+button{display:inline-block;border:1px solid var(--line);background:transparent;color:var(--text);font:inherit;padding:13px 18px;min-height:52px;cursor:pointer}
+button.primary{background:var(--action);color:#1b1114;border-color:var(--action);width:100%;font-weight:600}
+button:disabled{opacity:.4;cursor:default}button.secondary{border-color:var(--line);min-height:40px}
+.small{font-size:12px;line-height:1.5}#error{color:#f0a8a8;white-space:pre-wrap}#providerStatus{color:#cdbab0}
+.step{font-size:11px;letter-spacing:.14em;color:#ccaf9b;text-transform:uppercase}.preview{display:grid;gap:24px}.frame{border-top:1px solid var(--line);padding-top:18px}.frame img{display:block;width:100%;max-height:640px;object-fit:contain;background:#19151a;margin:12px 0}
+.frame-actions{display:flex;gap:8px;flex-wrap:wrap}.frame-actions button{flex:1;min-width:130px}.status{font-size:13px;color:var(--muted)}
+progress{display:block;width:100%;height:5px;accent-color:var(--action);margin:18px 0}
+#jobs{display:grid;gap:8px;margin-top:12px}#jobs button{text-align:left;min-height:43px;font-size:13px}
+footer{padding:28px 0 6px;color:var(--muted);font-size:12px;line-height:1.55}summary{cursor:pointer;color:var(--text)}
+</style>
+</head>
+<body>
+<main>
+<header><nav><a href="/novel2/">← В роман</a></nav><div class="kicker">NIGHT4TWO / PRIVATE STORIES</div><h1>Мастерская<br>иллюстраций</h1><p>Одна сцена — один кадр. Всё необходимое для визуальной постановки загружается системой.</p></header>
+<section id="uploadStep">
+<div class="step">Шаг 1 / 4</div><h2>Описание сцены</h2>
+<form id="prepareForm">
+<label for="source">Загрузите текст сцены в формате TXT (до 64 КБ)
+<input id="source" type="file" accept=".txt,text/plain" required></label>
+<p class="small">Достаточно описать действие, героев и обстановку. Режиссёрские инструкции, палитра и технические параметры подставляются автоматически.</p>
+<button class="primary" id="prepare" type="submit">Продолжить</button>
+</form>
+</section>
+<p id="providerStatus" role="status" class="small"></p><p id="error" role="alert"></p>
+<div id="jobPanel" hidden>
+<section id="generationStep">
+<div class="step">Шаг 2 / 4</div><h2>Подготовить кадр</h2>
+<p id="summary" role="status"></p>
+<progress id="progress" max="1" value="0" aria-label="Утверждённые кадры"></progress>
+<p class="small">Перед платной генерацией потребуется подтверждение. Неизвестный результат не запускается повторно автоматически.</p>
+<button id="generate" class="primary" type="button">Создать изображение</button>
+<button id="retry" class="secondary" hidden type="button">Повторить после проверки</button>
+<button id="check" class="secondary" type="button">Проверить состояние</button>
+</section>
+<section id="reviewStep" hidden>
+<div class="step">Шаг 3 / 4</div><h2>Проверить кадр</h2>
+<p class="small">Сверьте композицию, внешность, руки, одежду и детали сцены. Изображение не считается утверждённым без вашего решения.</p>
+<div id="frames" class="preview"></div>
+</section>
+<section id="exportStep" hidden>
+<div class="step">Шаг 4 / 4</div><h2>Готовый результат</h2>
+<p>Кадр утверждён. Его можно сохранить в документе.</p>
+<button id="export" class="primary" disabled type="button">Скачать документ DOCX</button>
+<button id="newScene" class="secondary" type="button">Создать другую сцену</button>
+</section>
+</div>
+<section id="historyStep"><details><summary>Мои предыдущие задания</summary><div id="jobs"></div></details></section>
+<footer>Рабочие инструкции остаются на сервере. Результаты тестирования моделей ведутся отдельно от мастерской. В случае сетевой ошибки ранее отправленный платный запрос может быть уже выполнен.</footer>
+</main>
+<script>
 'use strict';
-let job=null,poll=null,reading=false,providerBlocked=false;
-const imageCache=new Map();
 const $=id=>document.getElementById(id);
-const errors={ACCESS_DENIED:'Откройте раздел из Telegram-бота.',NOVEL2_ACCESS_DENIED:'Откройте раздел из Telegram-бота.',NOVEL2_ILLUSTRATIONS_UNAVAILABLE:'Сервис иллюстраций пока недоступен.',DUPLICATE_MARKER:'В тексте повторяется имя метки.',MARKER_MUST_OCCUPY_ITS_OWN_PARAGRAPH:'Каждая метка должна находиться в отдельном абзаце.',MARKER_BEFORE_STORY:'Перед первой меткой должен быть текст сцены.',NO_IMAGE_MARKERS:'В тексте не найдено меток [[IMAGE:имя]].',INSTRUCTIONS_UNKNOWN_SCENE:'Инструкции содержат имя сцены, которого нет среди меток рукописи.',IMAGE_APPROVAL_REQUIRED:'Сначала утвердите все изображения.',JOB_BUSY:'Это задание уже обрабатывается.',CONTENT_NOT_SUPPORTED:'Запрошенный тип изображения не поддерживается.',GENERATOR_NOT_CONFIGURED:'Генератор не подключён.'};
-function explain(code){if(/^NOVEL2_AI_TEXT_PROVIDER_403/.test(code))return 'OpenRouter отказал в доступе к модели'+(code.endsWith('_LIMIT')?': достигнут лимит.':code.endsWith('_REGION')?': ограничение региона.':code.endsWith('_MODEL_ACCESS')?': модель не разрешена для ключа.':'. Проверьте доступ и настройки ключа.');return errors[code]||('Операция остановлена: '+code)}
-function headers(){
- const init=window.Telegram?.WebApp?.initData||sessionStorage.getItem('novel2_illustrations_init')||'';
- if(init)sessionStorage.setItem('novel2_illustrations_init',init);
- return {'content-type':'application/json','x-telegram-init-data':init};
-}
-async function api(action,data={}){
- const response=await fetch('/novel2/api/illustrations/'+action,{method:'POST',headers:headers(),body:JSON.stringify(data),signal:AbortSignal.timeout(30000)});
- const value=await response.json();if(!response.ok||!value.ok)throw Error(explain(value.error||'REQUEST_FAILED'));return value;
-}
-function showError(error){$('error').textContent=String(error.message||error)}
-function download(bytes,mime,name){const url=URL.createObjectURL(new Blob([bytes],{type:mime}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
-function unbase64(value){return Uint8Array.from(atob(value),c=>c.charCodeAt(0))}
-async function encodeFile(file){const bytes=new Uint8Array(await file.arrayBuffer());let s='';for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(s)}
-async function action(fn){$('error').textContent='';try{await fn()}catch(e){showError(e)}}
+let job=null,poll=null,reading=false,providerBlocked=true,actionBusy=false;
+const cache=new Map();
+const labels={planned:'Кадр подготовлен',planning:'Готовится описание кадра',generating:'Создаётся изображение',uncertain:'Результат требует проверки',blocked:'Генерация остановлена',rejected:'Кадр отклонён',review_required:'Проверьте кадр',approved:'Кадр утверждён'};
+const codes={NOVEL2_ILLUSTRATIONS_UNAVAILABLE:'Сервис иллюстраций временно недоступен.',NOVEL2_ILLUSTRATIONS_ORIGIN_UNREACHABLE:'Нет связи с сервисом иллюстраций.',SCENE_PAYLOAD_INVALID:'Проверьте файл сцены.',SCENE_SIZE_INVALID:'Файл должен быть меньше 64 КБ.',SCENE_TOO_SHORT:'Добавьте описание действия и обстановки.',SCENE_FILENAME_INVALID:'Допускаются только текстовые файлы TXT.',SYSTEM_INSTRUCTIONS_SERVER_ONLY:'Инструкции подставляются автоматически. Удалите старый JSON.',IMAGE_APPROVAL_REQUIRED:'Сначала утвердите все кадры.',NO_IMAGE_MARKERS:'Не удалось определить кадр. Проверьте описание сцены.'};
+const explain=code=>codes[code]||'Операция остановлена: '+code;
+function headers(){const init=window.Telegram?.WebApp?.initData||sessionStorage.getItem('novel2_illustrations_init')||'';if(init)sessionStorage.setItem('novel2_illustrations_init',init);return {'content-type':'application/json','x-telegram-init-data':init}}
+async function api(action,data={}){const r=await fetch('/novel2/api/illustrations/'+action,{method:'POST',headers:headers(),body:JSON.stringify(data),signal:AbortSignal.timeout(30000)});let v;try{v=await r.json()}catch{throw Error('Неверный ответ сервиса')};if(!r.ok||!v.ok)throw Error(explain(v.error||'REQUEST_FAILED'));return v}
+function showError(e){$('error').textContent=String(e?.message||e)}
+async function guarded(fn){if(actionBusy)return;actionBusy=true;$('error').textContent='';try{await fn()}catch(e){showError(e)}finally{actionBusy=false}}
+function b64File(file){return file.arrayBuffer().then(buffer=>{const arr=new Uint8Array(buffer);let out='';for(let i=0;i<arr.length;i+=8192)out+=String.fromCharCode(...arr.subarray(i,i+8192));return btoa(out)})}
+function unbase64(s){return Uint8Array.from(atob(s),x=>x.charCodeAt(0))}
+function download(bytes,mime,name){const url=URL.createObjectURL(new Blob([bytes],{type:mime})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
 function render(){
- if(!job)return;$('jobPanel').hidden=false;$('jobId').textContent='Задание '+job.id;
- $('summary').textContent='Сгенерировано '+job.images.filter(x=>['review_required','approved'].includes(x.status)).length+' из '+job.total+' · Утверждено '+job.approved+' из '+job.total+(job.running?' · Генерация выполняется. Можно закрыть окно.':'')+(job.error?' · '+explain(job.error):'');
- $('progress').max=job.total;$('progress').value=job.approved;$('generate').disabled=providerBlocked||job.running||job.images.every(x=>x.status!=='planned');
- $('retry').hidden=!job.images.some(x=>['uncertain','failed'].includes(x.status));$('retry').disabled=providerBlocked||job.running;$('export').disabled=!job.can_export||job.running;
+ if(!job)return;
+ $('uploadStep').hidden=true;$('jobPanel').hidden=false;
+ const images=job.images||[],done=images.filter(x=>['review_required','approved'].includes(x.status)).length;
+ $('summary').textContent='Готово '+done+' из '+job.total+' · утверждено '+job.approved+' из '+job.total+(job.running?' · Обработка выполняется, можно закрыть окно.':'')+(job.error?' · '+explain(job.error):'');
+ $('progress').max=job.total||1;$('progress').value=job.approved||0;
+ const hasPending=images.some(x=>['planned','planning','generating','failed','uncertain'].includes(x.status));
+ const hasReview=images.some(x=>['review_required','approved','rejected'].includes(x.status));
+ $('generationStep').hidden=!hasPending;
+ $('reviewStep').hidden=!hasReview;
+ $('exportStep').hidden=!job.can_export;
+ $('generate').disabled=providerBlocked||job.running||!images.some(x=>x.status==='planned');
+ $('retry').hidden=!images.some(x=>['uncertain','failed'].includes(x.status));$('retry').disabled=providerBlocked||job.running;
+ $('export').disabled=!job.can_export||job.running;
  $('frames').replaceChildren();
- for(const item of job.images){
-  const frame=document.createElement('article');frame.className='frame';const title=document.createElement('h3');title.textContent=item.scene_id;frame.append(title);
-  const status=document.createElement('p');status.className='status';const labels={planned:'Готово к генерации',planning:'Готовим описание сцены',generating:'Генерируем изображение',uncertain:'Запрос не завершён',blocked:'Генерация отклонена',rejected:'Кадр отклонён пользователем',review_required:'Проверьте изображение',approved:'Утверждено'};status.textContent=(labels[item.status]||item.status)+(item.error?' · '+explain(item.error):'');frame.append(status);
+ for(const item of images){
+  const frame=document.createElement('article');frame.className='frame';
+  const title=document.createElement('h3');title.textContent=job.total>1?'Кадр '+item.scene_id:'Кадр сцены';frame.append(title);
+  const state=document.createElement('p');state.className='status';state.textContent=(labels[item.status]||item.status)+(item.error?' · '+explain(item.error):'');frame.append(state);
   if(['review_required','approved'].includes(item.status)){
-   const img=document.createElement('img');img.alt='Иллюстрация '+item.scene_id;frame.append(img);
-   const key=job.id+':'+item.scene_id+':'+item.sha256;
-   if(imageCache.has(key))img.src=imageCache.get(key);else{
-    const id=job.id;api('asset',{job_id:id,scene_id:item.scene_id}).then(value=>{const url=URL.createObjectURL(new Blob([unbase64(value.data)],{type:value.content_type}));imageCache.set(key,url);if(job?.id===id)img.src=url}).catch(showError);
-   }
-   if(item.status==='review_required'){const button=document.createElement('button');button.textContent='Кадр соответствует сцене';button.disabled=job.running;button.onclick=()=>action(async()=>{job=(await api('approve',{job_id:job.id,scene_id:item.scene_id})).job;render()});frame.append(button)}
+   const img=document.createElement('img');img.alt='Иллюстрация сцены';frame.append(img);
+   const key=job.id+':'+item.scene_id+':'+item.sha256,id=job.id;
+   if(cache.has(key))img.src=cache.get(key);else api('asset',{job_id:id,scene_id:item.scene_id}).then(value=>{const url=URL.createObjectURL(new Blob([unbase64(value.data)],{type:value.content_type}));cache.set(key,url);if(job?.id===id)img.src=url}).catch(showError);
   }
-  if(['review_required','approved'].includes(item.status)){const reject=document.createElement('button');reject.className='secondary';reject.textContent=item.status==='approved'?'Отменить утверждение':'Кадр не подходит';reject.disabled=job.running;reject.onclick=()=>action(async()=>{job=(await api('reject',{job_id:job.id,scene_id:item.scene_id})).job;render()});frame.append(reject)}
-  if(item.status==='rejected'){const again=document.createElement('button');again.textContent='Сгенерировать другой кадр';again.disabled=providerBlocked||job.running;again.onclick=()=>action(async()=>{if(!confirm('Сгенерировать новый вариант только этого кадра? Это новый платный запрос.'))return;job=(await api('retry',{job_id:job.id,scene_id:item.scene_id,confirm_repeat:true})).job;job.running=true;render();watch()});frame.append(again)}
-  $('frames').append(frame);
+  const actions=document.createElement('div');actions.className='frame-actions';
+  if(item.status==='review_required'){
+   const approve=document.createElement('button');approve.className='primary';approve.textContent='Утвердить кадр';approve.onclick=()=>guarded(async()=>{job=(await api('approve',{job_id:job.id,scene_id:item.scene_id})).job;render()});actions.append(approve);
+  }
+  if(['review_required','approved'].includes(item.status)){
+   const reject=document.createElement('button');reject.textContent=item.status==='approved'?'Отменить утверждение':'Не подходит';reject.onclick=()=>guarded(async()=>{job=(await api('reject',{job_id:job.id,scene_id:item.scene_id})).job;render()});actions.append(reject);
+  }
+  if(item.status==='rejected'){
+   const retry=document.createElement('button');retry.textContent='Новый вариант';retry.disabled=providerBlocked||job.running;retry.onclick=()=>guarded(async()=>{if(!confirm('Это отдельный платный запрос. Продолжить?'))return;job=(await api('retry',{job_id:job.id,scene_id:item.scene_id,confirm_repeat:true})).job;watch();render()});actions.append(retry);
+  }
+  frame.append(actions);$('frames').append(frame);
  }
 }
-async function refresh(){if(reading||!job)return;reading=true;try{job=(await api('status',{job_id:job.id})).job;render();if(!job.running)clearInterval(poll)}finally{reading=false}}
+async function refresh(){if(reading||!job)return;reading=true;try{job=(await api('status',{job_id:job.id})).job;render();if(!job.running){clearInterval(poll);poll=null}}finally{reading=false}}
 function watch(){clearInterval(poll);poll=setInterval(()=>refresh().catch(showError),2500)}
-async function jobs(){const list=(await api('list')).jobs;$('jobs').replaceChildren();for(const item of list){const b=document.createElement('button');b.textContent=new Date(item.created_at*1000).toLocaleString('ru')+' · '+item.approved+'/'+item.total;b.onclick=()=>action(async()=>{job=(await api('status',{job_id:item.id})).job;sessionStorage.setItem('novel2_illustration_job',job.id);render();if(job.running)watch()});$('jobs').append(b)}}
-$('prepareForm').onsubmit=e=>{e.preventDefault();action(async()=>{const source=$('source').files[0],rules=$('instructions').files[0];if(source.size>2000000||rules.size>100000)throw Error('Файл превышает допустимый размер.');$('prepare').disabled=true;try{const instructions=JSON.parse(await rules.text());job=(await api('prepare',{filename:source.name,data:await encodeFile(source),instructions})).job;sessionStorage.setItem('novel2_illustration_job',job.id);render();await jobs()}finally{$('prepare').disabled=false}})};
-$('generate').onclick=()=>action(async()=>{job=(await api('generate',{job_id:job.id})).job;job.running=true;render();watch()});
-$('retry').onclick=()=>action(async()=>{if(!confirm('Повторить незавершённые запросы? Провайдер мог уже списать оплату за предыдущую попытку.'))return;job=(await api('retry',{job_id:job.id,confirm_repeat:true})).job;job.running=true;render();watch()});
-$('check').onclick=()=>action(refresh);
-$('export').onclick=()=>action(async()=>{job=(await api('assemble',{job_id:job.id})).job;const value=await api('asset',{job_id:job.id,document:true});download(unbase64(value.data),value.content_type,'novel_illustrated.docx');render()});
-const exampleRules={version:1,content_type:'cinematic_romance',format:'portrait',visual_direction:'Неграфические романтические иллюстрации. Герои одеты, возраст 21+. Реалистичные материалы.',palette:'серое море, тёмное дерево, латунь',camera:'editorial photograph, 50 mm',characters:{},locations:{},scenes:{}};
-$('sampleRules').onclick=()=>download(JSON.stringify(exampleRules,null,2),'application/json','visual_instructions.json');
-$('sampleText').onclick=()=>download('# Пример\n\nЖенщина в сером пальто остановилась у окна старого отеля. На подоконнике лежал латунный ключ. За окном виднелось море.\n\n[[IMAGE:arrival]]\n\nОна взяла ключ и повернулась к двери.','text/markdown','story_marked.md');
+async function history(){const list=(await api('list')).jobs;$('jobs').replaceChildren();for(const item of list){const b=document.createElement('button');b.type='button';b.textContent=new Date(item.created_at*1000).toLocaleString('ru')+' · '+item.approved+'/'+item.total+' кадров';b.onclick=()=>guarded(async()=>{job=(await api('status',{job_id:item.id})).job;sessionStorage.setItem('novel2_illustration_job',job.id);render();if(job.running)watch()});$('jobs').append(b)}}
+$('prepareForm').onsubmit=e=>{e.preventDefault();guarded(async()=>{const file=$('source').files[0];if(!file||!file.name.toLowerCase().endsWith('.txt')||file.size<20||file.size>65536)throw Error('Выберите TXT-файл сцены до 64 КБ');$('prepare').disabled=true;try{const value=await api('prepare',{filename:file.name,data:await b64File(file)});job=value.job;sessionStorage.setItem('novel2_illustration_job',job.id);render();await history()}finally{$('prepare').disabled=false}})};
+$('generate').onclick=()=>guarded(async()=>{if(!confirm('Запустить генерацию? Модель может списать средства за этот запрос.'))return;job=(await api('generate',{job_id:job.id})).job;render();watch()});
+$('retry').onclick=()=>guarded(async()=>{if(!confirm('Прошлая попытка могла быть оплачена. Повторить незавершённые запросы?'))return;job=(await api('retry',{job_id:job.id,confirm_repeat:true})).job;render();watch()});
+$('check').onclick=()=>guarded(refresh);
+$('export').onclick=()=>guarded(async()=>{job=(await api('assemble',{job_id:job.id})).job;const output=await api('asset',{job_id:job.id,document:true});download(unbase64(output.data),output.content_type,'night4two_scene_illustrated.docx');render()});
+$('newScene').onclick=()=>{clearInterval(poll);poll=null;job=null;sessionStorage.removeItem('novel2_illustration_job');$('jobPanel').hidden=true;$('uploadStep').hidden=false;$('source').value='';window.scrollTo(0,0)};
 window.Telegram?.WebApp?.ready();
-action(async()=>{try{const cfg=await api('configuration');providerBlocked=!cfg.configured||!cfg.authenticated||cfg.expired||cfg.limit_exhausted||cfg.management_key;if(providerBlocked)$('providerStatus').textContent=cfg.limit_exhausted?'Достигнут лимит ключа OpenRouter. Генерация приостановлена.':cfg.expired?'Срок ключа OpenRouter истёк. Генерация приостановлена.':'Проверьте доступ ключа OpenRouter. Генерация приостановлена.';}catch(e){showError(e)}await jobs();const remembered=sessionStorage.getItem('novel2_illustration_job');if(remembered){job=(await api('status',{job_id:remembered})).job;render();if(job.running)watch()}});
-</script></body></html>
+guarded(async()=>{try{const c=await api('configuration');providerBlocked=!c.configured||!c.authenticated||c.expired||c.limit_exhausted||c.management_key;$('providerStatus').textContent=providerBlocked?'Генерация временно недоступна; файл сцены можно подготовить.':''}catch(e){providerBlocked=true;$('providerStatus').textContent='Не удалось проверить доступность генератора.'}try{await history();const id=sessionStorage.getItem('novel2_illustration_job');if(id){job=(await api('status',{job_id:id})).job;render();if(job.running)watch()}}catch(e){showError(e)}});
+</script>
+</body>
+</html>
