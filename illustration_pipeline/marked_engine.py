@@ -10,6 +10,7 @@ import uuid
 from pathlib import Path
 from PIL import Image, ImageOps
 from content_profile import validate_profile, prompt_for, FORMATS
+from visual_instruction_contract import load_visual_contract
 from marked_manuscript import read_manuscript, assemble_marked, digest
 from edge_client import EdgeClient
 
@@ -70,8 +71,10 @@ class MarkedEngine:
             blocks, anchors = read_manuscript(source)
             if set(profile['scenes'])-{a['scene_id'] for a in anchors}:
                 raise JobError('INSTRUCTIONS_UNKNOWN_SCENE')
+            _, visual_manifest = load_visual_contract()
             job = {'id':job_id,'owner':owner,'created_at':time.time(),'source':source.name,
                 'source_sha256':digest(source),'instructions':profile,
+                'visual_instructions':visual_manifest,
                 'instructions_sha256':hashlib.sha256(json.dumps(profile,sort_keys=True,ensure_ascii=False).encode()).hexdigest(),
                 'images':[{**a,'status':'planned','attempts':0} for a in anchors]}
             self._save(job); return self.view(job)
