@@ -1,0 +1,88 @@
+name: Night4two v3 Isolated Preview
+on:
+  push:
+    branches: [feat/night4two-v3-journey]
+    paths:
+      - 'novel2/public/**'
+      - 'cloudflare/novel2-preview/src/**'
+      - '.github/workflows/night4two-v3-staging.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: night4two-v3-isolated-preview
+  cancel-in-progress: true
+jobs:
+  deploy-isolated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: cloudflare/novel2-preview
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Render isolated no-write-boundings preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re, urllib.request
+          from pathlib import Path
+          account=os.getenv('CLOUDFLARE_ACCOUNT_ID','')
+          token=os.getenv('CLOUDFLARE_API_TOKEN','')
+          if not account or not token: raise SystemExit('N4T_STAGING_CLOUDFLARE_SECRETS_MISSING')
+          req=urllib.request.Request(
+            f'https://api.cloudflare.com/client/v4/accounts/{account}/workers/scripts/novel2-preview/settings',
+            headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(req,timeout=30) as response: d=json.load(response)
+          if not d.get('success'): raise SystemExit('N4T_STAGING_BASELINE_SETTINGS_FAILED')
+          bindings=d['result'].get('bindings',[])
+          def binding(name): return next((b for b in bindings if b.get('name')==name),None)
+          vpc=binding('NOVEL2_VPC')
+          origin=(binding('NOVEL2_ORIGIN_HOST') or {}).get('text','')
+          port=(binding('NOVEL2_ORIGIN_PORT') or {}).get('text','')
+          if not vpc or not re.fullmatch(r'[a-f0-9-]{36}',vpc.get('tunnel_id','')): raise SystemExit('N4T_STAGING_VPC_NOT_READY')
+          if not re.fullmatch(r'[A-Za-z0-9.-]+',origin) or port!='5690': raise SystemExit('N4T_STAGING_ORIGIN_NOT_READY')
+          print('::add-mask::'+origin)
+          cfg=json.loads(Path('wrangler.jsonc').read_text())
+          cfg['name']='night4two-v3-preview'
+          cfg['vars']={'NOVEL2_ORIGIN_HOST':origin,'NOVEL2_ORIGIN_PORT':'5690'}
+          cfg['vpc_networks']=[{'binding':'NOVEL2_VPC','tunnel_id':vpc['tunnel_id']}]
+          # Explicitly NO database, R2, AI, provider keys, or mutable workflows.
+          for key in ['d1_databases','r2_buckets','workflows','ai']:
+            cfg.pop(key,None)
+          cfg['assets']['directory']='../../novel2/public'
+          Path('wrangler.v3.preview.json').write_text(json.dumps(cfg,indent=2)+'\n')
+          print('N4T_V3_PREVIEW_ISOLATION_VERIFIED=true')
+          PY
+      - name: Deploy separate staging Worker (production untouched)
+        run: npx --yes wrangler@4 deploy --config wrangler.v3.preview.json
+      - name: Verify version markers and existing origin reachability
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://night4two-v3-preview.kontrakevich.workers.dev'
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS --max-time 20 "$base/novel2/illustrations.html?release=n4t-v3" -o /tmp/n4t-v3.html; then
+              if grep -Fq 'night4two-v3-scene-only-20261107' /tmp/n4t-v3.html; then break; fi
+            fi
+            sleep 3
+          done
+          grep -Fq 'night4two-v3-scene-only-20261107' /tmp/n4t-v3.html
+          ! grep -Fq 'id="instructions"' /tmp/n4t-v3.html
+          curl -fsS --max-time 20 "$base/novel2/?release=n4t-v3" -o /tmp/n4t-home.html
+          grep -Fq 'night4two-v3-journey-20261107' /tmp/n4t-home.html
+          curl -fsS --max-time 20 "$base/novel2/health" -o /tmp/n4t-health.json
+          python - <<'PY'
+          import json
+          j=json.load(open('/tmp/n4t-health.json'))
+          if not j.get('ok') or j.get('product')!='interactive_novel_2':
+              raise SystemExit('N4T_V3_ORIGIN_NOT_HEALTHY')
+          PY
+          echo "N4T_V3_PREVIEW_VERIFIED=$base/novel2/"
