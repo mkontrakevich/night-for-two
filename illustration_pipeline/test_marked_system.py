@@ -12,6 +12,7 @@ from PIL import Image
 from docx import Document
 from content_profile import validate_profile
 from marked_engine import MarkedEngine, JobError
+from visual_instruction_contract import load_visual_contract
 from marked_manuscript import read_manuscript, assemble_marked
 from workbench import make_server
 from edge_client import EdgeClient
@@ -32,6 +33,22 @@ class FakeEdge:
         return {'model':'fixture'}
 
 class MarkedSystemTest(unittest.TestCase):
+    def test_canonical_backend_instructions_are_versioned_and_recorded(self):
+        doc, meta = load_visual_contract()
+        self.assertIn('Sensual Director',doc)
+        self.assertIn('Couple Space',doc)
+        self.assertIn('SD Story Illustration',doc)
+        self.assertEqual(len(meta['sha256']),64)
+        job=self.create()
+        stored=self.engine.get(job['id'],OWNER)
+        self.assertEqual(stored['visual_instructions'],meta)
+        self.assertNotIn('visual_instructions',job,'System instruction content is not exposed by public job view')
+        with patch.object(EdgeClient,'call',return_value={'ok':True,'content':json.dumps({'allowed':True,'description':'One adult archivist stands quietly beside a window in a dim hotel room.'})}) as mocked:
+            client=EdgeClient('https://example.invalid/novel2-ai','test-key')
+            client.describe({'context':'An adult archivist stands near a window.','scene_id':'frame'},PROFILE)
+            prompt=mocked.call_args.args[1]['messages'][0]['content']
+            self.assertIn(doc,prompt)
+            self.assertIn('SERVER-SIDE VERSIONED VISUAL INSTRUCTIONS',prompt)
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name)
         self.edge=FakeEdge();self.engine=MarkedEngine(self.root/'jobs',edge=self.edge)
