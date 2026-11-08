@@ -8,6 +8,7 @@ export const config = Object.freeze({
   textModel: String(process.env.NOVEL2_TEXT_MODEL || 'openai/gpt-5.6'),
   visionModel: String(process.env.NOVEL2_VISION_MODEL || 'openai/gpt-5.6'),
   imageModel: String(process.env.NOVEL2_IMAGE_MODEL || 'bytedance-seed/seedream-5-0-flash'),
+  shotFlowEnabled: /^(1|true)$/i.test(String(process.env.NOVEL2_SHOT_FLOW_ENABLED || '')),
   localTest: /^(1|true|yes)$/i.test(String(process.env.NOVEL2_LOCAL_TEST_MODE || ''))
 });
 
