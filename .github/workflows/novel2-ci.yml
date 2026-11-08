@@ -34,6 +34,7 @@ jobs:
           node --check src/app.js
           node --check src/auth.js
           node --check src/db.js
+          node --check src/shot-draft.js
           node --check src/ai.js
           node --check src/prose-engine.js
           node --check src/identity-engine.js
@@ -42,6 +43,8 @@ jobs:
           node --check src/ai-character-library.js
           node --check src/visual-engine.js
       - run: npm test
+      - name: v3.2 Reader shot offer and safe draft unit test
+        run: node scripts/shot-draft.test.mjs
       - name: Build container
         run: docker build -t novel2:ci .
 
@@ -69,6 +72,10 @@ jobs:
         env:
           NOVEL2_LAUNCH_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/launch_test
       - run: node novel2/scripts/pipeline-transaction.test.mjs
+        env:
+          NOVEL2_LAUNCH_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/launch_test
+      - name: v3.2 PostgreSQL role isolation, revision and zero-paid attempts
+        run: node novel2/scripts/shot-draft-postgres.test.mjs
         env:
           NOVEL2_LAUNCH_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/launch_test
       - run: node --experimental-vm-modules novel2/scripts/story-launch-gateway.test.mjs

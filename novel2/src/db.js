@@ -132,6 +132,42 @@ CREATE TABLE IF NOT EXISTS novel2_visuals(
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(book_id,visual_key)
 );
+-- Shot Drafts are non-billable until an explicit generation gate.
+CREATE TABLE IF NOT EXISTS novel2_shot_drafts(
+  id uuid PRIMARY KEY,
+  book_id bigint NOT NULL REFERENCES novel2_books(id) ON DELETE CASCADE,
+  pair_key text NOT NULL,
+  turn_no integer NOT NULL CHECK(turn_no>=0),
+  owner_role text NOT NULL CHECK(owner_role IN ('A','B')),
+  scene_sha256 text NOT NULL CHECK(length(scene_sha256)=64),
+  offer text NOT NULL DEFAULT '',
+  frame_note text NOT NULL DEFAULT '',
+  status text NOT NULL DEFAULT 'draft'
+    CHECK(status IN ('draft','skipped','queued','uncertain','review','approved','rejected')),
+  revision integer NOT NULL DEFAULT 1 CHECK(revision>=1),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(book_id,turn_no,owner_role)
+);
+CREATE INDEX IF NOT EXISTS novel2_shots_pair_book_idx
+  ON novel2_shot_drafts(pair_key,book_id,turn_no DESC);
+CREATE TABLE IF NOT EXISTS novel2_shot_attempts(
+  id uuid PRIMARY KEY,
+  shot_id uuid NOT NULL REFERENCES novel2_shot_drafts(id) ON DELETE CASCADE,
+  attempt_no integer NOT NULL CHECK(attempt_no>=1),
+  status text NOT NULL DEFAULT 'reserved'
+    CHECK(status IN ('reserved','submitted','uncertain','failed','review','approved','rejected')),
+  idempotency_key text NOT NULL UNIQUE,
+  provider_request_id text NOT NULL DEFAULT '',
+  model text NOT NULL DEFAULT '',
+  price_ceiling_usd numeric(10,4),
+  billed_usd numeric(10,4),
+  media_sha256 text NOT NULL DEFAULT '',
+  private_media_key text NOT NULL DEFAULT '',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(shot_id,attempt_no)
+);
 `;
 
 export async function initDb() {

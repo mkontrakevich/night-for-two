@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0909">
-<meta name="novel2-ui-release" content="night4two-v3-journey-20261107">
+<meta name="novel2-ui-release" content="night4two-v3-2-shot-draft-20261109">
 <title>Interactive Novel 2.0</title>
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <link rel="stylesheet" href="/novel2/noir-experience.css?v=1">
@@ -119,6 +119,15 @@
 .actorAngleOptional{grid-column:2;color:#93847b;font-size:10px;line-height:1.3}
 .builder .actorAngleField,.photoIdentityPanel .actorAngleField{border-radius:0}
  .journeyTool{display:block;border:1px solid rgba(242,222,215,.35);padding:17px 15px;color:#f2e6df;text-decoration:none;font-size:14px;letter-spacing:.03em;min-height:55px}.journeyToolNote{margin:9px 0 26px;color:#a89893;font-size:12px;line-height:1.45}
+.shotOffer{margin:28px 24px 10px;padding:23px 20px;border:1px solid rgba(241,232,216,.27);background:rgba(131,93,79,.1);color:var(--paper)}
+.shotOffer .shotKicker{letter-spacing:.16em;font-size:10px;text-transform:uppercase;opacity:.75}
+.shotOffer h3{font:400 23px/1.2 Georgia,serif;margin:10px 0}
+.shotOffer p{font-size:14px;line-height:1.5;color:var(--paper);opacity:.86}
+.shotOffer textarea{display:block;width:100%;min-height:76px;resize:vertical;padding:12px;background:rgba(0,0,0,.28);color:var(--paper);border:1px solid rgba(241,232,216,.26);border-radius:0}
+.shotOffer .shotActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.shotOffer button{border:1px solid rgba(241,232,216,.38);padding:12px 14px;background:transparent;color:var(--paper);border-radius:0;cursor:pointer;font-size:13px;flex:1;min-width:125px}
+.shotOffer button:first-child{background:var(--paper);color:var(--ink)}
+.shotOffer .shotMeta{font-size:12px;opacity:.7}
 </style>
 </head>
 <body><main id="app"></main>
@@ -913,9 +922,24 @@ function render(){
    :aiTurn
      ?'<div class="aiTurnStatus"><span class="aiTurnDot"></span><span id="aiStatus">'+esc(waitingText)+'</span>'+(aiAdvanceError?'<button class="aiRetry" id="retryAiTurn" type="button">Повторить</button>':'')+'</div>'
      :esc(waitingText);
- app.innerHTML='<section class="reader"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><button class="exitStory" id="mainMenu">Меню</button></div><img id="sceneImage" class="sceneImage" alt=""><article class="prose">'+esc(s.prose||'')+'</article><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(actions?'<div class="choiceRow">'+actions+'</div>':'')+'<div class="status">'+statusHtml+'</div></section><div class="replyDock"><textarea id="reply" placeholder="'+(state.can_reply?'Ответить от лица героя…':aiTurn?'AI-персонаж формирует ответ…':'Ожидаем второго героя…')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить</button></div></div>';
+ const shotFlow=state.shot_flow?.enabled?state.shot_flow:null;
+ const currentShot=shotFlow?.draft||null;
+ const shotEnabled=Boolean(shotFlow)&&currentShot?.status!=='skipped';
+ const shotCard=shotEnabled
+   ?'<aside class="shotOffer" aria-label="Предложение кадра"><div class="shotKicker">Рассказчик · момент для иллюстрации</div>'
+     +'<h3>Сохранить этот момент?</h3><p>'+esc(shotFlow.offer||'Этот момент можно сохранить в кадре.')+'</p>'
+     +'<label for="shotFrameNote" class="shotMeta">Как показать момент? (необязательно)</label>'
+     +'<textarea id="shotFrameNote" maxlength="800" placeholder="Например: средний план, акцент на руках и мягком вечернем свете"></textarea>'
+     +'<div class="shotActions"><button id="shotSave" type="button">'+(currentShot?'Обновить описание':'Сохранить описание кадра')+'</button>'
+     +'<button id="shotSkip" type="button">Пропустить</button></div>'
+     +'<p class="shotMeta">'+(currentShot?'Черновик сохранён. Можно уточнить ракурс.':'История продолжится независимо от выбора.')+' Генерация изображений будет подключена после проверки.</p></aside>'
+   : '';
+ app.innerHTML='<section class="reader"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><button class="exitStory" id="mainMenu">Меню</button></div><img id="sceneImage" class="sceneImage" alt=""><article class="prose">'+esc(s.prose||'')+'</article>'+shotCard+'<div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(actions?'<div class="choiceRow">'+actions+'</div>':'')+'<div class="status">'+statusHtml+'</div></section><div class="replyDock"><textarea id="reply" placeholder="'+(state.can_reply?'Ответить от лица героя…':aiTurn?'AI-персонаж формирует ответ…':'Ожидаем второго героя…')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить</button></div></div>';
  document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>{if(state.pending_reply)return;selectedAction=x.dataset.action;document.getElementById('selected').textContent='Выбрано: '+x.textContent});
  document.getElementById('send').onclick=sendReply;
+ const noteBox=document.getElementById('shotFrameNote');if(noteBox)noteBox.value=currentShot?.frame_note||'';
+ const shotSave=document.getElementById('shotSave');if(shotSave)shotSave.onclick=()=>saveInNovelShot(false);
+ const shotSkip=document.getElementById('shotSkip');if(shotSkip)shotSkip.onclick=()=>saveInNovelShot(true);
  if(state.pending_reply){
    const savedReply=document.getElementById('reply');savedReply.value=state.pending_reply.reply;savedReply.readOnly=true;
    selectedAction=state.pending_reply.action_key||'';document.getElementById('send').textContent='Продолжить обработку ответа';
@@ -1029,6 +1053,27 @@ async function sendReply(){
  if(busy||!state?.can_reply)return;const box=document.getElementById('reply'),reply=box.value.trim();if(!reply&&!selectedAction)return;
  busy=true;loading('Продолжаем роман из вашей реплики…','story',600);
  try{state=(await api('reply',{reply,action_key:selectedAction,book_id:state.book.id,turn_no:Number(state.book.turn_no)},600000)).state;selectedAction='';render()}catch(e){if(isCancelled(e))return;alert(e.message);refresh()}finally{busy=false}
+}
+async function saveInNovelShot(skip=false){
+ if(busy||!state?.shot_flow?.enabled||!state?.book)return;
+ const frameNote=skip?'':String(document.getElementById('shotFrameNote')?.value||'');
+ const replyDraft=document.getElementById('reply')?.value||'';
+ const prior=state.shot_flow.draft;
+ busy=true;
+ try{
+  const j=await api('shot/draft/'+(skip?'skip':'save'),{
+    book_id:state.book.id,turn_no:Number(state.book.turn_no),
+    frame_note:frameNote,revision:prior?.revision??null
+  },30000);
+  state.shot_flow=j.shot_flow;
+  render();
+  const reply=document.getElementById('reply');if(reply&&!reply.readOnly)reply.value=replyDraft;
+ }catch(error){
+  if(isCancelled(error))return;
+  alert(error?.code==='NOVEL2_SHOT_REVISION_CONFLICT'
+    ?'Описание кадра изменилось в другой сессии. Обновите роман.'
+    :String(error?.message||'Не удалось сохранить кадр.'));
+ }finally{busy=false}
 }
 async function loadVisual(){try{const j=await api('visual');const img=document.getElementById('sceneImage');if(img&&j.image){img.src=j.image;img.classList.add('on')}}catch{}}
 refresh();

@@ -1,5 +1,6 @@
 import {createStoryLaunchQueue,publicLaunchJob,publishStoryLaunch} from './story-launch.js';
 import {assertExpectedTurn} from './pipeline-contract.js';
+import {createShotDraftStore,publicShotDraft,narratorShotOffer} from './shot-draft.js';
 import http from 'node:http';
 import {illustrationWorkbenchRequest} from './illustration-workbench-proxy.js';
 import crypto from 'node:crypto';
@@ -28,6 +29,7 @@ import {fetchRelationshipContext,sliceRelationshipContext,explicitGenderForRole}
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const htmlPath=path.resolve(__dirname,'../public/index.html');
+const shotStore=createShotDraftStore(db,pairKey);
 
 // One active generation per authenticated player. The task runs on the origin
 // after the HTTP request ends; re-opening the Mini App can reconnect to it.
@@ -304,6 +306,12 @@ async function publicState(book,auth,ids={},bookCast=[]){
   };
   if(!book)return{mode:'home',...base};
   const scene=book.current_scene||{};
+  const shotFlow=config.shotFlowEnabled?{
+    enabled:true,
+    offer:narratorShotOffer(scene),
+    draft:publicShotDraft(await shotStore.get(book.id,Number(book.turn_no),auth.role)),
+    image_generation_available:false
+  }:null;
   const canReply=!Boolean(scene.noir_progress?.finale)&&String(book.active_role)===String(auth.role)&&!isAiControlled(ids,book.active_role,bookCast);
   const ownCast=(Array.isArray(bookCast)?bookCast:[]).filter(
     entry=>String(entry.interactive_role||'')===String(auth.role)
@@ -313,6 +321,7 @@ async function publicState(book,auth,ids={},bookCast=[]){
     ...base,
     book:{id:book.id,title:book.title,chapter_no:book.chapter_no,turn_no:book.turn_no},
     scene,
+    ...(shotFlow?{shot_flow:shotFlow}:{}),
     active_role:book.active_role,
     active_control_mode:isAiControlled(ids,book.active_role,bookCast)?'ai':'human',
     cast:await Promise.all(ownCast.map(castCharacterSummary)),
@@ -691,7 +700,34 @@ async function main(){
         bookCast=await getBookCast(book.id);
       }
 
-      if(url.pathname==='/novel2/api/books'){
+      if(url.pathname.startsWith('/novel2/api/shot/draft/')){
+         if(!config.shotFlowEnabled)return send(res,404,{ok:false,error:'NOT_FOUND'});
+         if(req.method!=='POST')return send(res,405,{ok:false,error:'METHOD_NOT_ALLOWED'});
+         if(!book)return send(res,409,{ok:false,error:'NOVEL2_SHOT_BOOK_REQUIRED'});
+         const action=url.pathname.slice('/novel2/api/shot/draft/'.length);
+         if(action==='status'){
+           const row=await shotStore.get(book.id,Number(book.turn_no),auth.role);
+           return send(res,200,{ok:true,draft:publicShotDraft(row),offer:narratorShotOffer(book.current_scene)});
+         }
+         if(action!=='save'&&action!=='skip')return send(res,404,{ok:false,error:'NOT_FOUND'});
+         try{
+           assertExpectedTurn(book,input);
+           const row=await shotStore.save({
+             book,role:auth.role,skip:action==='skip',
+             frameNote:action==='skip'?'':input.frame_note,
+             revision:input.revision??null
+           });
+           return send(res,200,{ok:true,draft:publicShotDraft(row),
+             shot_flow:{enabled:true,offer:narratorShotOffer(book.current_scene),
+               draft:publicShotDraft(row),image_generation_available:false}});
+         }catch(error){
+           const code=String(error?.message||'');
+           if(/^NOVEL2_(PIPELINE_STALE_TURN|SHOT_[A-Z0-9_]+)$/.test(code))
+             return send(res,/SCENE_STALE|REVISION_CONFLICT|ALREADY_FINALIZED|STALE_TURN/.test(code)?409:422,{ok:false,error:code});
+           throw error;
+         }
+       }
+       if(url.pathname==='/novel2/api/books'){
         const books=await listBooks(30);
         const drafts=await listStoryDrafts(12);
         return send(res,200,{ok:true,books,drafts:drafts.map(publicStoryDraft)});
@@ -1050,6 +1086,16 @@ async function main(){
 
       if(url.pathname==='/novel2/api/visual'){
         if(!book)return send(res,400,{ok:false,error:'NOVEL2_BOOK_REQUIRED'});
+        if(config.shotFlowEnabled){
+          // Feature gate forbids the old read-triggered paid generation.
+          // Preserve existing legacy image without changing its canonical status.
+          const cached=await getVisual(book.id,'turn-'+String(book.turn_no||0));
+          if(cached?.image_base64)
+            return send(res,200,{ok:true,cached:true,
+              image:'data:image/jpeg;base64,'+cached.image_base64,
+              model:cached.model,prompt:cached.prompt});
+          return send(res,200,{ok:true,cached:false,awaiting_shot_approval:true});
+        }
         bookCast=await getBookCast(book.id);
         if(!bookCast.length){
           ids=await identities();
