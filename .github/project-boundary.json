@@ -36,6 +36,7 @@
     "night-cloudflare-inspect-20260929.yml",
     "night-product-deploy.yml",
     "night4two-v3-origin-sidecar.yml",
+    "night4two-v3-public-smoke.yml",
     "night4two-v3-staging.yml",
     "novel2-ci.yml",
     "novel2-migration-verify.yml",
