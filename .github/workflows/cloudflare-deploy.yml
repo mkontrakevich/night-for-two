@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "cloudflare/**"
+      - "cloudflare/night-gateway/**"
       - ".github/workflows/cloudflare-deploy.yml"
   workflow_dispatch:
 
