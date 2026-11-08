@@ -1,0 +1,72 @@
+name: Night4two v3 Public Read-only Smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'novel2/public/**'
+      - 'cloudflare/novel2-preview/src/illustration-intake.js'
+      - '.github/workflows/night4two-v3-public-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n4t-v3-public-smoke
+  cancel-in-progress: true
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify published Novel2 and scene-only workflow without generation
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://novel2-preview.kontrakevich.workers.dev'
+          expected_home=$(python - <<'PY'
+          from pathlib import Path
+          import re
+          raw=Path('novel2/public/index.html').read_text()
+          print(re.search(r'<meta name="novel2-ui-release" content="([^"]+)"',raw).group(1))
+          PY
+          )
+          expected_studio=$(python - <<'PY'
+          from pathlib import Path
+          import re
+          raw=Path('novel2/public/illustrations.html').read_text()
+          print(re.search(r'<meta name="novel2-illustrations-release" content="([^"]+)"',raw).group(1))
+          PY
+          )
+          ready=0
+          for i in $(seq 1 10); do
+            curl -fsS --max-time 20 "$base/novel2/?release=$expected_home" -o /tmp/n4t-home.html || true
+            curl -fsS --max-time 20 "$base/novel2/illustrations.html?release=$expected_studio" -o /tmp/n4t-illustrations.html || true
+            if grep -Fq "$expected_home" /tmp/n4t-home.html && grep -Fq "$expected_studio" /tmp/n4t-illustrations.html; then ready=1;break;fi
+            sleep 3
+          done
+          test "$ready" = 1 || { echo '::error::N4T_V3_PUBLIC_VERSION_NOT_CURRENT';exit 1; }
+          grep -Fq 'id="source"' /tmp/n4t-illustrations.html
+          ! grep -Fq 'id="instructions"' /tmp/n4t-illustrations.html
+          ! grep -Fq 'id="sampleRules"' /tmp/n4t-illustrations.html
+          grep -Fq 'id="generationStep"' /tmp/n4t-illustrations.html
+          grep -Fq 'id="reviewStep"' /tmp/n4t-illustrations.html
+          grep -Fq 'id="exportStep"' /tmp/n4t-illustrations.html
+          curl -fsS --max-time 20 "$base/novel2/health" -o /tmp/n4t-health.json
+          python - <<'PY'
+          import json
+          j=json.load(open('/tmp/n4t-health.json'))
+          assert j.get('ok') is True and j.get('product')=='interactive_novel_2'
+          PY
+          # Preflight must reject client-supplied system instructions at the edge,
+          # without an authorized provider call or new stored job.
+          echo '{"filename":"scene.txt","data":"YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh","instructions":{}}' >/tmp/n4t-forbidden.json
+          code=$(curl -sS --max-time 20 -o /tmp/n4t-forbidden-result.json -w '%{http_code}' -X POST -H 'content-type: application/json' --data-binary @/tmp/n4t-forbidden.json "$base/novel2/api/illustrations/prepare")
+          test "$code" = 422 || { echo "::error::N4T_V3_EDGE_CLIENT_INSTRUCTION_OVERRIDE_STATUS:$code";exit 1; }
+          python - <<'PY'
+          import json
+          j=json.load(open('/tmp/n4t-forbidden-result.json'))
+          assert j.get('error')=='SYSTEM_INSTRUCTIONS_SERVER_ONLY'
+          PY
+          echo "N4T_V3_PUBLIC_SMOKE_OK=true"
+          echo "N4T_V3_HOME=$base/novel2/"
+          echo "N4T_V3_STUDIO=$base/novel2/illustrations.html"
