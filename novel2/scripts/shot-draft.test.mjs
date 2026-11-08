@@ -36,7 +36,7 @@ assert.match(source,/id="shotSkip"/);
 assert.match(source,/shot\/draft\//);
 assert.match(source,/const shotFlow=state\.shot_flow\?\.enabled/);
 assert.match(source,/Рассказчик · момент для иллюстрации/);
-assert.match(source,/'+shotCard+'<div class="turnPrompt"/);
+assert(source.includes("+'</article>'+shotCard+'<div class=\"turnPrompt\">"),'Shot card must be placed after prose and before the reply prompt');
 const app=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
 assert.match(app,/if\(config\.shotFlowEnabled\)\{/);
 assert.match(app,/awaiting_shot_approval:true/);
