@@ -1,0 +1,82 @@
+name: Night4two v3 Private Workbench Origin Sidecar
+on:
+  push:
+    branches: [feat/night4two-v3-journey]
+    paths:
+      - '.github/workflows/night4two-v3-origin-sidecar.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: night4two-v3-private-sidecar
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install -r illustration_pipeline/requirements.txt
+      - run: python -m unittest illustration_pipeline/test_workbench_compose.py
+      - run: python -m unittest discover -s illustration_pipeline -p 'test*.py' -q
+      - name: Validate sidecar configuration without private credentials
+        env:
+          TELEGRAM_BOT_TOKEN: ci-not-a-real-token
+        run: |
+          touch .env novel2/.env
+          docker compose -f novel2/docker-compose.yml config --quiet
+
+  isolated-origin-sidecar:
+    needs: preflight
+    runs-on: [self-hosted, windows, x64, marins-production]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy only Night4two private sidecar, never restart the novel or PostgreSQL
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $origin='D:\Github\night-for-two'
+          $currentEnv=Join-Path $origin 'novel2\.env'
+          if(-not (Test-Path -LiteralPath $currentEnv)) { $currentEnv=Join-Path $origin '.env' }
+          if(-not (Test-Path -LiteralPath $currentEnv)) { throw 'N4T_ORIGIN_ENV_NOT_FOUND' }
+          $tokenLine=Get-Content -LiteralPath $currentEnv | Where-Object { $_ -match '^TELEGRAM_BOT_TOKEN=' } | Select-Object -Last 1
+          $token=if($tokenLine){($tokenLine -replace '^TELEGRAM_BOT_TOKEN=','').Trim().Trim('"')}else{''}
+          if($token.Length -lt 20){throw 'N4T_ORIGIN_TELEGRAM_AUTH_NOT_READY'}
+          $env:TELEGRAM_BOT_TOKEN=$token
+          $health=Invoke-RestMethod -Uri 'http://127.0.0.1:5690/novel2/health' -TimeoutSec 10
+          if($health.ok -ne $true -or $health.product -ne 'interactive_novel_2'){throw 'N4T_EXISTING_ORIGIN_NOT_HEALTHY'}
+          $appBefore=(docker inspect novel2-preview-app-1 --format '{{.Id}}').Trim()
+          $dbBefore=(docker inspect novel2-preview-postgres-1 --format '{{.Id}}').Trim()
+          if(-not $appBefore -or -not $dbBefore){throw 'N4T_EXISTING_CONTAINERS_MISSING'}
+          if(-not (Test-Path -LiteralPath .env)){New-Item -ItemType File -Path .env | Out-Null}
+          if(-not (Test-Path -LiteralPath novel2\.env)){New-Item -ItemType File -Path novel2\.env | Out-Null}
+          docker compose -p novel2-preview -f novel2/docker-compose.yml up -d --no-deps --build novel2-illustration-workbench
+          if($LASTEXITCODE -ne 0){throw 'N4T_SIDECAR_DEPLOY_FAILED'}
+          $ready=$false
+          for($i=0;$i -lt 20;$i++){
+            $state=(docker inspect novel2-preview-novel2-illustration-workbench-1 --format '{{.State.Health.Status}}' 2>$null).Trim()
+            if($state -eq 'healthy'){$ready=$true;break}
+            Start-Sleep -Seconds 3
+          }
+          if(-not $ready){throw 'N4T_SIDECAR_NOT_HEALTHY'}
+          $appAfter=(docker inspect novel2-preview-app-1 --format '{{.Id}}').Trim()
+          $dbAfter=(docker inspect novel2-preview-postgres-1 --format '{{.Id}}').Trim()
+          if($appBefore -ne $appAfter -or $dbBefore -ne $dbAfter){throw 'N4T_PROD_CONTAINERS_CHANGED'}
+          $probe=@'
+          import json,os,urllib.request
+          token=os.environ['WORKBENCH_TOKEN']
+          req=urllib.request.Request('http://127.0.0.1:5691/list',data=b'{}',method='POST',headers={'Authorization':'Bearer '+token,'X-Workbench-Owner':'a'*64,'Content-Type':'application/json'})
+          with urllib.request.urlopen(req,timeout=8) as response:
+              value=json.load(response)
+          assert value.get('ok') is True and isinstance(value.get('jobs'),list)
+          print('N4T_SIDECAR_AUTHENTICATED_READ_OK=true')
+          '@
+          $probe | docker exec -i novel2-preview-novel2-illustration-workbench-1 python -
+          if($LASTEXITCODE -ne 0){throw 'N4T_SIDECAR_AUTH_SMOKE_FAILED'}
+          Write-Host 'N4T_APP_AND_DB_CONTAINER_IDS_UNCHANGED=true'
+          Write-Host 'N4T_PRIVATE_SIDECAR_HEALTHY=true'
+          $env:TELEGRAM_BOT_TOKEN=''
