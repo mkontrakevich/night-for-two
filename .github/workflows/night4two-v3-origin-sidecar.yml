@@ -68,7 +68,12 @@ jobs:
           if($appBefore -ne $appAfter -or $dbBefore -ne $dbAfter){throw 'N4T_PROD_CONTAINERS_CHANGED'}
           $probe=@'
           import json,os,urllib.request
-          token=os.environ['WORKBENCH_TOKEN']
+          # Runtime entrypoint creates WORKBENCH_TOKEN after Docker container
+          # configuration; docker exec receives only the original image env.
+          # Read PID 1's effective process env privately, never echo the key.
+          proc_env=open('/proc/1/environ','rb').read().split(b'\\0')
+          token=next((v.partition(b'=')[2].decode() for v in proc_env if v.startswith(b'WORKBENCH_TOKEN=')),None)
+          if not token: raise RuntimeError('N4T_SIDECAR_RUNTIME_TOKEN_NOT_FOUND')
           req=urllib.request.Request('http://127.0.0.1:5691/list',data=b'{}',method='POST',headers={'Authorization':'Bearer '+token,'X-Workbench-Owner':'a'*64,'Content-Type':'application/json'})
           with urllib.request.urlopen(req,timeout=8) as response:
               value=json.load(response)
