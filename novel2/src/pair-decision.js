@@ -69,12 +69,13 @@ export function pairDecisionView(scene={},role='A',answeredRoles=[]){
 export function publicDecisionPrompt(scene={},role='A',answeredRoles=[]){
   const view=pairDecisionView(scene,role,answeredRoles);
   const src=scene&&typeof scene==='object'?scene:{};
-  // Never show the other player's prompt as a selectable instruction.
-  if(view.can_reply)return src;
+  // Story reasoning with private scope belongs to the server even when the
+  // viewer is allowed to answer. The partner's unsent text never leaves SQL.
   const restricted=src?.decision_dependency?.reveal_scope==='private';
   const dependency=restricted?{
     ...src.decision_dependency,participation_reason:''
   }:src.decision_dependency;
-  return {...src,decision_dependency:dependency,
-    primary_interaction:{type:'none',prompt:''},optional_actions:[]};
+  const safe={...src,decision_dependency:dependency};
+  if(view.can_reply)return safe;
+  return {...safe,primary_interaction:{type:'none',prompt:''},optional_actions:[]};
 }
