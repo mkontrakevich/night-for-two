@@ -55,7 +55,7 @@ export function pairDecisionView(scene={},role='A',answeredRoles=[]){
   const finished=Boolean(scene?.noir_progress?.finale);
   const myTurn=!finished&&(requiresBoth?!answered.has(role):owner===role);
   const waitingFor=finished?null:
-    requiresBoth?(!answered.has(role)?null:answered.has(role==='A'?'B':'A')?'partner':'resume'):
+    requiresBoth?(!answered.has(role)?null:answered.has(role==='A'?'B':'A')?'resume':'partner'):
       owner!==role?'partner':null;
   return {
     owner:requiresBoth?'both':owner,
