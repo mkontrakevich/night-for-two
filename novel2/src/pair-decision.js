@@ -71,5 +71,10 @@ export function publicDecisionPrompt(scene={},role='A',answeredRoles=[]){
   const src=scene&&typeof scene==='object'?scene:{};
   // Never show the other player's prompt as a selectable instruction.
   if(view.can_reply)return src;
-  return {...src,primary_interaction:{type:'none',prompt:''},optional_actions:[]};
+  const restricted=src?.decision_dependency?.reveal_scope==='private';
+  const dependency=restricted?{
+    ...src.decision_dependency,participation_reason:''
+  }:src.decision_dependency;
+  return {...src,decision_dependency:dependency,
+    primary_interaction:{type:'none',prompt:''},optional_actions:[]};
 }
