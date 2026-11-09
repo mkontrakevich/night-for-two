@@ -8,7 +8,7 @@ for(let i=0;i<3;i++){
  assert.equal(scene.decision_dependency.decision_owner,'A');
 }
 assert.equal(scene.decision_dependency.version,DECISION_POLICY_VERSION);
-assert.equal(scene.primary_interaction.prompt,'Выберите продолжение');
+assert.equal(scene.primary_interaction.prompt,'Что вы предпринимаете дальше?');
 // Explicit participant-dependent decision waits for real B, not B's online flag.
 const waiting=resolveNextDecision({...base('B'),decision_dependency:{decision_owner:'B',requires_partner:true,participation_reason:'Только Снежа может выбрать, откроет ли она дверь',reveal_scope:'private'}},'A');
 assert.equal(decisionOwner(waiting),'B');
