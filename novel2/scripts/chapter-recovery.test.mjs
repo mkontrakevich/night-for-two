@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import {expandSceneToTarget} from '../src/scene-expansion.js';
 import {publicLaunchJob} from '../src/story-launch.js';
 const source=fs.readFileSync(new URL('../src/prose-engine.js',import.meta.url),'utf8').replace(/\r\n?/g,'\n').replace(/^import .*;\n/gm,'').replace(/^export /gm,'');
-const factory=complete=>new Function('jsonCompletion','noirBeatPlan','attachNoirScene','expandSceneToTarget',source+'\nreturn createStoryBible;')(complete,()=>({}),scene=>scene,expandSceneToTarget);
+const factory=complete=>new Function('jsonCompletion','noirBeatPlan','attachNoirScene','expandSceneToTarget','config',source+'\nreturn createStoryBible;')(complete,()=>({}),scene=>scene,expandSceneToTarget,{asyncPairEnabled:false});
 const A={passport:{fiction_name:'Fixture A'}},B={passport:{fiction_name:'Fixture B'}},blueprint={title:'Fixture',logline:'Neutral fixture'};
 const short={prose:'A neutral initial passage. '.repeat(45),target_role:'B',primary_interaction:{prompt:'Continue?'},optional_actions:[],visual_scene:{location:'Original setting'}};
 let saved,firstCalls=0,expansions=0;
