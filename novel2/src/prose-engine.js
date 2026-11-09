@@ -1,4 +1,6 @@
 import {jsonCompletion} from './ai.js';
+import {config} from './config.js';
+import {resolveNextDecision} from './pair-decision.js';
 import {expandSceneToTarget} from './scene-expansion.js';
 import {noirBeatPlan,attachNoirScene,cleanNoirAnalysis,noirPartnerPlan,noirTrialPlan} from './noir-director.js';
 
@@ -38,6 +40,9 @@ GAMEPLAY
 — optional_actions допускаются только когда есть реальное физическое/сюжетное решение, максимум 3;
 — следующая сцена обязана реализовать смысл пользовательского ответа, а не игнорировать его;
 — пользовательская реплика становится каноном;
+— В парной асинхронной игре не требуй очередности A/B: один игрок может принимать несколько последовательных решений, пока второй не нужен по сюжету.
+— Отсутствие онлайн-сессии второго игрока не причина останавливать историю. Не принимай решения за отсутствующего реального игрока.
+— Второстепенные вымышленные AI-персонажи могут действовать, говорить и менять конфликт самостоятельно.
 — никогда не подменяй ответ пользователя заранее написанной репликой.
 — СТРУКТУРА ПЕРВИЧНА: свободный текст — это решение персонажа, а не просьба бесконечно разговаривать с помощником. Прочитай его как намерение, действие и изменение отношений в контексте Story Bible, канона и текущей сцены.
 — Одно решение игрока запускает существенное последствие и следующий драматургический бит, а не очередное бессодержательное уточнение.
@@ -95,6 +100,12 @@ function cleanScene(value={}) {
     visual_after_paragraph:Math.max(0,Math.min(40,Number(s.visual_after_paragraph)||0)),
     noir_trial:s.noir_trial&&typeof s.noir_trial==='object'?s.noir_trial:null,
     target_role:['A','B'].includes(String(s.target_role))?String(s.target_role):'A',
+    decision_dependency:s.decision_dependency&&typeof s.decision_dependency==='object'?{
+      decision_owner:['A','B','both'].includes(s.decision_dependency.decision_owner)?s.decision_dependency.decision_owner:'',
+      requires_partner:s.decision_dependency.requires_partner===true,
+      participation_reason:String(s.decision_dependency.participation_reason||'').slice(0,320),
+      reveal_scope:s.decision_dependency.reveal_scope==='private'?'private':'shared'
+    }:null,
     primary_interaction:{
       type:'free_reply',
       prompt:String(s.primary_interaction?.prompt||'Что вы отвечаете?').trim().slice(0,500)
@@ -272,7 +283,7 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
   data.title=String(data.title||storyBlueprint.title||'').trim().slice(0,140);
   if(!data.title)throw new Error('NOVEL2_BIBLE_TITLE_MISSING');
   let first=cleanScene(data.first_scene);
-  const bible={...data,...storyBlueprint,title:data.title,noir_dialogue_contract:{version:2,episodes:6,beats_per_episode:5,partner_reveal:'progressive',consent_first:true,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
+  const bible={...data,...storyBlueprint,title:data.title,async_pair_mode:config.asyncPairEnabled?'real_players_v1':null,noir_dialogue_contract:{version:2,episodes:6,beats_per_episode:5,partner_reveal:'progressive',consent_first:true,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
   await onCandidate({...bible,first_scene:first});
   first=await ensureLongScene(first,{storyBible:bible,reason:'first_scene'});
   await onCandidate({...bible,first_scene:first});
@@ -280,8 +291,9 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
   return {...bible,first_scene:attachNoirScene(first,noirBeatPlan(1))};
 }
 
-export async function continueStory({book, recentTurns, playerRole, playerReply, actionKey=''}) {
+export async function continueStory({book, recentTurns, playerRole, playerReply, actionKey='', jointResponses=null}) {
   const bible=book.story_bible||{},canon=book.canon||{};
+  const asyncPair=config.asyncPairEnabled&&bible.async_pair_mode==='real_players_v1';
   const noirEnabled=Boolean(bible?.noir_dialogue_contract?.version);
   const nextPlan=noirEnabled?noirBeatPlan(Number(book.turn_no||1)+1):null;
   const partner=nextPlan?noirPartnerPlan(nextPlan):null;
@@ -306,6 +318,8 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
       current_scene:book.current_scene||{},
       recent_turns:recentTurns,
       player_input:{role:playerRole,reply:String(playerReply||'').slice(0,3000),action_key:String(actionKey||'')},
+      joint_responses:asyncPair&&Array.isArray(jointResponses)?jointResponses.map(x=>({role:x.role,reply:String(x.reply||'').slice(0,3000),action_key:String(x.action_key||'')})):null,
+      asynchronous_pair_mode:asyncPair,
       output:{
         scene:{
           chapter_no:Number(book.chapter_no)||1,
@@ -314,7 +328,8 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
           noir_whisper:'',
           visual_after_paragraph:0,
           noir_trial:{title:'',invitation:'',softer_option:'',decline_option:'',intensity:'subtle'},
-          target_role:playerRole==='A'?'B':'A',
+          target_role:asyncPair?playerRole:(playerRole==='A'?'B':'A'),
+          decision_dependency:{decision_owner:playerRole,requires_partner:false,participation_reason:'',reveal_scope:'shared'},
           primary_interaction:{type:'free_reply',prompt:''},
           optional_actions:[],
           visual_beat:'',
@@ -348,7 +363,9 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
         'Сохраняй имена, роли, знания персонажей, предметы, место и причинность.',
         'Сверяй действия и реплики с player_characters и supporting_characters из story_bible: все присутствующие характеры должны влиять на продолжение.',
         'AI-персонажи из supporting_characters сами говорят и действуют внутри сцены; для них не создавай пользовательский target_role.',
-        'Следующий активный герой обычно другой игрок, если драматургически нет веской причины оставить ход текущему.',
+        asyncPair
+          ?'По умолчанию сохраняй следующий ход за playerRole: разрешено несколько последовательных самостоятельных решений. Переключайся на другого игрока только если без его конкретного выбора сюжет не может продолжаться. Тогда укажи decision_dependency.decision_owner (A/B), requires_partner:true, participation_reason (содержательная причина), reveal_scope (private/shared), а target_role совпадает с decision_owner. Если решение независимо требуется от обоих, укажи decision_owner:both и requires_partner:true. Никогда не говори и не решай за отсутствующего реального партнёра.'
+          :'Следующий активный герой обычно другой игрок, если драматургически нет веской причины оставить ход текущему.',
         'visual_scene должен строго соответствовать только что написанной сцене: та же локация, те же физически присутствующие герои, их одежда, позы, реквизит и время/свет.',
         'Не помещай героя в characters_present, если по прозе его физически нет в этой локации.',
         'characters_present может содержать A, B и slot_key любых supporting_characters; не ограничивай кадр двумя персонажами.',
@@ -359,6 +376,7 @@ export async function continueStory({book, recentTurns, playerRole, playerReply,
   let scene=cleanScene(data.scene||{});
   if(scene.prose.length<350) throw new Error('NOVEL2_SCENE_INVALID');
   scene=await ensureLongScene(scene,{storyBible:bible,recentTurns,reason:'between_player_decisions'});
+  if(asyncPair)scene=resolveNextDecision(scene,playerRole);
   if(scene.prose.length<LONG_SCENE_MIN_CHARS) throw new Error('NOVEL2_SCENE_TOO_SHORT');
   const analysis=cleanNoirAnalysis(data.response_analysis||{});
   const mergedCanon=data.canon&&typeof data.canon==='object'?data.canon:canon;

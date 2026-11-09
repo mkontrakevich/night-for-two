@@ -132,6 +132,20 @@ CREATE TABLE IF NOT EXISTS novel2_visuals(
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(book_id,visual_key)
 );
+-- Joint real-player decisions: two private answers, same scene turn.
+-- Only the authenticated server reads the answers; public state exposes role
+-- receipt flags and the current actor's own text, never the partner's choice.
+CREATE TABLE IF NOT EXISTS novel2_joint_turn_choices(
+  book_id bigint NOT NULL REFERENCES novel2_books(id) ON DELETE CASCADE,
+  scene_turn_no integer NOT NULL CHECK(scene_turn_no>0),
+  role text NOT NULL CHECK(role IN ('A','B')),
+  reply text NOT NULL CHECK(char_length(reply) BETWEEN 1 AND 3000),
+  action_key text NOT NULL DEFAULT '',
+  submitted_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(book_id,scene_turn_no,role)
+);
+CREATE INDEX IF NOT EXISTS novel2_joint_turn_choices_book_idx
+  ON novel2_joint_turn_choices(book_id,scene_turn_no);
 `;
 
 export async function initDb() {
@@ -371,6 +385,58 @@ export async function appendTurn(bookId, turnNo, role, kind, content, payload={}
     const {rows}=await client.query("SELECT (content=$5 AND CASE WHEN kind='reply' THEN coalesce(payload->>'action_key','')=coalesce(($6::jsonb)->>'action_key','') ELSE payload=$6::jsonb END) AS same FROM novel2_turns WHERE book_id=$1 AND turn_no=$2 AND role=$3 AND kind=$4",args);
     if(!rows[0]?.same)throw new Error('NOVEL2_PIPELINE_TURN_CONFLICT');
   }
+}
+
+export async function saveJointTurnChoice(bookId,turnNo,role,reply,actionKey=''){
+  const cleanRole=String(role||'');
+  const cleanReply=String(reply||'').trim(),cleanKey=String(actionKey||'').trim();
+  if(!['A','B'].includes(cleanRole)||!cleanReply||cleanReply.length>3000||cleanKey.length>40)
+    throw new Error('NOVEL2_PAIR_CHOICE_INVALID');
+  const id=Number(bookId),turn=Number(turnNo);
+  if(!Number.isSafeInteger(id)||id<=0||!Number.isSafeInteger(turn)||turn<=0)
+    throw new Error('NOVEL2_PAIR_CHOICE_INVALID');
+  const inserted=await db.query(
+    `INSERT INTO novel2_joint_turn_choices(book_id,scene_turn_no,role,reply,action_key)
+     SELECT b.id,$2,$3,$4,$5 FROM novel2_books b
+      WHERE b.id=$1 AND b.pair_key=$6 AND b.status='active' AND b.turn_no=$2
+     ON CONFLICT(book_id,scene_turn_no,role) DO NOTHING RETURNING role`,
+    [id,turn,cleanRole,cleanReply,cleanKey,pairKey()]
+  );
+  if(inserted.rowCount)return true;
+  const {rows}=await db.query(
+    `SELECT c.reply,c.action_key FROM novel2_joint_turn_choices c
+      JOIN novel2_books b ON b.id=c.book_id
+     WHERE c.book_id=$1 AND c.scene_turn_no=$2 AND c.role=$3 AND b.pair_key=$4 AND b.status='active' AND b.turn_no=$2`,
+    [id,turn,cleanRole,pairKey()]
+  );
+  if(!rows.length)throw new Error('NOVEL2_PAIR_CHOICE_STALE');
+  if(rows[0].reply!==cleanReply||rows[0].action_key!==cleanKey)
+    throw new Error('NOVEL2_PAIR_CHOICE_CONFLICT');
+  return false;
+}
+
+export async function jointTurnChoices(bookId,turnNo){
+  const {rows}=await db.query(
+    `SELECT c.role,c.reply,c.action_key FROM novel2_joint_turn_choices c
+       JOIN novel2_books b ON b.id=c.book_id
+      WHERE c.book_id=$1 AND c.scene_turn_no=$2 AND b.pair_key=$3 AND b.status='active' AND b.turn_no=$2
+      ORDER BY c.role`,
+    [Number(bookId),Number(turnNo),pairKey()]
+  );
+  return rows;
+}
+
+export async function ownJointTurnChoice(bookId,turnNo,role){
+  if(!['A','B'].includes(role))return null;
+  const {rows}=await db.query(
+    `SELECT c.reply,c.action_key FROM novel2_joint_turn_choices c
+       JOIN novel2_books b ON b.id=c.book_id
+      WHERE c.book_id=$1 AND c.scene_turn_no=$2 AND c.role=$3
+        AND b.pair_key=$4 AND b.status='active' AND b.turn_no=$2
+      LIMIT 1`,
+    [Number(bookId),Number(turnNo),role,pairKey()]
+  );
+  return rows[0]||null;
 }
 
 export async function pendingReply(bookId,turnNo,role){

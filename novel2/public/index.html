@@ -904,16 +904,24 @@ function render(){
    return;
  }
  const s=state.scene||{},actions=(s.optional_actions||[]).map(x=>'<button class="chip" data-action="'+esc(x.key)+'">'+esc(x.label)+'</button>').join('');
- const aiTurn=state.active_control_mode==='ai';
- const waitingText=aiTurn
-   ?(aiAdvanceError?'Не удалось получить ход AI-персонажа.':'AI-персонаж пишет продолжение…')
-   :'Ход второго героя · история продолжится после его ответа';
- const statusHtml=state.can_reply
-   ?'Ваш ход · отвечайте от лица своего героя'
+ const pair=state.async_pair||{};
+ const aiTurn=state.active_control_mode==='ai'&&!pair.enabled;
+ const jointRecover=pair.enabled&&pair.awaiting_both&&state.pending_reply&&state.can_reply;
+ const waitingText=pair.enabled
+   ?pair.awaiting_both
+     ?pair.answered_by_me?'Ваш выбор сохранён. Ожидаем второго участника.':'Для продолжения нужны решения обоих участников.'
+     :'История сохранена. Продолжение откроется после решения второго участника.'
    :aiTurn
-     ?'<div class="aiTurnStatus"><span class="aiTurnDot"></span><span id="aiStatus">'+esc(waitingText)+'</span>'+(aiAdvanceError?'<button class="aiRetry" id="retryAiTurn" type="button">Повторить</button>':'')+'</div>'
-     :esc(waitingText);
- app.innerHTML='<section class="reader"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><button class="exitStory" id="mainMenu">Меню</button></div><img id="sceneImage" class="sceneImage" alt=""><article class="prose">'+esc(s.prose||'')+'</article><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(actions?'<div class="choiceRow">'+actions+'</div>':'')+'<div class="status">'+statusHtml+'</div></section><div class="replyDock"><textarea id="reply" placeholder="'+(state.can_reply?'Ответить от лица героя…':aiTurn?'AI-персонаж формирует ответ…':'Ожидаем второго героя…')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить</button></div></div>';
+     ?(aiAdvanceError?'Не удалось получить ход AI-персонажа.':'AI-персонаж пишет продолжение…')
+     :'Ход второго героя · история продолжится после его ответа';
+ const statusHtml=jointRecover
+   ?'Оба ответа сохранены · можно продолжить обработку'
+   :state.can_reply
+     ?'Ваш ход · отвечайте от лица своего героя'
+     :aiTurn
+       ?'<div class="aiTurnStatus"><span class="aiTurnDot"></span><span id="aiStatus">'+esc(waitingText)+'</span>'+(aiAdvanceError?'<button class="aiRetry" id="retryAiTurn" type="button">Повторить</button>':'')+'</div>'
+       :esc(waitingText)+(pair.enabled?'<button type="button" class="secondary" id="checkPartnerReply">Проверить продолжение</button>':'');
+ app.innerHTML='<section class="reader"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">Глава '+esc(s.chapter_no||state.book?.chapter_no||1)+'</div></div><button class="exitStory" id="mainMenu">Меню</button></div><img id="sceneImage" class="sceneImage" alt=""><article class="prose">'+esc(s.prose||'')+'</article><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||(pair.enabled&&!state.can_reply?'Ожидаем продолжения…':'Что вы отвечаете?'))+'</div>'+(actions?'<div class="choiceRow">'+actions+'</div>':'')+'<div class="status">'+statusHtml+'</div></section><div class="replyDock"><textarea id="reply" placeholder="'+(state.can_reply?'Ответить от лица героя…':aiTurn?'AI-персонаж формирует ответ…':'Ожидаем второго героя…')+'" '+(state.can_reply?'':'disabled')+'></textarea><div class="replyRow"><div id="selected"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить</button></div></div>';
  document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>{if(state.pending_reply)return;selectedAction=x.dataset.action;document.getElementById('selected').textContent='Выбрано: '+x.textContent});
  document.getElementById('send').onclick=sendReply;
  if(state.pending_reply){
@@ -922,7 +930,10 @@ function render(){
  }
  document.getElementById('mainMenu').onclick=openMainMenu;
  const retryAi=document.getElementById('retryAiTurn');if(retryAi)retryAi.onclick=()=>{aiAdvanceError='';aiAdvanceKey='';render()};
- void loadVisual();
+ const checkPartner=document.getElementById('checkPartnerReply');if(checkPartner)checkPartner.onclick=refresh;
+ // v3.2 visuals require a separate consent/approval state. Never run the
+ // historical paid /visual endpoint automatically while async-pair is active.
+ if(!pair.enabled)void loadVisual();
  if(aiTurn&&!aiAdvanceInFlight&&!aiAdvanceError)setTimeout(()=>advanceAiTurn(),0);
 }
 async function advanceAiTurn(){
