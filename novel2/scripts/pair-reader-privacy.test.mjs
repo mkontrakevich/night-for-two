@@ -62,5 +62,5 @@ assert.match(html,/checkPartnerReply/);
 config.asyncPairEnabled=false;
 const legacy=await publicState(book,{role:'B'},ids,cast);
 assert.equal(legacy.async_pair,null);
-assert.equal(legacy.can_reply,true);
+assert.equal(legacy.can_reply,false,'Legacy novels must still obey book.active_role=A in this fixture');
 console.log('NIGHT4TWO_PAIR_PUBLIC_PRIVACY_OK offline_wait=true two_private_answers=true idempotent_resume=true no_image_autoplay=true legacy_unchanged=true');
