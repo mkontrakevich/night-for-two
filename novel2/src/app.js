@@ -294,6 +294,7 @@ function publicStoryDraft(draft){
    }
  };
 }
+function isAsyncPairBook(book){return Boolean(config.asyncPairEnabled&&book?.story_bible?.async_pair_mode==='real_players_v1');}
 async function publicState(book,auth,ids={},bookCast=[]){
   const own=await characterSummary(ids[auth.role],auth.role);
   const base={
@@ -306,7 +307,7 @@ async function publicState(book,auth,ids={},bookCast=[]){
   };
   if(!book)return{mode:'home',...base};
   const scene=book.current_scene||{};
-  const asyncPair=config.asyncPairEnabled;
+  const asyncPair=isAsyncPairBook(book);
   const both=asyncPair&&decisionOwner(scene)==='both';
   const joint=both?await jointTurnChoices(book.id,book.turn_no):[];
   const pairView=asyncPair?pairDecisionView(scene,auth.role,joint.map(x=>x.role)):null;
@@ -792,7 +793,7 @@ async function main(){
       if(url.pathname==='/novel2/api/ai/advance'){
         if(!book)return send(res,400,{ok:false,error:'NOVEL2_BOOK_REQUIRED'});
         assertExpectedTurn(book,input);
-        if(book.current_scene?.noir_progress?.finale||config.asyncPairEnabled)
+        if(book.current_scene?.noir_progress?.finale||isAsyncPairBook(book))
           return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast),advanced:false});
         if(!isAiControlled(ids,book.active_role,bookCast)){
           return send(res,200,{ok:true,state:await publicState(book,auth,ids,bookCast),advanced:false});
@@ -825,8 +826,9 @@ async function main(){
         if(!book)return send(res,400,{ok:false,error:'NOVEL2_BOOK_REQUIRED'});
         assertExpectedTurn(book,input);
         if(book.current_scene?.noir_progress?.finale)return send(res,409,{ok:false,error:'NOVEL2_STORY_ALREADY_FINISHED'});
-        const both=config.asyncPairEnabled&&decisionOwner(book.current_scene)==='both';
-        if(config.asyncPairEnabled){
+        const pairEnabled=isAsyncPairBook(book);
+        const both=pairEnabled&&decisionOwner(book.current_scene)==='both';
+        if(pairEnabled){
           const owner=decisionOwner(book.current_scene);
           if(!hasPersistentHumanIdentity(ids[auth.role])||(owner!=='both'&&owner!==auth.role))
             return send(res,409,{ok:false,error:'NOVEL2_NOT_YOUR_TURN'});
