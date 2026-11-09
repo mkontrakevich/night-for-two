@@ -9,6 +9,7 @@ const b=app.indexOf('\nasync function driveAiTurns(',a);
 assert.ok(a>=0&&b>a,'private API projection source available');
 let characterReads=0;
 const {publicState,publicStoryDraft}=vm.runInNewContext(app.slice(a,b)+'\n({publicState,publicStoryDraft})',{
+ config:{asyncPairEnabled:false}, // compatibility: historical owner-only state projection
  characterSummary:async(identity,role)=>{characterReads++;return {ready:!!identity?.approved,name:role==='A'?'My actor':'Private partner',avatar:'',character_card:{passport:{fiction_name:'Player '+role}}}},
  buildBaseActorCard:({role})=>({role,kind:'base_actor_identity'}),
  castCharacterSummary:async(entry)=>({...entry,from_cast:true}),
