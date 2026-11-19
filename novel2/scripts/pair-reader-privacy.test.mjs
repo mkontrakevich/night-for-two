@@ -59,6 +59,8 @@ assert.doesNotMatch(JSON.stringify(pa),/Private prompt to B|Private plot reason/
 assert.match(html,/pair.enabled/);
 assert.match(html,/if\(!pair.enabled\)void loadVisual\(\)/,'No paid automatic illustrations during async-pair scenes');
 assert.match(html,/checkPartnerReply/);
+assert.match(html,/schedulePairWaitRefresh\(\)/,'Read-only partner status is refreshed automatically');
+assert.match(html,/document\.visibilityState==='hidden'/,'No background spin while Mini App is hidden');
 config.asyncPairEnabled=false;
 const legacy=await publicState(book,{role:'B'},ids,cast);
 assert.equal(legacy.async_pair,null);
