@@ -1,6 +1,7 @@
 import {createStoryLaunchQueue,publicLaunchJob,publishStoryLaunch} from './story-launch.js';
 import {assertExpectedTurn} from './pipeline-contract.js';
 import {decisionOwner,pairDecisionView,publicDecisionPrompt} from './pair-decision.js';
+import {assertRealPairReady,assertRealPairCast} from './pair-cast.js';
 import http from 'node:http';
 import {illustrationWorkbenchRequest} from './illustration-workbench-proxy.js';
 import crypto from 'node:crypto';
@@ -381,6 +382,7 @@ const launchQueue=createStoryLaunchQueue({db,pairKey,
     if(!draft)throw new Error('NOVEL2_STORY_DRAFT_NOT_FOUND');
     const ids=await identities();
     if(!hasPersistentHumanIdentity(ids[role]))throw new Error('NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED');
+    if(config.asyncPairEnabled)assertRealPairReady(ids,hasPersistentHumanIdentity);
   },
   execute:async({role,draftId,checkpoint,save,client})=>{
     const step=async(key,work)=>{
@@ -399,6 +401,7 @@ const launchQueue=createStoryLaunchQueue({db,pairKey,
     if(interactive.length!==2)throw new Error('NOVEL2_STORY_INTERACTIVE_SLOTS_INVALID');
 
     const {ids,relationship}=context;
+    if(config.asyncPairEnabled)assertRealPairReady(ids,hasPersistentHumanIdentity);
     const assignments={};
     const castEntries=[];
     const playerCards={};
@@ -484,6 +487,7 @@ const launchQueue=createStoryLaunchQueue({db,pairKey,
       assignments[slot.slot_key]='story_ai:'+entry.slot_key;
     }
 
+    if(config.asyncPairEnabled)assertRealPairCast(castEntries);
     const supportingCast=castEntries.filter(x=>!x.interactive_role).map(x=>({
       slot_key:x.slot_key,
       narrative_function:x.narrative_function,
@@ -493,6 +497,7 @@ const launchQueue=createStoryLaunchQueue({db,pairKey,
       characters:{A:playerCards.A,B:playerCards.B},
       supportingCast,
       blueprint,
+      launchRole:role,
       relationshipContext:relationship,
       resumeCandidate:checkpoint.first_chapter_candidate||null,
       onCandidate:async(candidate)=>{
@@ -1090,6 +1095,9 @@ async function main(){
 
       if(url.pathname==='/novel2/api/visual'){
         if(!book)return send(res,400,{ok:false,error:'NOVEL2_BOOK_REQUIRED'});
+        // No silent paid calls in new human-pair books. Re-enable visuals only
+        // through a later explicit Shot Draft / approval endpoint.
+        if(isAsyncPairBook(book))return send(res,409,{ok:false,error:'NOVEL2_PAIR_VISUAL_APPROVAL_REQUIRED'});
         bookCast=await getBookCast(book.id);
         if(!bookCast.length){
           ids=await identities();
