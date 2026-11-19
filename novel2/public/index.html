@@ -926,7 +926,8 @@ function render(){
  document.getElementById('send').onclick=sendReply;
  if(state.pending_reply){
    const savedReply=document.getElementById('reply');savedReply.value=state.pending_reply.reply;savedReply.readOnly=true;
-   selectedAction=state.pending_reply.action_key||'';document.getElementById('send').textContent='Продолжить обработку ответа';
+   selectedAction=state.pending_reply.action_key||'';
+   document.getElementById('send').textContent=state.can_reply?'Продолжить обработку ответа':'Ответ сохранён';
  }
  document.getElementById('mainMenu').onclick=openMainMenu;
  const retryAi=document.getElementById('retryAiTurn');if(retryAi)retryAi.onclick=()=>{aiAdvanceError='';aiAdvanceKey='';render()};
