@@ -85,6 +85,8 @@ jobs:
             npx playwright install --with-deps chromium
           fi
       - run: node novel2/scripts/story-launch-browser.test.mjs
+      - name: Asynchronous pair Reader on phone and desktop
+        run: node novel2/scripts/pair-reader-browser.test.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
