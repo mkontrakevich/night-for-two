@@ -70,6 +70,8 @@ try{
   const A=await open('A');
   assert.equal(await A.page.locator('#reply').isDisabled(),true);
   assert.match(await A.page.locator('body').innerText(),/история продолжится|История сохранена/i);
+  const debug=await A.page.evaluate(()=>({pair:state?.async_pair,canReply:state?.can_reply,html:document.querySelector('.status')?.innerHTML,button:document.getElementById('checkPartnerReply')?.outerHTML,display:document.getElementById('checkPartnerReply')?getComputedStyle(document.getElementById('checkPartnerReply')).display:null}));
+  console.log('N4T_PAIR_WAIT_DIAG',JSON.stringify(debug).slice(0,1800));
   assert.equal(await A.page.locator('#checkPartnerReply').isVisible(),true);
   const B=await open('B');
   assert.equal(await B.page.locator('#reply').isEnabled(),true);
