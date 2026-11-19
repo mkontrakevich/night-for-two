@@ -53,7 +53,8 @@
   }
   function renderNoir(){
     stopLoading();
-    const s=state.scene||{},key=getKey(),seen=wasRead(key)||reduceMotion();
+    if(pairWaitTimer){clearTimeout(pairWaitTimer);pairWaitTimer=null;}
+    const s=state.scene||{},pair=state.async_pair||{},key=getKey(),seen=wasRead(key)||reduceMotion();
     const paragraphs=sceneParagraphs(s.prose);
     clearTimeout(revealTimer);
     sceneKey=key;revealReady=seen;
@@ -61,7 +62,7 @@
     // without an anchor default to after all prose, never before it.
     const anchor=Math.max(1,Math.min(paragraphs.length||1,Number(s.visual_after_paragraph)||paragraphs.length||1));
     const delay=i=>seen?0:Math.min(5300,i*360);
-    const picture='<figure class="noirStill" id="noirStill" style="--beat-delay:'+delay(anchor)+'ms"><div class="noirStillHead"><span>КАДР ИСТОРИИ</span><span>VISUAL DNA · SD</span></div><div class="noirStillFrame"><div class="noirStillPending">Сцена проявляется из темноты…</div><img id="sceneImage" alt="Кинематографичная иллюстрация события в текущей сцене"></div></figure>';
+    const picture=pair.enabled?'':'<figure class="noirStill" id="noirStill" style="--beat-delay:'+delay(anchor)+'ms"><div class="noirStillHead"><span>КАДР ИСТОРИИ</span><span>VISUAL DNA · SD</span></div><div class="noirStillFrame"><div class="noirStillPending">Сцена проявляется из темноты…</div><img id="sceneImage" alt="Кинематографичная иллюстрация события в текущей сцене"></div></figure>';
     let placed=false;
     const beats=paragraphs.map((value,i)=>{
       const p='<p class="noirBeat'+(/^[—«"“]/.test(value)?' spoken':'')+'" style="--beat-delay:'+delay(i)+'ms">'+esc(value)+'</p>';
@@ -74,21 +75,30 @@
     const stageText=s.noir_progress?.episode
       ?'ЭПИЗОД '+s.noir_progress.episode+' · РЕШЕНИЕ '+s.noir_progress.beat+' / '+(s.noir_progress.beats_per_episode||5)
       :'ГЛАВА '+(s.chapter_no||state.book?.chapter_no||1);
-    const aiTurn=state.active_control_mode==='ai';
-    const waitingText=aiTurn?(aiAdvanceError?'Не удалось получить ход AI-персонажа.':'AI-персонаж пишет продолжение…'):'Ход второго героя · история продолжится после его ответа';
-    const status=finale?'Роман завершён. Следующая история начнётся с нового приглашения.':state.can_reply?'Ваш ход · отвечайте от лица своего героя':aiTurn
-      ?'<div class="aiTurnStatus"><span class="aiTurnDot"></span><span id="aiStatus">'+esc(waitingText)+'</span>'+(aiAdvanceError?'<button class="aiRetry" id="retryAiTurn" type="button">Повторить</button>':'')+'</div>':esc(waitingText);
+    const aiTurn=state.active_control_mode==='ai'&&!pair.enabled;
+    const jointRecover=pair.enabled&&pair.awaiting_both&&state.pending_reply&&state.can_reply;
+    const waitingText=pair.enabled
+      ?pair.awaiting_both
+        ?pair.answered_by_me?'Ваш ответ сохранён. Ожидаем второго участника.':'Для продолжения нужны решения обоих участников.'
+        :'История сохранена. Продолжение откроется после решения второго участника.'
+      :aiTurn?(aiAdvanceError?'Не удалось получить ход AI-персонажа.':'AI-персонаж пишет продолжение…'):'Ход второго героя · история продолжится после его ответа';
+    const status=finale?'Роман завершён. Следующая история начнётся с нового приглашения.'
+      :jointRecover?'Оба ответа сохранены · можно продолжить обработку'
+      :state.can_reply?'Ваш ход · отвечайте от лица своего героя'
+      :aiTurn
+        ?'<div class="aiTurnStatus"><span class="aiTurnDot"></span><span id="aiStatus">'+esc(waitingText)+'</span>'+(aiAdvanceError?'<button class="aiRetry" id="retryAiTurn" type="button">Повторить</button>':'')+'</div>'
+        :esc(waitingText)+(pair.enabled?'<button type="button" class="secondary" id="checkPartnerReply">Проверить продолжение</button>':'');
     const title=s.chapter_title||('Глава '+(s.chapter_no||state.book?.chapter_no||1));
     const whisper=String(s.noir_whisper||'').trim();
     // The whisper is written by the novelist skill alongside the scene,
     // so it cannot be unrelated UI decoration or an invented spoiler.
     const whisperHtml=whisper?'<aside class="noirWhisper" style="--beat-delay:'+delay(0)+'ms"><small>СООБЩЕНИЕ ОТ НЕЗНАКОМЦА · AI</small><p>'+esc(whisper)+'</p></aside>':'';
     const trial=s.noir_trial&&typeof s.noir_trial==='object'?s.noir_trial:null;
-    const trialHtml=trial?.opt_in&&trial?.title&&trial?.invitation
+    const trialHtml=state.can_reply&&trial?.opt_in&&trial?.title&&trial?.invitation
       ?'<aside class="noirTrial" style="--beat-delay:'+delay(paragraphs.length)+'ms"><div class="noirSignal">СЮЖЕТНОЕ ИСПЫТАНИЕ · ПО ЖЕЛАНИЮ</div><h2>'+esc(trial.title)+'</h2><p>'+esc(trial.invitation)+'</p><small>Выбор добровольный и не препятствует продолжению романа.</small><div class="noirTrialActions"><button type="button" data-trial-choice="accept">Принять приглашение</button><button type="button" data-trial-choice="softer">'+esc(trial.softer_option||'Выбрать мягче')+'</button><button type="button" data-trial-choice="decline">'+esc(trial.decline_option||'Отказаться и продолжить')+'</button></div></aside>'
       :'';
     const finalDelay=seen?0:Math.min(6100,paragraphs.length*360+360);
-    app.innerHTML='<section class="reader noirReader '+(seen?'revealed':'entering')+'"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">'+esc(stageText)+'</div></div><button class="exitStory" id="mainMenu" type="button">Главное меню</button></div><header class="noirConnection"><div class="noirSignal">НЕЗНАКОМЕЦ · AI-ВЕДУЩИЙ</div><h1>'+esc(title)+'</h1><p>'+(hiddenPartner?'Партнёр пока остаётся загадкой. ':'')+'История открывается в словах, взглядах и решениях.</p></header><div class="noirTranscript"><div class="noirTranscriptHead"><span>ГОЛОС ИЗ ТЕМНОТЫ</span><button type="button" class="noirSkip" id="noirSkip" '+(seen?'hidden':'')+'>Показать всю сцену</button></div>'+whisperHtml+beats+trialHtml+'<div class="noirInteraction" style="--beat-delay:'+finalDelay+'ms"><div class="noirSignal">ВАШЕ РЕШЕНИЕ</div><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||'Что вы отвечаете?')+'</div>'+(options?'<div class="choiceRow">'+options+'</div>':'')+'<div class="status">'+status+'</div></div></div></section><div class="replyDock noirDock"><div class="noirDockLabel">ВАША РЕПЛИКА</div><textarea id="reply" aria-label="Реплика вашего героя" placeholder="'+(finale?'История завершена':state.can_reply?'Ответить от лица героя…':aiTurn?'AI-персонаж формирует ответ…':'Ожидаем второго героя…')+'" '+(state.can_reply&&!finale?'':'disabled')+'></textarea><div class="replyRow"><div id="selected" aria-live="polite"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить →</button></div></div>';
+    app.innerHTML='<section class="reader noirReader '+(seen?'revealed':'entering')+'"><div class="chrome"><div><div class="bookTitle">'+esc(state.book?.title||'Роман')+'</div><div class="chapter">'+esc(stageText)+'</div></div><button class="exitStory" id="mainMenu" type="button">Главное меню</button></div><header class="noirConnection"><div class="noirSignal">НЕЗНАКОМЕЦ · AI-ВЕДУЩИЙ</div><h1>'+esc(title)+'</h1><p>'+(hiddenPartner?'Партнёр пока остаётся загадкой. ':'')+'История открывается в словах, взглядах и решениях.</p></header><div class="noirTranscript"><div class="noirTranscriptHead"><span>ГОЛОС ИЗ ТЕМНОТЫ</span><button type="button" class="noirSkip" id="noirSkip" '+(seen?'hidden':'')+'>Показать всю сцену</button></div>'+whisperHtml+beats+trialHtml+'<div class="noirInteraction" style="--beat-delay:'+finalDelay+'ms"><div class="noirSignal">ВАШЕ РЕШЕНИЕ</div><div class="turnPrompt">'+esc(s.primary_interaction?.prompt||(pair.enabled&&!state.can_reply?'Ожидаем продолжения…':'Что вы отвечаете?'))+'</div>'+(options?'<div class="choiceRow">'+options+'</div>':'')+'<div class="status">'+status+'</div></div></div></section><div class="replyDock noirDock"><div class="noirDockLabel">ВАША РЕПЛИКА</div><textarea id="reply" aria-label="Реплика вашего героя" placeholder="'+(finale?'История завершена':state.can_reply?'Ответить от лица героя…':aiTurn?'AI-персонаж формирует ответ…':'Ожидаем второго героя…')+'" '+(state.can_reply&&!finale?'':'disabled')+'></textarea><div class="replyRow"><div id="selected" aria-live="polite"></div><button class="send" id="send" '+(state.can_reply?'':'disabled')+'>Ответить →</button></div></div>';
     document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>{
       if(state.pending_reply)return;
       selectedAction=x.dataset.action;
@@ -109,14 +119,16 @@
     document.getElementById('send').onclick=sendReply;
     if(state.pending_reply){
       const saved=document.getElementById('reply');saved.value=state.pending_reply.reply;saved.readOnly=true;
-      selectedAction=state.pending_reply.action_key||'';document.getElementById('send').textContent='Продолжить обработку ответа';
+      selectedAction=state.pending_reply.action_key||'';document.getElementById('send').textContent=state.can_reply?'Продолжить обработку ответа':'Ответ сохранён';
     }
     document.getElementById('mainMenu').onclick=()=>{clearTimeout(revealTimer);openMainMenu()};
     const skip=document.getElementById('noirSkip');if(skip)skip.onclick=finishReveal;
     const retry=document.getElementById('retryAiTurn');if(retry)retry.onclick=()=>{aiAdvanceError='';aiAdvanceKey='';render()};
+    const checkPartner=document.getElementById('checkPartnerReply');if(checkPartner)checkPartner.onclick=refresh;
+    if(pair.enabled&&!state.can_reply)schedulePairWaitRefresh();
     if(seen)showVisual();
     else revealTimer=setTimeout(()=>{if(sceneKey===key)finishReveal()},Math.min(6950,Math.max(1450,finalDelay+750)));
-    void loadSceneVisual();
+    if(!pair.enabled)void loadSceneVisual();
     if(aiTurn&&!finale&&!aiAdvanceInFlight&&!aiAdvanceError)setTimeout(()=>advanceAiTurn(),0);
   }
   render=function(...args){
