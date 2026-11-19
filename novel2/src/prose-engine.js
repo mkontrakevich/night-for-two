@@ -199,7 +199,7 @@ export async function createStoryBlueprint({creativeBrief=''}={}) {
   return blueprint;
 }
 
-export async function createStoryBible({characters={},supportingCast=[],blueprint={},relationshipContext={},resumeCandidate=null,onCandidate=async()=>{}}={}) {
+export async function createStoryBible({characters={},supportingCast=[],blueprint={},relationshipContext={},launchRole='A',resumeCandidate=null,onCandidate=async()=>{}}={}) {
   const A=characters.A&&typeof characters.A==='object'?characters.A:null;
   const B=characters.B&&typeof characters.B==='object'?characters.B:null;
   if(!A?.passport||!B?.passport) throw new Error('NOVEL2_CHARACTER_CARDS_REQUIRED');
@@ -226,6 +226,7 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
       task:'Теперь засели уже готовую историю конкретными персонажами. Архитектура истории первична: не переписывай основной конфликт под характеры, а найди для каждого назначенного героя естественный способ выполнить его сюжетную функцию.',
       story_blueprint:storyBlueprint,
       assigned_cast:assignedCast,
+      launch_role:config.asyncPairEnabled?(launchRole==='B'?'B':'A'):null,
       supporting_cast_slots:supporting,
       sanitized_pair_dynamics:{
         raw_messages:false,
@@ -245,7 +246,8 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
         title:storyBlueprint.title,
         canon:{},
         first_scene:{
-          chapter_no:1,chapter_title:'',prose:'',noir_whisper:'',visual_after_paragraph:0,target_role:'A',
+          chapter_no:1,chapter_title:'',prose:'',noir_whisper:'',visual_after_paragraph:0,target_role:config.asyncPairEnabled?launchRole:'A',
+          decision_dependency:{decision_owner:launchRole,requires_partner:false,participation_reason:'',reveal_scope:'shared'},
           primary_interaction:{type:'free_reply',prompt:''},
           optional_actions:[],
           noir_trial:{title:'',invitation:'',intensity:'subtle',softer_option:'',decline_option:'',effect:''},
@@ -271,7 +273,9 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
         'Используй дополнительные AI-роли уже в первой сцене, если это естественно для opening_situation.',
         'characters_present содержит slot_key/идентификаторы реально присутствующих персонажей. Для интерактивных игроков используй A и B; для AI — их slot_key.',
         'visual_scene точно фиксирует локацию, присутствующих героев, положение тел, одежду, предметы и свет.',
-        'Первая сцена заканчивается значимым выбором A или B, а не обязательным ходом каждого присутствующего персонажа.',
+        config.asyncPairEnabled
+          ?'В асинхронной игре оба персонажа принадлежат реальным людям. По умолчанию первая сцена предлагает решение запускающему игроку launch_role. Другого участника вызывай только при необходимом именно его выборе: decision_dependency.decision_owner=A/B или both, requires_partner:true, содержательная participation_reason. Не принимай решение за отсутствующего игрока.'
+          :'Первая сцена заканчивается значимым выбором A или B, а не обязательным ходом каждого присутствующего персонажа.',
         'В первом эпизоде второй герой остаётся сюжетной загадкой: не раскрывай его полное художественное имя, биографию или внешность; только убедительные следы и намёки.',
         'Не задавай бессмысленные вопросы. Ведущий пригласил гостя в историю и через действия раскрыл конфликт.',
          'noir_whisper и visual_after_paragraph связывают литературное развитие с появлением изображения; никаких визуальных спойлеров.'
@@ -283,6 +287,7 @@ export async function createStoryBible({characters={},supportingCast=[],blueprin
   data.title=String(data.title||storyBlueprint.title||'').trim().slice(0,140);
   if(!data.title)throw new Error('NOVEL2_BIBLE_TITLE_MISSING');
   let first=cleanScene(data.first_scene);
+  if(config.asyncPairEnabled)first=resolveNextDecision(first,launchRole);
   const bible={...data,...storyBlueprint,title:data.title,async_pair_mode:config.asyncPairEnabled?'real_players_v1':null,noir_dialogue_contract:{version:2,episodes:6,beats_per_episode:5,partner_reveal:'progressive',consent_first:true,sound_design:'deferred'},story_blueprint:storyBlueprint,player_characters:{A,B},supporting_characters:Object.fromEntries(supporting.map(x=>[x.slot_key,x.character_card]))};
   await onCandidate({...bible,first_scene:first});
   first=await ensureLongScene(first,{storyBible:bible,reason:'first_scene'});
