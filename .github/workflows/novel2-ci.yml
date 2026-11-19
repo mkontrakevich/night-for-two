@@ -71,6 +71,10 @@ jobs:
       - run: node novel2/scripts/pipeline-transaction.test.mjs
         env:
           NOVEL2_LAUNCH_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/launch_test
+      - name: Night4two asynchronous pair decisions / PostgreSQL
+        run: node novel2/scripts/async-pair-postgres.test.mjs
+        env:
+          NOVEL2_LAUNCH_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/launch_test
       - run: node --experimental-vm-modules novel2/scripts/story-launch-gateway.test.mjs
 
 
@@ -81,6 +85,8 @@ jobs:
             npx playwright install --with-deps chromium
           fi
       - run: node novel2/scripts/story-launch-browser.test.mjs
+      - name: Asynchronous pair Reader on phone and desktop
+        run: node novel2/scripts/pair-reader-browser.test.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
