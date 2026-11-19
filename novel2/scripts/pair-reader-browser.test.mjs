@@ -59,6 +59,9 @@ try{
    const page=await ctx.newPage(),errors=[];
    page.on('pageerror',e=>errors.push(e.message));
    await page.route('https://**/*',route=>route.fulfill({contentType:'text/javascript',body:''}));
+   // Local browser fixture runs on 127.0.0.1. Production authenticates
+   // signed Telegram initData; only this fixture supplies synthetic role headers.
+   await page.route('**/novel2/api/**',route=>route.continue({headers:{...route.request().headers(),'x-novel2-local-user':role==='B'?'local_b':'local_a'}}));
    await page.addInitScript((player)=>{
      localStorage.setItem('novel2_host_introduced','1');
      localStorage.setItem('novel2_local_user',player==='B'?'local_b':'local_a');
