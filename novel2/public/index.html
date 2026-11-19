@@ -172,6 +172,8 @@ async function api(path,body={},timeoutMs=600000){
        throw new Error('Не удалось собрать корректную структуру истории. Повторите создание — исходные данные не потеряны.');
      }
      if(technical==='NOVEL2_CURRENT_PLAYER_CHARACTER_REQUIRED')throw new Error('Сначала создайте и сохраните своего персонажа из фотографий.');
+     if(technical==='NOVEL2_PAIR_BOTH_ACTORS_REQUIRED')throw new Error('Для нового парного романа Михаил и Снежа должны сначала утвердить свои карточки персонажей. Одновременно быть онлайн не нужно.');
+     if(technical==='NOVEL2_PAIR_VISUAL_APPROVAL_REQUIRED')throw new Error('Иллюстрация создаётся только после подтверждения кадра в романе.');
      if(technical==='NOVEL2_PIPELINE_STALE_TURN')throw new Error('Сцена уже изменилась. Обновите историю, чтобы увидеть сохранённое продолжение.');
      if(technical==='NOVEL2_PIPELINE_TURN_CONFLICT')throw new Error('Ответ для этого хода уже сохранён. Обновите историю и продолжите его обработку.');
      if(technical==='NOVEL2_PIPELINE_BUSY')throw new Error('Этот ход уже обрабатывается. Вернитесь к истории через несколько секунд — повторная генерация не запущена.');
