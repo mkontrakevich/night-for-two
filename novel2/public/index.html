@@ -128,6 +128,7 @@ const app=document.getElementById('app');
 const tg=window.Telegram?.WebApp;try{tg?.ready();tg?.expand()}catch{}
 let state=null,busy=false,selectedAction='',calibrationImage='',characterDraft=null,forceBuilder=false,menuMode=false,libraryBooks=[],libraryDrafts=[],storyDraft=null,resumeStoryDraftId='',aiCharacters=[],roleGenderHints={A:'',B:''},characterDetailRole='',characterLooks={A:[],B:[]},characterLooksLoaded={A:false,B:false},characterViewerIndex=0,characterViewerRole='',aiAdvanceInFlight=false,aiAdvanceError='',aiAdvanceKey='';
 let activeRequestControllers=new Set(),navigationEpoch=0;
+let pairWaitTimer=null;
 let actorSheetTask={active:false,status:'idle',role:'',phase:'',startedAt:0,phaseStartedAt:0,maxSeconds:180,detached:false,error:''};
 let actorMenuTimer=null;
 let actorPollActive=false,actorRecoveryBusy=false;
@@ -876,6 +877,7 @@ async function launchStoryDraft(){
  try{await storyLaunch.start(id);}finally{busy=false;}
 }
 function render(){
+ if(pairWaitTimer){clearTimeout(pairWaitTimer);pairWaitTimer=null;}
  stopLoading();
  if(storyDraft){renderStoryDraft();return}
  if(menuMode){renderMainMenu();return}
@@ -934,10 +936,35 @@ function render(){
  document.getElementById('mainMenu').onclick=openMainMenu;
  const retryAi=document.getElementById('retryAiTurn');if(retryAi)retryAi.onclick=()=>{aiAdvanceError='';aiAdvanceKey='';render()};
  const checkPartner=document.getElementById('checkPartnerReply');if(checkPartner)checkPartner.onclick=refresh;
+ if(pair.enabled&&!state.can_reply)schedulePairWaitRefresh();
  // v3.2 visuals require a separate consent/approval state. Never run the
  // historical paid /visual endpoint automatically while async-pair is active.
  if(!pair.enabled)void loadVisual();
  if(aiTurn&&!aiAdvanceInFlight&&!aiAdvanceError)setTimeout(()=>advanceAiTurn(),0);
+}
+// Read-only check for the other real player's decision. Background tabs
+// are suspended; reopening the Mini App invokes the normal state refresh.
+function schedulePairWaitRefresh(){
+ if(pairWaitTimer)clearTimeout(pairWaitTimer);
+ if(menuMode||state?.mode!=='reader'||!state?.async_pair?.enabled||state.can_reply)return;
+ const bookId=String(state.book?.id||''),turn=Number(state.book?.turn_no||0);
+ pairWaitTimer=setTimeout(async()=>{
+   pairWaitTimer=null;
+   if(menuMode||state?.mode!=='reader'||String(state.book?.id||'')!==bookId)return;
+   if(document.visibilityState==='hidden'){schedulePairWaitRefresh();return;}
+   try{
+     const refreshed=(await api('state',{},15000)).state;
+     if(menuMode||String(state?.book?.id||'')!==bookId)return;
+     if(refreshed?.book?.id&&String(refreshed.book.id)===bookId){
+       const changed=Number(refreshed.book.turn_no||0)!==turn||
+         Boolean(refreshed.can_reply)!==Boolean(state.can_reply)||
+         Boolean(refreshed.async_pair?.answered_by_me)!==Boolean(state.async_pair?.answered_by_me);
+       state=refreshed;
+       if(changed){render();return;}
+     }
+   }catch(e){if(isCancelled(e))return;}
+   schedulePairWaitRefresh();
+ },20000);
 }
 async function advanceAiTurn(){
  if(aiAdvanceInFlight||menuMode||state?.mode!=='reader'||state?.active_control_mode!=='ai')return;
